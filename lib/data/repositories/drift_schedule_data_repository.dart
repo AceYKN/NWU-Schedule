@@ -212,6 +212,33 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   }
 
   @override
+  Future<void> deleteSemester(String semesterId) async {
+    if (semesterId.trim().isEmpty) {
+      throw ArgumentError.value(semesterId, 'semesterId');
+    }
+    await database.transaction(() async {
+      final semester = await (database.select(database.semesters)
+            ..where((table) => table.id.equals(semesterId)))
+          .getSingleOrNull();
+      if (semester == null) {
+        throw StateError('Semester not found: $semesterId');
+      }
+      await (database.delete(database.semesters)
+            ..where((table) => table.id.equals(semesterId)))
+          .go();
+      final preferred = await getPreferredSemesterId();
+      if (preferred == semesterId) {
+        await (database.delete(database.appSettings)
+              ..where((table) => table.key.isIn([
+                    'preferredSemesterId',
+                    'preferredSemesterSelectedAt',
+                  ])))
+            .go();
+      }
+    });
+  }
+
+  @override
   Future<void> saveCourse(
     domain.Course course,
     List<domain.MeetingRule> rules,

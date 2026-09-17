@@ -39,6 +39,8 @@ abstract interface class ScheduleDataRepository {
 
   Future<void> saveSemester(Semester semester);
 
+  Future<void> deleteSemester(String semesterId);
+
   Future<void> saveCourse(Course course, List<MeetingRule> rules);
 
   Future<void> saveException(CourseException exception);

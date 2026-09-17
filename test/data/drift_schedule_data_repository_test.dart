@@ -181,6 +181,49 @@ void main() {
     expect((await repository.loadSemester(semester.id)).exceptions, isEmpty);
   });
 
+  test('deletes a semester and clears its preferred selection atomically',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final semester = domain.Semester(
+      id: 's1',
+      academicYear: '2026-2027',
+      term: domain.SemesterTerm.first,
+      label: '第一学期',
+      createdAt: DateTime(2026, 9, 1),
+    );
+    await repository.saveSemester(semester);
+    await repository.setPreferredSemesterId(semester.id);
+    await repository.saveCourse(
+      domain.Course(
+        id: 'course-1',
+        semesterId: semester.id,
+        sourceType: domain.CourseSourceType.manual,
+        name: '课程',
+      ),
+      [],
+    );
+    await repository.saveException(
+      domain.CourseException(
+        id: 'exception-1',
+        semesterId: semester.id,
+        type: domain.CourseExceptionType.add,
+        targetDate: DateTime(2026, 9, 8),
+        targetStartSection: 1,
+        targetEndSection: 2,
+        addedCourseName: '临时课',
+      ),
+    );
+
+    await repository.deleteSemester(semester.id);
+
+    expect(await repository.loadSemesters(), isEmpty);
+    expect(await repository.getPreferredSemesterId(), isNull);
+    expect(await database.select(database.courses).get(), isEmpty);
+    expect(await database.select(database.courseExceptions).get(), isEmpty);
+  });
+
   test('imports atomically, keeps snapshots, and preserves local-only fields',
       () async {
     final database = AppDatabase(NativeDatabase.memory());

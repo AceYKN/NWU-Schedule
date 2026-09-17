@@ -254,11 +254,23 @@ Future<void> _selectSemester(BuildContext context, WidgetRef ref) async {
           shrinkWrap: true,
           children: [
             const ListTile(title: Text('切换学期')),
-            ...semesters.map((semester) => ListTile(
-                  title: Text(semester.label),
-                  subtitle: Text(semester.calendarId == null ? '缺少校历' : '本地课表'),
-                  onTap: () => Navigator.pop(sheetContext, semester.id),
-                )),
+            ...semesters.map(
+              (semester) => ListTile(
+                title: Text(semester.label),
+                subtitle: Text(semester.calendarId == null ? '缺少校历' : '本地课表'),
+                onTap: () => Navigator.pop(sheetContext, semester.id),
+                trailing: IconButton(
+                  tooltip: '删除学期',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => _deleteSemester(
+                    context,
+                    sheetContext,
+                    ref,
+                    semester,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -267,6 +279,41 @@ Future<void> _selectSemester(BuildContext context, WidgetRef ref) async {
   } catch (error) {
     if (context.mounted) {
       _showMessage(context, nwuUserMessage(error, action: '切换学期失败'));
+    }
+  }
+}
+
+Future<void> _deleteSemester(
+  BuildContext pageContext,
+  BuildContext sheetContext,
+  WidgetRef ref,
+  Semester semester,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: pageContext,
+    builder: (dialogContext) => AlertDialog(
+      title: Text('删除${semester.label}？'),
+      content: const Text('该学期的课程、临时变更、导入快照和删除记录都会被移除，且无法撤销。'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('删除'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !pageContext.mounted) return;
+  try {
+    await ref.read(scheduleDataRepositoryProvider).deleteSemester(semester.id);
+    if (sheetContext.mounted) Navigator.pop(sheetContext);
+    if (pageContext.mounted) _showMessage(pageContext, '学期已删除');
+  } catch (error) {
+    if (pageContext.mounted) {
+      _showMessage(pageContext, nwuUserMessage(error, action: '删除学期失败'));
     }
   }
 }
