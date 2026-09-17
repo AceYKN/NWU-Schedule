@@ -537,6 +537,10 @@ class _ImportPreview extends StatelessWidget {
             Text('${timetable.courses.length} 门课程 · $meetingCount 个上课安排'),
             if (diff != null) ...[
               const SizedBox(height: 4),
+              if (diff!.isNewSemester)
+                const Text(
+                  '发现新的学期，确认后会建立独立的本地课表，不会覆盖其他学期。',
+                ),
               Text(
                 '新增 ${diff!.addedCount} · 更新 ${diff!.modifiedCount} · '
                 '删除 ${diff!.removedCount} · '
@@ -589,7 +593,13 @@ class _ImportPreview extends StatelessWidget {
                       saving || diff == null || diff?.hasConflicts == true
                           ? null
                           : onConfirm,
-                  child: Text(saving ? '导入中…' : '确认导入'),
+                  child: Text(
+                    saving
+                        ? '导入中…'
+                        : diff?.isNewSemester == true
+                            ? '建立新课表'
+                            : '确认导入',
+                  ),
                 ),
               ],
             ),

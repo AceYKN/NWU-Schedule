@@ -50,9 +50,10 @@ class ImportChange {
 }
 
 class ImportDiff {
-  const ImportDiff(this.changes);
+  const ImportDiff(this.changes, {this.isNewSemester = false});
 
   final List<ImportChange> changes;
+  final bool isNewSemester;
 
   bool get hasChanges => changes.any(
         (change) => change.kind != ImportChangeKind.unchanged,
@@ -84,7 +85,7 @@ class ImportDiff {
     if (!hasConflicts && !hasLocallyDeleted) return this;
     return ImportDiff([
       for (final change in changes) _resolveChange(change, resolution),
-    ]);
+    ], isNewSemester: isNewSemester);
   }
 
   static ImportChange _resolveChange(
@@ -259,7 +260,10 @@ class ImportDiffEngine {
         throw StateError('Import diff item has no local or remote course');
       }
     }
-    return ImportDiff(List.unmodifiable(changes));
+    return ImportDiff(
+      List.unmodifiable(changes),
+      isNewSemester: local == null,
+    );
   }
 
   List<ImportFieldChange> _fields({

@@ -102,6 +102,17 @@ void main() {
         MergeDecision.remote);
   });
 
+  test('marks a different semester as a new local timetable', () {
+    final diff = const ImportDiffEngine().build(
+      incoming: timetable([course()]),
+      local: null,
+      previousImport: null,
+    );
+
+    expect(diff.isNewSemester, isTrue);
+    expect(diff.resolve(ImportConflictResolution.empty).isNewSemester, isTrue);
+  });
+
   test('local-only change is retained without conflict', () {
     final diff = const ImportDiffEngine().build(
       incoming: timetable([course()]),
