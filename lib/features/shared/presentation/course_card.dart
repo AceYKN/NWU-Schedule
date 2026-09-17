@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
 import '../../../core/nwu/periods.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/week_mask.dart';
+import '../../../domain/course/course_exception.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
 
 class CourseCard extends StatelessWidget {
@@ -152,8 +154,12 @@ void showCourseDetails(
                         runSpacing: 8,
                         children: [
                           OutlinedButton.icon(
-                            onPressed: () =>
-                                _showComingSoon(sheetContext, '临时变更'),
+                            onPressed: () => _showExceptionEditor(
+                              context,
+                              sheetContext,
+                              ref,
+                              instance,
+                            ),
                             icon: const Icon(Icons.edit_calendar_outlined),
                             label: const Text('临时变更'),
                           ),
@@ -279,9 +285,253 @@ class _DetailLine extends StatelessWidget {
   }
 }
 
-void _showComingSoon(BuildContext context, String feature) {
-  Navigator.of(context).pop();
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('$feature将在后续数据层阶段接入')),
+Future<void> _showExceptionEditor(
+  BuildContext pageContext,
+  BuildContext sheetContext,
+  WidgetRef ref,
+  EffectiveCourseInstance instance,
+) async {
+  final exception = await showModalBottomSheet<CourseException>(
+    context: sheetContext,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => _ExceptionEditorSheet(instance: instance),
   );
+  if (exception == null || !sheetContext.mounted) return;
+  try {
+    await ref.read(scheduleDataRepositoryProvider).saveException(exception);
+    if (!sheetContext.mounted || !pageContext.mounted) return;
+    final messenger = ScaffoldMessenger.of(pageContext);
+    Navigator.of(sheetContext).pop();
+    messenger.showSnackBar(const SnackBar(content: Text('临时变更已保存')));
+  } catch (error) {
+    if (sheetContext.mounted) {
+      ScaffoldMessenger.of(sheetContext).showSnackBar(
+        SnackBar(content: Text('保存临时变更失败：$error')),
+      );
+    }
+  }
+}
+
+class _ExceptionEditorSheet extends StatefulWidget {
+  const _ExceptionEditorSheet({required this.instance});
+
+  final EffectiveCourseInstance instance;
+
+  @override
+  State<_ExceptionEditorSheet> createState() => _ExceptionEditorSheetState();
+}
+
+class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _teacher;
+  late final TextEditingController _campus;
+  late final TextEditingController _room;
+  late final TextEditingController _note;
+  late DateTime _targetDate;
+  late int _startSection;
+  late int _endSection;
+  CourseExceptionType _type = CourseExceptionType.move;
+
+  EffectiveCourseInstance get _instance => widget.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _targetDate = dateOnly(_instance.date);
+    _startSection = _instance.startSection;
+    _endSection = _instance.endSection;
+    _teacher = TextEditingController(text: _instance.teacher ?? '');
+    _campus = TextEditingController(text: _instance.campus ?? '');
+    _room = TextEditingController(text: _instance.room ?? '');
+    _note = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    for (final controller in [_teacher, _campus, _room, _note]) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  String? _optional(TextEditingController controller) {
+    final value = controller.text.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  Future<void> _pickDate() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _targetDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (selected != null && mounted) setState(() => _targetDate = selected);
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    final sourceRule = _instance.meetingRule;
+    if ((_type == CourseExceptionType.move ||
+            _type == CourseExceptionType.cancel) &&
+        sourceRule == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('找不到原始上课安排，无法创建临时变更')),
+      );
+      return;
+    }
+    final exception = CourseException(
+      id: 'exception-${DateTime.now().microsecondsSinceEpoch}',
+      semesterId: _instance.course.semesterId,
+      courseId: _instance.course.id,
+      sourceMeetingId: _type == CourseExceptionType.add ? null : sourceRule!.id,
+      sourceDate:
+          _type == CourseExceptionType.add ? null : dateOnly(_instance.date),
+      type: _type,
+      targetDate: _type == CourseExceptionType.cancel ? null : _targetDate,
+      targetStartSection:
+          _type == CourseExceptionType.cancel ? null : _startSection,
+      targetEndSection:
+          _type == CourseExceptionType.cancel ? null : _endSection,
+      teacherOverride: _optional(_teacher),
+      campusOverride: _optional(_campus),
+      roomOverride: _optional(_room),
+      addedCourseName:
+          _type == CourseExceptionType.add ? _instance.course.name : null,
+      note: _optional(_note),
+    );
+    Navigator.of(context).pop(exception);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final needsTarget = _type != CourseExceptionType.cancel;
+    final maxHeight = MediaQuery.sizeOf(context).height * .82;
+    return SafeArea(
+      child: SizedBox(
+        height: maxHeight,
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              4,
+              20,
+              24 + MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            children: [
+              Text(
+                '临时变更 · ${_instance.courseName}',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                  '原安排：${_instance.date.year}-${_instance.date.month}-${_instance.date.day} · 第 ${_instance.startSection}-${_instance.endSection} 节'),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<CourseExceptionType>(
+                initialValue: _type,
+                decoration: const InputDecoration(labelText: '变更类型'),
+                items: const [
+                  DropdownMenuItem(
+                    value: CourseExceptionType.move,
+                    child: Text('MOVE · 移动本次课程'),
+                  ),
+                  DropdownMenuItem(
+                    value: CourseExceptionType.cancel,
+                    child: Text('CANCEL · 停止本次课程'),
+                  ),
+                  DropdownMenuItem(
+                    value: CourseExceptionType.add,
+                    child: Text('ADD · 临时增加一次课程'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) setState(() => _type = value);
+                },
+              ),
+              if (needsTarget) ...[
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.event_outlined),
+                  title: const Text('目标日期'),
+                  subtitle: Text(
+                    MaterialLocalizations.of(context)
+                        .formatMediumDate(_targetDate),
+                  ),
+                  onTap: _pickDate,
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        initialValue: _startSection,
+                        decoration: const InputDecoration(labelText: '开始节'),
+                        items: _sectionItems(),
+                        onChanged: (value) => setState(() {
+                          _startSection = value ?? 1;
+                          if (_endSection < _startSection) {
+                            _endSection = _startSection;
+                          }
+                        }),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        key: ValueKey(_endSection),
+                        initialValue: _endSection,
+                        decoration: const InputDecoration(labelText: '结束节'),
+                        items: _sectionItems(),
+                        onChanged: (value) =>
+                            setState(() => _endSection = value ?? 1),
+                        validator: (value) =>
+                            value == null || value < _startSection
+                                ? '结束节不能早于开始节'
+                                : null,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _teacher,
+                  decoration: const InputDecoration(labelText: '教师覆盖值（可选）'),
+                ),
+                TextFormField(
+                  controller: _campus,
+                  decoration: const InputDecoration(labelText: '校区覆盖值（可选）'),
+                ),
+                TextFormField(
+                  controller: _room,
+                  decoration: const InputDecoration(labelText: '教室覆盖值（可选）'),
+                ),
+              ],
+              TextFormField(
+                controller: _note,
+                decoration: const InputDecoration(labelText: '备注（可选）'),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _submit,
+                child: const Text('保存临时变更'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<DropdownMenuItem<int>> _sectionItems() => List.generate(
+        NwuPeriodRepository.all.length,
+        (index) => DropdownMenuItem(
+          value: index + 1,
+          child: Text('第 ${index + 1} 节'),
+        ),
+      );
 }
