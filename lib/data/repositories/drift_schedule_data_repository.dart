@@ -1,9 +1,15 @@
-import 'package:drift/drift.dart' show Value;
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+import 'package:drift/drift.dart' show OrderingTerm, Value;
 
 import '../../core/utils/week_mask.dart';
 import '../../domain/course/course.dart' as domain;
 import '../../domain/course/course_exception.dart' as domain;
 import '../../domain/course/meeting_rule.dart' as domain;
+import '../../domain/import/import_diff.dart';
+import '../../domain/import/timetable_import.dart';
+import '../../domain/import/three_way_merge.dart';
 import '../../domain/schedule/schedule_data_repository.dart';
 import '../../domain/semester/semester.dart' as domain;
 import '../database/app_database.dart' as db;
@@ -327,5 +333,281 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         updatedAt: Value(DateTime.now()),
       ));
     });
+  }
+
+  @override
+  Future<RemoteTimetable?> loadLatestImport(String semesterId) async {
+    final row = await (database.select(database.importSnapshots)
+          ..where((table) => table.semesterId.equals(semesterId))
+          ..orderBy([
+            (table) => OrderingTerm.desc(table.importedAt),
+            (table) => OrderingTerm.desc(table.id),
+          ])
+          ..limit(1))
+        .getSingleOrNull();
+    if (row == null) return null;
+    return const TimetableImportParser().parse(
+      jsonDecode(row.normalizedJson) as Map<String, dynamic>,
+    );
+  }
+
+  @override
+  Future<void> commitImportedTimetable(
+    RemoteTimetable timetable, {
+    String adapterVersion = 'nwu-zhengfang-v1',
+  }) async {
+    final report = validateTimetable(timetable);
+    if (!report.isValid) {
+      throw TimetableImportValidationException(report);
+    }
+    final semesterId = timetable.semester.id;
+    final semesters = await loadSemesters();
+    domain.Semester? existingSemester;
+    for (final semester in semesters) {
+      if (semester.id == semesterId) {
+        existingSemester = semester;
+        break;
+      }
+    }
+    final local =
+        existingSemester == null ? null : await loadSemester(semesterId);
+    final previous = await loadLatestImport(semesterId);
+    final tombstones = await (database.select(database.deletedSourceItems)
+          ..where((table) => table.semesterId.equals(semesterId)))
+        .get();
+    final diff = const ImportDiffEngine().build(
+      incoming: timetable,
+      local: local,
+      previousImport: previous,
+      deletedSourceCourseKeys:
+          tombstones.map((row) => row.sourceCourseKey).toSet(),
+    );
+    if (diff.hasConflicts) {
+      throw TimetableImportConflictException(diff);
+    }
+
+    final now = DateTime.now();
+    final semester = existingSemester ??
+        domain.Semester(
+          id: semesterId,
+          academicYear: timetable.semester.academicYear,
+          term: domain.SemesterTerm.values[timetable.semester.term - 1],
+          label: timetable.semester.label,
+          remoteTermKey: timetable.semester.remoteTermKey,
+          calendarId: timetable.semester.calendarId ?? semesterId,
+          createdAt: now,
+        );
+    final localCourses = {
+      for (final course in local?.courses ?? const <domain.Course>[])
+        if (course.sourceCourseKey != null) course.sourceCourseKey!: course,
+    };
+    final localRules = <String, List<domain.MeetingRule>>{};
+    for (final rule in local?.meetingRules ?? const <domain.MeetingRule>[]) {
+      localRules.putIfAbsent(rule.courseId, () => []).add(rule);
+    }
+    await database.transaction(() async {
+      await _upsertSemester(semester);
+      for (final change in diff.changes) {
+        final remote = change.remoteCourse;
+        if (remote == null) {
+          if (change.kind == ImportChangeKind.removed &&
+              change.localCourse != null) {
+            await _markImportedDeleted(change.localCourse!);
+          }
+          continue;
+        }
+        if (change.kind == ImportChangeKind.locallyDeleted) continue;
+        if (change.kind == ImportChangeKind.unchanged) continue;
+        final existing = localCourses[remote.sourceCourseKey];
+        final course = _courseFromRemote(
+          semester: semester,
+          remote: remote,
+          existing: existing,
+          fields: change.fields,
+          now: now,
+        );
+        final existingRules = existing == null
+            ? const <domain.MeetingRule>[]
+            : localRules[existing.id] ?? const <domain.MeetingRule>[];
+        final rules = _rulesFromRemote(
+          remote: remote,
+          courseId: course.id,
+          existing: existingRules,
+          fields: change.fields,
+        );
+        await _upsertCourse(course, rules);
+      }
+      final normalizedJson = jsonEncode(timetable.toJson());
+      final hash = sha256.convert(utf8.encode(normalizedJson)).toString();
+      await database.into(database.importSnapshots).insert(
+            db.ImportSnapshotsCompanion.insert(
+              id: '$semesterId:${now.microsecondsSinceEpoch}',
+              semesterId: semesterId,
+              importedAt: now,
+              adapterVersion: adapterVersion,
+              schemaVersion: 1,
+              normalizedJson: normalizedJson,
+              hash: hash,
+            ),
+          );
+    });
+  }
+
+  Future<void> _upsertSemester(domain.Semester semester) async {
+    await database.into(database.semesters).insertOnConflictUpdate(
+          db.SemestersCompanion.insert(
+            id: semester.id,
+            academicYear: semester.academicYear,
+            term: semester.term.index + 1,
+            label: semester.label,
+            remoteTermKey: Value(semester.remoteTermKey),
+            calendarId: Value(semester.calendarId),
+            createdAt: semester.createdAt,
+          ),
+        );
+  }
+
+  Future<void> _upsertCourse(
+    domain.Course course,
+    List<domain.MeetingRule> rules,
+  ) async {
+    await database.into(database.courses).insertOnConflictUpdate(
+          db.CoursesCompanion.insert(
+            id: course.id,
+            semesterId: course.semesterId,
+            sourceType: course.sourceType.name,
+            sourceCourseKey: Value(course.sourceCourseKey),
+            name: course.name,
+            code: Value(course.code),
+            teachingClass: Value(course.teachingClass),
+            credits: Value(course.credits),
+            assessment: Value(course.assessment),
+            note: Value(course.note),
+            colorOverride: Value(course.colorOverride),
+            hidden: Value(course.hidden),
+            deleted: Value(course.deleted),
+            createdAt: course.createdAt,
+            updatedAt: course.updatedAt,
+          ),
+        );
+    await (database.delete(database.meetingRules)
+          ..where((table) => table.courseId.equals(course.id)))
+        .go();
+    for (final rule in rules) {
+      await database.into(database.meetingRules).insert(
+            db.MeetingRulesCompanion.insert(
+              id: rule.id,
+              courseId: course.id,
+              sourceMeetingKey: Value(rule.sourceMeetingKey),
+              weekday: rule.weekday,
+              startSection: rule.startSection,
+              endSection: rule.endSection,
+              teacher: Value(rule.teacher),
+              campus: Value(rule.campus),
+              room: Value(rule.room),
+              weekMask: rule.weekMask.value,
+              rawWeekText: rule.weekMask.rawText,
+            ),
+          );
+    }
+  }
+
+  Future<void> _markImportedDeleted(domain.Course course) async {
+    final key = course.sourceCourseKey;
+    if (key == null) return;
+    await (database.update(database.courses)
+          ..where((table) => table.id.equals(course.id)))
+        .write(db.CoursesCompanion(
+      deleted: const Value(true),
+      updatedAt: Value(DateTime.now()),
+    ));
+    await database.into(database.deletedSourceItems).insertOnConflictUpdate(
+          db.DeletedSourceItemsCompanion.insert(
+            id: 'course:${course.semesterId}:$key',
+            semesterId: course.semesterId,
+            sourceCourseKey: key,
+            deletedAt: DateTime.now(),
+          ),
+        );
+  }
+
+  domain.Course _courseFromRemote({
+    required domain.Semester semester,
+    required ImportedCourse remote,
+    required domain.Course? existing,
+    required List<ImportFieldChange> fields,
+    required DateTime now,
+  }) {
+    Object? value(String field, Object? remoteValue, Object? localValue) {
+      ImportFieldChange? change;
+      for (final item in fields) {
+        if (item.field == field) {
+          change = item;
+          break;
+        }
+      }
+      if (change == null) return remoteValue;
+      return change.decision == MergeDecision.local ? localValue : remoteValue;
+    }
+
+    final id =
+        existing?.id ?? _importedCourseId(semester.id, remote.sourceCourseKey);
+    return domain.Course(
+      id: id,
+      semesterId: semester.id,
+      sourceType: domain.CourseSourceType.imported,
+      sourceCourseKey: remote.sourceCourseKey,
+      name: value('name', remote.name, existing?.name) as String,
+      code: value('code', remote.code, existing?.code) as String?,
+      teachingClass:
+          value('teachingClass', remote.teachingClass, existing?.teachingClass)
+              as String?,
+      credits: value('credits', remote.credits, existing?.credits) as double?,
+      assessment: value('assessment', remote.assessment, existing?.assessment)
+          as String?,
+      note: existing?.note,
+      colorOverride: existing?.colorOverride,
+      hidden: existing?.hidden ?? false,
+      deleted: existing?.deleted ?? false,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    );
+  }
+
+  List<domain.MeetingRule> _rulesFromRemote({
+    required ImportedCourse remote,
+    required String courseId,
+    required List<domain.MeetingRule> existing,
+    required List<ImportFieldChange> fields,
+  }) {
+    ImportFieldChange? meetingsField;
+    for (final field in fields) {
+      if (field.field == 'meetings') {
+        meetingsField = field;
+        break;
+      }
+    }
+    if (meetingsField?.decision == MergeDecision.local) return existing;
+    return [
+      for (final meeting in remote.meetings)
+        domain.MeetingRule(
+          id: '$courseId:${meeting.sourceMeetingKey}',
+          courseId: courseId,
+          sourceMeetingKey: meeting.sourceMeetingKey,
+          weekday: meeting.weekday,
+          startSection: meeting.startSection,
+          endSection: meeting.endSection,
+          teacher: meeting.teacher,
+          campus: meeting.campus,
+          room: meeting.room,
+          weekMask: meeting.weekMask,
+        ),
+    ];
+  }
+
+  static String _importedCourseId(String semesterId, String sourceKey) {
+    final digest =
+        sha256.convert(utf8.encode('$semesterId:$sourceKey')).toString();
+    return 'imported-${digest.substring(0, 24)}';
   }
 }

@@ -5,6 +5,7 @@ import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
 import 'package:nwu_schedule/domain/course/course.dart' as domain;
 import 'package:nwu_schedule/domain/course/meeting_rule.dart' as domain;
+import 'package:nwu_schedule/domain/import/timetable_import.dart';
 import 'package:nwu_schedule/domain/semester/semester.dart' as domain;
 
 void main() {
@@ -144,5 +145,153 @@ void main() {
     expect((await repository.loadSemester(semester.id)).courses.single.deleted,
         isFalse);
     expect(await database.select(database.deletedSourceItems).get(), isEmpty);
+  });
+
+  test('imports atomically, keeps snapshots, and preserves local-only fields',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    RemoteTimetable timetable({String room = '3406', String name = '软件测试'}) =>
+        RemoteTimetable(
+          semester: const RemoteSemester(
+            remoteTermKey: '2026-2027-1',
+            academicYear: '2026-2027',
+            term: 1,
+            label: '2026-2027 第一学期',
+            calendarId: 'nwu-2026-2027-1',
+          ),
+          totalWeeks: 20,
+          courses: [
+            ImportedCourse(
+              sourceCourseKey: 'remote-course-1',
+              name: name,
+              code: 'CS301',
+              teachingClass: '软件工程2401',
+              credits: 2,
+              assessment: '考查',
+              meetings: [
+                ImportedMeeting(
+                  sourceMeetingKey: 'remote-rule-1',
+                  weekday: 1,
+                  startSection: 3,
+                  endSection: 4,
+                  teacher: '教师 A',
+                  campus: '长安校区',
+                  room: room,
+                  weekMask: WeekMask.all(16),
+                ),
+              ],
+            ),
+          ],
+        );
+
+    await repository.commitImportedTimetable(timetable());
+    var loaded = await repository.loadSemester('nwu-2026-2027-1');
+    expect(loaded.courses.single.sourceType, domain.CourseSourceType.imported);
+    expect(loaded.meetingRules.single.room, '3406');
+    expect(await repository.loadLatestImport('nwu-2026-2027-1'), isNotNull);
+
+    final course = loaded.courses.single;
+    await repository.saveCourse(
+      course.copyWith(note: '我的备注', colorOverride: 0xff123456),
+      [loaded.meetingRules.single],
+    );
+    await repository.commitImportedTimetable(timetable(room: '3508'));
+    loaded = await repository.loadSemester('nwu-2026-2027-1');
+    expect(loaded.meetingRules.single.room, '3508');
+    expect(loaded.courses.single.note, '我的备注');
+    expect(loaded.courses.single.colorOverride, 0xff123456);
+
+    final locallyEdited = loaded.courses.single;
+    await repository.saveCourse(
+      locallyEdited,
+      [loaded.meetingRules.single.copyWith(room: '3601')],
+    );
+    await repository.commitImportedTimetable(timetable(room: '3508'));
+    loaded = await repository.loadSemester('nwu-2026-2027-1');
+    expect(loaded.meetingRules.single.room, '3601');
+    expect(
+        (await database.select(database.importSnapshots).get()), hasLength(3));
+  });
+
+  test('conflicting import rolls back without adding a snapshot', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final base = RemoteTimetable(
+      semester: const RemoteSemester(
+        remoteTermKey: '2026-2027-1',
+        academicYear: '2026-2027',
+        term: 1,
+        label: '2026-2027 第一学期',
+      ),
+      totalWeeks: 20,
+      courses: [
+        ImportedCourse(
+          sourceCourseKey: 'c1',
+          name: '软件测试',
+          code: null,
+          teachingClass: null,
+          credits: null,
+          assessment: null,
+          meetings: [
+            ImportedMeeting(
+              sourceMeetingKey: 'r1',
+              weekday: 1,
+              startSection: 1,
+              endSection: 2,
+              teacher: null,
+              campus: null,
+              room: '3406',
+              weekMask: WeekMask.all(16),
+            ),
+          ],
+        ),
+      ],
+    );
+    await repository.commitImportedTimetable(base);
+    final loaded = await repository.loadSemester(base.semester.id);
+    await repository.saveCourse(
+      loaded.courses.single,
+      [loaded.meetingRules.single.copyWith(room: '3508')],
+    );
+    final incoming = RemoteTimetable(
+      semester: base.semester,
+      totalWeeks: 20,
+      courses: [
+        ImportedCourse(
+          sourceCourseKey: 'c1',
+          name: '软件测试',
+          code: null,
+          teachingClass: null,
+          credits: null,
+          assessment: null,
+          meetings: [
+            ImportedMeeting(
+              sourceMeetingKey: 'r1',
+              weekday: 1,
+              startSection: 1,
+              endSection: 2,
+              teacher: null,
+              campus: null,
+              room: '3201',
+              weekMask: WeekMask.all(16),
+            ),
+          ],
+        ),
+      ],
+    );
+    await expectLater(
+      repository.commitImportedTimetable(incoming),
+      throwsA(isA<TimetableImportConflictException>()),
+    );
+    expect(await database.select(database.importSnapshots).get(), hasLength(1));
+    expect(
+        (await repository.loadSemester(base.semester.id))
+            .meetingRules
+            .single
+            .room,
+        '3508');
   });
 }

@@ -1,0 +1,51 @@
+{
+  "semester": {
+    "remoteTermKey": "2026-2027-1",
+    "academicYear": "2026-2027",
+    "term": 1,
+    "label": "2026-2027学年第一学期",
+    "calendarId": "nwu-2026-2027-1",
+    "totalWeeks": 20
+  },
+  "courses": [
+    {
+      "sourceCourseKey": "COURSE-TEST-001",
+      "name": "软件测试",
+      "code": "CS301",
+      "teachingClass": "软件工程2401",
+      "credits": 2.0,
+      "assessment": "考查",
+      "meetings": [
+        {
+          "sourceMeetingKey": "MEETING-TEST-001",
+          "weekday": 1,
+          "startSection": 3,
+          "endSection": 4,
+          "teacher": "苏峙之",
+          "campus": "长安校区",
+          "room": "3508",
+          "weekText": "1-16周"
+        }
+      ]
+    },
+    {
+      "courseKey": "COURSE-NET-002",
+      "courseName": "计算机网络",
+      "courseCode": "CS302",
+      "className": "软件工程2401",
+      "credit": "3",
+      "assessmentType": "考试",
+      "rules": [
+        {
+          "meetingKey": "MEETING-NET-001",
+          "xqj": "2",
+          "jcs": "5-6节",
+          "js": "李老师",
+          "xq": "太白校区",
+          "jxcd": "1310",
+          "zcd": "1-8周双周"
+        }
+      ]
+    }
+  ]
+}

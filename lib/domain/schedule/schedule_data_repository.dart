@@ -1,6 +1,7 @@
 import '../course/course.dart';
 import '../course/course_exception.dart';
 import '../course/meeting_rule.dart';
+import '../import/timetable_import.dart';
 import '../semester/semester.dart';
 
 class ScheduleDataSnapshot {
@@ -41,4 +42,11 @@ abstract interface class ScheduleDataRepository {
   Future<void> deleteCourse(String courseId);
 
   Future<void> restoreImportedCourse(String courseId);
+
+  Future<RemoteTimetable?> loadLatestImport(String semesterId);
+
+  Future<void> commitImportedTimetable(
+    RemoteTimetable timetable, {
+    String adapterVersion = 'nwu-zhengfang-v1',
+  });
 }
