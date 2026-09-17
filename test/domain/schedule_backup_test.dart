@@ -13,6 +13,7 @@ void main() {
     term: SemesterTerm.first,
     label: '2026-2027 第一学期',
     calendarId: 'nwu-2026-2027-1',
+    calendarRevision: 1,
     createdAt: DateTime.utc(2026, 9, 1),
   );
   final course = Course(

@@ -42,6 +42,12 @@ class $SemestersTable extends Semesters
   late final GeneratedColumn<String> calendarId = GeneratedColumn<String>(
       'calendar_id', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _calendarRevisionMeta =
+      const VerificationMeta('calendarRevision');
+  @override
+  late final GeneratedColumn<int> calendarRevision = GeneratedColumn<int>(
+      'calendar_revision', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -49,8 +55,16 @@ class $SemestersTable extends Semesters
       'created_at', aliasedName, false,
       type: DriftSqlType.dateTime, requiredDuringInsert: true);
   @override
-  List<GeneratedColumn> get $columns =>
-      [id, academicYear, term, label, remoteTermKey, calendarId, createdAt];
+  List<GeneratedColumn> get $columns => [
+        id,
+        academicYear,
+        term,
+        label,
+        remoteTermKey,
+        calendarId,
+        calendarRevision,
+        createdAt
+      ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -98,6 +112,12 @@ class $SemestersTable extends Semesters
           calendarId.isAcceptableOrUnknown(
               data['calendar_id']!, _calendarIdMeta));
     }
+    if (data.containsKey('calendar_revision')) {
+      context.handle(
+          _calendarRevisionMeta,
+          calendarRevision.isAcceptableOrUnknown(
+              data['calendar_revision']!, _calendarRevisionMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -125,6 +145,8 @@ class $SemestersTable extends Semesters
           .read(DriftSqlType.string, data['${effectivePrefix}remote_term_key']),
       calendarId: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}calendar_id']),
+      calendarRevision: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}calendar_revision']),
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
     );
@@ -143,6 +165,7 @@ class Semester extends DataClass implements Insertable<Semester> {
   final String label;
   final String? remoteTermKey;
   final String? calendarId;
+  final int? calendarRevision;
   final DateTime createdAt;
   const Semester(
       {required this.id,
@@ -151,6 +174,7 @@ class Semester extends DataClass implements Insertable<Semester> {
       required this.label,
       this.remoteTermKey,
       this.calendarId,
+      this.calendarRevision,
       required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -164,6 +188,9 @@ class Semester extends DataClass implements Insertable<Semester> {
     }
     if (!nullToAbsent || calendarId != null) {
       map['calendar_id'] = Variable<String>(calendarId);
+    }
+    if (!nullToAbsent || calendarRevision != null) {
+      map['calendar_revision'] = Variable<int>(calendarRevision);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -181,6 +208,9 @@ class Semester extends DataClass implements Insertable<Semester> {
       calendarId: calendarId == null && nullToAbsent
           ? const Value.absent()
           : Value(calendarId),
+      calendarRevision: calendarRevision == null && nullToAbsent
+          ? const Value.absent()
+          : Value(calendarRevision),
       createdAt: Value(createdAt),
     );
   }
@@ -195,6 +225,7 @@ class Semester extends DataClass implements Insertable<Semester> {
       label: serializer.fromJson<String>(json['label']),
       remoteTermKey: serializer.fromJson<String?>(json['remoteTermKey']),
       calendarId: serializer.fromJson<String?>(json['calendarId']),
+      calendarRevision: serializer.fromJson<int?>(json['calendarRevision']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -208,6 +239,7 @@ class Semester extends DataClass implements Insertable<Semester> {
       'label': serializer.toJson<String>(label),
       'remoteTermKey': serializer.toJson<String?>(remoteTermKey),
       'calendarId': serializer.toJson<String?>(calendarId),
+      'calendarRevision': serializer.toJson<int?>(calendarRevision),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -219,6 +251,7 @@ class Semester extends DataClass implements Insertable<Semester> {
           String? label,
           Value<String?> remoteTermKey = const Value.absent(),
           Value<String?> calendarId = const Value.absent(),
+          Value<int?> calendarRevision = const Value.absent(),
           DateTime? createdAt}) =>
       Semester(
         id: id ?? this.id,
@@ -228,6 +261,9 @@ class Semester extends DataClass implements Insertable<Semester> {
         remoteTermKey:
             remoteTermKey.present ? remoteTermKey.value : this.remoteTermKey,
         calendarId: calendarId.present ? calendarId.value : this.calendarId,
+        calendarRevision: calendarRevision.present
+            ? calendarRevision.value
+            : this.calendarRevision,
         createdAt: createdAt ?? this.createdAt,
       );
   Semester copyWithCompanion(SemestersCompanion data) {
@@ -243,6 +279,9 @@ class Semester extends DataClass implements Insertable<Semester> {
           : this.remoteTermKey,
       calendarId:
           data.calendarId.present ? data.calendarId.value : this.calendarId,
+      calendarRevision: data.calendarRevision.present
+          ? data.calendarRevision.value
+          : this.calendarRevision,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -256,14 +295,15 @@ class Semester extends DataClass implements Insertable<Semester> {
           ..write('label: $label, ')
           ..write('remoteTermKey: $remoteTermKey, ')
           ..write('calendarId: $calendarId, ')
+          ..write('calendarRevision: $calendarRevision, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
-      id, academicYear, term, label, remoteTermKey, calendarId, createdAt);
+  int get hashCode => Object.hash(id, academicYear, term, label, remoteTermKey,
+      calendarId, calendarRevision, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -274,6 +314,7 @@ class Semester extends DataClass implements Insertable<Semester> {
           other.label == this.label &&
           other.remoteTermKey == this.remoteTermKey &&
           other.calendarId == this.calendarId &&
+          other.calendarRevision == this.calendarRevision &&
           other.createdAt == this.createdAt);
 }
 
@@ -284,6 +325,7 @@ class SemestersCompanion extends UpdateCompanion<Semester> {
   final Value<String> label;
   final Value<String?> remoteTermKey;
   final Value<String?> calendarId;
+  final Value<int?> calendarRevision;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
   const SemestersCompanion({
@@ -293,6 +335,7 @@ class SemestersCompanion extends UpdateCompanion<Semester> {
     this.label = const Value.absent(),
     this.remoteTermKey = const Value.absent(),
     this.calendarId = const Value.absent(),
+    this.calendarRevision = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -303,6 +346,7 @@ class SemestersCompanion extends UpdateCompanion<Semester> {
     required String label,
     this.remoteTermKey = const Value.absent(),
     this.calendarId = const Value.absent(),
+    this.calendarRevision = const Value.absent(),
     required DateTime createdAt,
     this.rowid = const Value.absent(),
   })  : id = Value(id),
@@ -317,6 +361,7 @@ class SemestersCompanion extends UpdateCompanion<Semester> {
     Expression<String>? label,
     Expression<String>? remoteTermKey,
     Expression<String>? calendarId,
+    Expression<int>? calendarRevision,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -327,6 +372,7 @@ class SemestersCompanion extends UpdateCompanion<Semester> {
       if (label != null) 'label': label,
       if (remoteTermKey != null) 'remote_term_key': remoteTermKey,
       if (calendarId != null) 'calendar_id': calendarId,
+      if (calendarRevision != null) 'calendar_revision': calendarRevision,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -339,6 +385,7 @@ class SemestersCompanion extends UpdateCompanion<Semester> {
       Value<String>? label,
       Value<String?>? remoteTermKey,
       Value<String?>? calendarId,
+      Value<int?>? calendarRevision,
       Value<DateTime>? createdAt,
       Value<int>? rowid}) {
     return SemestersCompanion(
@@ -348,6 +395,7 @@ class SemestersCompanion extends UpdateCompanion<Semester> {
       label: label ?? this.label,
       remoteTermKey: remoteTermKey ?? this.remoteTermKey,
       calendarId: calendarId ?? this.calendarId,
+      calendarRevision: calendarRevision ?? this.calendarRevision,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -374,6 +422,9 @@ class SemestersCompanion extends UpdateCompanion<Semester> {
     if (calendarId.present) {
       map['calendar_id'] = Variable<String>(calendarId.value);
     }
+    if (calendarRevision.present) {
+      map['calendar_revision'] = Variable<int>(calendarRevision.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -392,6 +443,7 @@ class SemestersCompanion extends UpdateCompanion<Semester> {
           ..write('label: $label, ')
           ..write('remoteTermKey: $remoteTermKey, ')
           ..write('calendarId: $calendarId, ')
+          ..write('calendarRevision: $calendarRevision, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -3470,6 +3522,7 @@ typedef $$SemestersTableCreateCompanionBuilder = SemestersCompanion Function({
   required String label,
   Value<String?> remoteTermKey,
   Value<String?> calendarId,
+  Value<int?> calendarRevision,
   required DateTime createdAt,
   Value<int> rowid,
 });
@@ -3480,6 +3533,7 @@ typedef $$SemestersTableUpdateCompanionBuilder = SemestersCompanion Function({
   Value<String> label,
   Value<String?> remoteTermKey,
   Value<String?> calendarId,
+  Value<int?> calendarRevision,
   Value<DateTime> createdAt,
   Value<int> rowid,
 });
@@ -3577,6 +3631,10 @@ class $$SemestersTableFilterComposer
 
   ColumnFilters<String> get calendarId => $composableBuilder(
       column: $table.calendarId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get calendarRevision => $composableBuilder(
+      column: $table.calendarRevision,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -3695,6 +3753,10 @@ class $$SemestersTableOrderingComposer
   ColumnOrderings<String> get calendarId => $composableBuilder(
       column: $table.calendarId, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get calendarRevision => $composableBuilder(
+      column: $table.calendarRevision,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 }
@@ -3725,6 +3787,9 @@ class $$SemestersTableAnnotationComposer
 
   GeneratedColumn<String> get calendarId => $composableBuilder(
       column: $table.calendarId, builder: (column) => column);
+
+  GeneratedColumn<int> get calendarRevision => $composableBuilder(
+      column: $table.calendarRevision, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -3848,6 +3913,7 @@ class $$SemestersTableTableManager extends RootTableManager<
             Value<String> label = const Value.absent(),
             Value<String?> remoteTermKey = const Value.absent(),
             Value<String?> calendarId = const Value.absent(),
+            Value<int?> calendarRevision = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
@@ -3858,6 +3924,7 @@ class $$SemestersTableTableManager extends RootTableManager<
             label: label,
             remoteTermKey: remoteTermKey,
             calendarId: calendarId,
+            calendarRevision: calendarRevision,
             createdAt: createdAt,
             rowid: rowid,
           ),
@@ -3868,6 +3935,7 @@ class $$SemestersTableTableManager extends RootTableManager<
             required String label,
             Value<String?> remoteTermKey = const Value.absent(),
             Value<String?> calendarId = const Value.absent(),
+            Value<int?> calendarRevision = const Value.absent(),
             required DateTime createdAt,
             Value<int> rowid = const Value.absent(),
           }) =>
@@ -3878,6 +3946,7 @@ class $$SemestersTableTableManager extends RootTableManager<
             label: label,
             remoteTermKey: remoteTermKey,
             calendarId: calendarId,
+            calendarRevision: calendarRevision,
             createdAt: createdAt,
             rowid: rowid,
           ),

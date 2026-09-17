@@ -41,6 +41,14 @@ void main() {
     await tester.tap(find.text('2026-2027学年第一学期'));
     await tester.pumpAndSettle();
     expect(find.text('2026-2027 第一学期'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('应用版本'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('应用版本'), findsOneWidget);
+    expect(find.text('隐私说明'), findsOneWidget);
+    expect(find.text('开源许可证'), findsOneWidget);
 
     await tester.tap(find.text('课表'));
     await tester.pumpAndSettle();

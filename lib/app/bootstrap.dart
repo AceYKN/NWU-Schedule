@@ -33,10 +33,15 @@ final class ScheduleCalendarMissing extends ScheduleLoadState {
 }
 
 final class ScheduleReady extends ScheduleLoadState {
-  const ScheduleReady({required this.semester, required this.engine});
+  const ScheduleReady({
+    required this.semester,
+    required this.engine,
+    this.calendarUpdated = false,
+  });
 
   final Semester semester;
   final ScheduleEngine engine;
+  final bool calendarUpdated;
 }
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
@@ -127,6 +132,19 @@ final scheduleLoadProvider = StreamProvider<ScheduleLoadState>((ref) {
         calendarId == null ? null : await calendars.findById(calendarId);
     if (definition == null) return ScheduleCalendarMissing(selected);
 
+    final calendarUpdated = selected.calendarRevision != null &&
+        selected.calendarRevision != definition.revision;
+    if (selected.calendarRevision == null) {
+      // Existing databases created before revision tracking are initialized
+      // silently. A real later revision change remains visible until the user
+      // dismisses the non-blocking notice in Home.
+      unawaited(
+        repository.saveSemester(
+          selected.copyWith(calendarRevision: definition.revision),
+        ),
+      );
+    }
+
     final data = await repository.loadSemester(selected.id);
     return ScheduleReady(
       semester: selected,
@@ -137,6 +155,7 @@ final scheduleLoadProvider = StreamProvider<ScheduleLoadState>((ref) {
         meetingRules: data.meetingRules,
         exceptions: data.exceptions,
       ),
+      calendarUpdated: calendarUpdated,
     );
   });
 });

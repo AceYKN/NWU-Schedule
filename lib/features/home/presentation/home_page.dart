@@ -76,6 +76,10 @@ class _HomePageState extends ConsumerState<HomePage>
         return _HomeContent(
           engine: ready.engine,
           state: ready.engine.getStateAt(DateTime.now().toUtc()),
+          calendarUpdated: ready.calendarUpdated,
+          onDismissCalendarUpdate: ready.calendarUpdated
+              ? () => _dismissCalendarUpdate(ref, ready)
+              : null,
           onRefresh: () async => setState(() {}),
         );
       },
@@ -168,11 +172,15 @@ class _HomeContent extends StatelessWidget {
   const _HomeContent({
     required this.engine,
     required this.state,
+    required this.calendarUpdated,
+    required this.onDismissCalendarUpdate,
     required this.onRefresh,
   });
 
   final ScheduleEngine engine;
   final ScheduleNowState state;
+  final bool calendarUpdated;
+  final VoidCallback? onDismissCalendarUpdate;
   final Future<void> Function() onRefresh;
 
   @override
@@ -184,6 +192,21 @@ class _HomeContent extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
         children: [
           _HomeHeader(resolved: resolved),
+          if (calendarUpdated) ...[
+            const SizedBox(height: 14),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.update_outlined),
+                title: const Text('西北大学校历已更新'),
+                subtitle: const Text('课表、上课提醒和桌面 Widget 已按新校历重新计算。'),
+                trailing: IconButton(
+                  tooltip: '关闭提示',
+                  onPressed: onDismissCalendarUpdate,
+                  icon: const Icon(Icons.close),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           _HeroState(state: state),
           const SizedBox(height: 24),
@@ -236,6 +259,17 @@ class _HomeContent extends StatelessWidget {
     }
     return null;
   }
+}
+
+Future<void> _dismissCalendarUpdate(
+  WidgetRef ref,
+  ScheduleReady ready,
+) async {
+  await ref.read(scheduleDataRepositoryProvider).saveSemester(
+        ready.semester.copyWith(
+          calendarRevision: ready.engine.calendarEngine.definition.revision,
+        ),
+      );
 }
 
 class _HomeHeader extends StatelessWidget {

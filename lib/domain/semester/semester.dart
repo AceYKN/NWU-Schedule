@@ -10,6 +10,7 @@ class Semester {
     required this.label,
     this.remoteTermKey,
     this.calendarId,
+    this.calendarRevision,
     required this.createdAt,
   });
 
@@ -19,12 +20,14 @@ class Semester {
   final String label;
   final String? remoteTermKey;
   final String? calendarId;
+  final int? calendarRevision;
   final DateTime createdAt;
 
   Semester copyWith({
     String? label,
     String? remoteTermKey,
     String? calendarId,
+    int? calendarRevision,
   }) {
     return Semester(
       id: id,
@@ -33,6 +36,7 @@ class Semester {
       label: label ?? this.label,
       remoteTermKey: remoteTermKey ?? this.remoteTermKey,
       calendarId: calendarId ?? this.calendarId,
+      calendarRevision: calendarRevision ?? this.calendarRevision,
       createdAt: createdAt,
     );
   }
@@ -45,6 +49,7 @@ class Semester {
       'label': label,
       'remoteTermKey': remoteTermKey,
       'calendarId': calendarId,
+      'calendarRevision': calendarRevision,
       'createdAt': dateKey(createdAt),
     };
   }

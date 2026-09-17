@@ -214,6 +214,7 @@ class ScheduleBackup {
         'label': semester.label,
         'remoteTermKey': semester.remoteTermKey,
         'calendarId': semester.calendarId,
+        'calendarRevision': semester.calendarRevision,
         'createdAt': semester.createdAt.toUtc().toIso8601String(),
       };
 
@@ -278,6 +279,7 @@ class ScheduleBackup {
       label: _requiredString(json, 'label'),
       remoteTermKey: _optionalString(json['remoteTermKey']),
       calendarId: _optionalString(json['calendarId']),
+      calendarRevision: _optionalInt(json['calendarRevision']),
       createdAt: _requiredDate(json, 'createdAt'),
     );
   }

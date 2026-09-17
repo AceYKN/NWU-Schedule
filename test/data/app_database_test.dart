@@ -6,14 +6,14 @@ import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
 
 void main() {
-  test('schema v1 survives close and reopen with its course data', () async {
+  test('schema v2 survives close and reopen with its course data', () async {
     final directory = Directory.systemTemp.createTempSync('nwu-schedule-db-');
     addTearDown(() => directory.deleteSync(recursive: true));
     final file = File('${directory.path}/schedule.sqlite');
     final created = DateTime(2026, 9, 1);
 
     var database = AppDatabase(NativeDatabase(file));
-    expect(database.schemaVersion, 1);
+    expect(database.schemaVersion, 2);
     await database.into(database.semesters).insert(
           SemestersCompanion.insert(
             id: '2026-2027-1',

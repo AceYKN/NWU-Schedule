@@ -5,6 +5,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
+import '../../../core/nwu/constants.dart';
 import '../../../domain/errors/app_error.dart';
 import '../../../domain/backup/schedule_backup.dart';
 import '../../../domain/semester/semester.dart';
@@ -170,16 +171,65 @@ class SettingsPage extends ConsumerWidget {
         ),
         const SizedBox(height: 20),
         _SectionTitle(title: '关于'),
-        const Card(
-          child: ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text('西北大学课程表'),
-            subtitle: Text('Android First · Local First · 无广告无账号'),
+        Card(
+          child: Column(
+            children: [
+              const ListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('西北大学课程表'),
+                subtitle: Text('Android First · Local First · 无广告无账号'),
+              ),
+              const Divider(height: 1),
+              const ListTile(
+                leading: Icon(Icons.verified_outlined),
+                title: Text('应用版本'),
+                subtitle: Text(nwuAppVersion),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.privacy_tip_outlined),
+                title: const Text('隐私说明'),
+                subtitle: const Text('本地存储，仅在主动导入时访问教务系统'),
+                onTap: () => _showPrivacyInfo(context),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.menu_book_outlined),
+                title: const Text('开源许可证'),
+                onTap: () => showLicensePage(
+                  context: context,
+                  applicationName: '西北大学课程表',
+                  applicationVersion: nwuAppVersion,
+                ),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
+}
+
+void _showPrivacyInfo(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('隐私说明'),
+      content: const SingleChildScrollView(
+        child: Text(
+          '课程、校历、提醒和 Widget 数据只保存在本机。应用没有账号系统、广告、统计或课表后端。\n\n'
+          '只有你主动进入“从教务系统导入”时，临时 WebView 才访问西北大学官方教务域名。导入结束后会清理 Cookie、缓存和页面存储；应用不读取或保存学号、密码、登录令牌。\n\n'
+          '诊断信息和备份都由你主动导出，应用不会自动上传。',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('知道了'),
+        ),
+      ],
+    ),
+  );
 }
 
 Future<void> _createSemester(BuildContext context, WidgetRef ref) async {
@@ -226,6 +276,7 @@ Future<void> _createSemester(BuildContext context, WidgetRef ref) async {
       term: SemesterTerm.values[definition.term - 1],
       label: '${definition.academicYear} $termLabel',
       calendarId: definition.id,
+      calendarRevision: definition.revision,
       createdAt: DateTime.now(),
     ));
     await repository.setPreferredSemesterId(selected);

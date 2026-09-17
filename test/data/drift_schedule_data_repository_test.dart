@@ -25,11 +25,13 @@ void main() {
       term: domain.SemesterTerm.first,
       label: '2026–2027 第一学期',
       calendarId: 'nwu-2026-2027-1',
+      calendarRevision: 1,
       createdAt: createdAt,
     );
     await firstChange;
     await repository.saveSemester(semester);
     expect((await repository.loadSemesters()).single.id, semester.id);
+    expect((await repository.loadSemesters()).single.calendarRevision, 1);
 
     final course = domain.Course(
       id: 'manual-1',

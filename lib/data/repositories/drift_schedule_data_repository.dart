@@ -47,6 +47,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             label: row.label,
             remoteTermKey: row.remoteTermKey,
             calendarId: row.calendarId,
+            calendarRevision: row.calendarRevision,
             createdAt: row.createdAt,
           ),
         )
@@ -206,6 +207,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             label: semester.label,
             remoteTermKey: Value(semester.remoteTermKey),
             calendarId: Value(semester.calendarId),
+            calendarRevision: Value(semester.calendarRevision),
             createdAt: semester.createdAt,
           ),
         );
@@ -461,6 +463,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
                 label: semester.label,
                 remoteTermKey: Value(semester.remoteTermKey),
                 calendarId: Value(semester.calendarId),
+                calendarRevision: Value(semester.calendarRevision),
                 createdAt: semester.createdAt,
               ),
             );
@@ -713,6 +716,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             label: semester.label,
             remoteTermKey: Value(semester.remoteTermKey),
             calendarId: Value(semester.calendarId),
+            calendarRevision: Value(semester.calendarRevision),
             createdAt: semester.createdAt,
           ),
         );

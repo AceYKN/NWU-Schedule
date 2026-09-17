@@ -10,6 +10,7 @@ class Semesters extends Table {
   TextColumn get label => text()();
   TextColumn get remoteTermKey => text().nullable()();
   TextColumn get calendarId => text().nullable()();
+  IntColumn get calendarRevision => integer().nullable()();
   DateTimeColumn get createdAt => dateTime()();
 
   @override
@@ -131,7 +132,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -154,7 +155,9 @@ class AppDatabase extends _$AppDatabase {
           );
         },
         onUpgrade: (migrator, from, to) async {
-          throw StateError('Database migration $from → $to is missing');
+          if (from < 2) {
+            await migrator.addColumn(semesters, semesters.calendarRevision);
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
