@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
@@ -350,6 +351,9 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
   if (confirmed != true || !context.mounted) return;
   try {
     await ref.read(scheduleDataRepositoryProvider).clearAllData();
+    await ref.read(notificationServiceProvider).clear();
+    await ref.read(widgetServiceProvider).clear();
+    await WebViewCookieManager().clearCookies();
     ref.invalidate(themeIdProvider);
     ref.invalidate(scheduleLoadProvider);
     if (context.mounted) _showMessage(context, '本地数据已清除');

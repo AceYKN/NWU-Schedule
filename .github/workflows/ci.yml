@@ -22,3 +22,5 @@ jobs:
       - run: flutter analyze
       - run: flutter test
       - run: flutter build apk --debug
+      - if: github.ref == 'refs/heads/main'
+        run: flutter build apk --release
