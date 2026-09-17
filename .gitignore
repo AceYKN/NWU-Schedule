@@ -1,0 +1,32 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+/build/
+/coverage/
+/android/.gradle/
+/android/local.properties
+/ios/Pods/
+/ios/.symlinks/
+/ios/Flutter/ephemeral/
+/macos/Pods/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+
+# Generated files
+*.g.dart
+*.freezed.dart
+
+# Local database and secrets
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.env
+
+# OS files
+Thumbs.db
+Desktop.ini
