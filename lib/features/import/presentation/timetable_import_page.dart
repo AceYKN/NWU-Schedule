@@ -17,6 +17,7 @@ import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/schedule_data_repository.dart';
 import '../../../infrastructure/backup/backup_file_service.dart';
 import '../../../infrastructure/import/nwu_zhengfang_v9_importer.dart';
+import '../../../infrastructure/import/webview_session_service.dart';
 
 class TimetableImportPage extends ConsumerStatefulWidget {
   const TimetableImportPage({super.key});
@@ -396,6 +397,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       await _controller.clearLocalStorage();
       await _controller.clearCache();
       await _cookieManager.clearCookies();
+      await const WebViewSessionService().clear();
     } on Object {
       // The importer is best-effort cleanup even when the WebView is closing.
     }

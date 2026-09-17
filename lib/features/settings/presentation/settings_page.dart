@@ -10,6 +10,7 @@ import '../../../domain/errors/app_error.dart';
 import '../../../domain/backup/schedule_backup.dart';
 import '../../../domain/semester/semester.dart';
 import '../../../infrastructure/backup/backup_file_service.dart';
+import '../../../infrastructure/import/webview_session_service.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -461,6 +462,7 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
     await ref.read(notificationServiceProvider).clear();
     await ref.read(widgetServiceProvider).clear();
     await WebViewCookieManager().clearCookies();
+    await const WebViewSessionService().clear();
     ref.invalidate(themeIdProvider);
     ref.invalidate(scheduleLoadProvider);
     if (context.mounted) _showMessage(context, '本地数据已清除');

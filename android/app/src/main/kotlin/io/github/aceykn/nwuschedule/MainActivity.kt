@@ -8,6 +8,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.webkit.CookieManager
+import android.webkit.WebStorage
+import android.webkit.WebView
+import android.webkit.WebViewDatabase
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -50,6 +54,15 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "updateSnapshot" -> updateWidgetSnapshot(call, result)
                 "clearSnapshot" -> clearWidgetSnapshot(result)
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            WEBVIEW_SESSION_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "clearSession" -> clearWebViewSession(result)
                 else -> result.notImplemented()
             }
         }
@@ -270,6 +283,23 @@ class MainActivity : FlutterActivity() {
         result.success(null)
     }
 
+    private fun clearWebViewSession(result: MethodChannel.Result) {
+        try {
+            CookieManager.getInstance().removeAllCookies {
+                CookieManager.getInstance().flush()
+                WebStorage.getInstance().deleteAllData()
+                WebViewDatabase.getInstance(this).clearFormData()
+                val webView = WebView(this)
+                webView.clearHistory()
+                webView.clearCache(true)
+                webView.destroy()
+                result.success(null)
+            }
+        } catch (error: Exception) {
+            result.error("clear_failed", error.message, null)
+        }
+    }
+
     private fun cancelNotificationAlarm(alarmManager: AlarmManager, id: Int) {
         val intent = Intent(this, CourseNotificationReceiver::class.java)
         val pendingIntent = PendingIntent.getBroadcast(
@@ -310,6 +340,7 @@ class MainActivity : FlutterActivity() {
         private const val CHANNEL = "nwu_schedule/backup_files"
         private const val NOTIFICATION_CHANNEL = "nwu_schedule/notifications"
         private const val WIDGET_CHANNEL = "nwu_schedule/widget"
+        private const val WEBVIEW_SESSION_CHANNEL = "nwu_schedule/webview_session"
         private const val NAVIGATION_CHANNEL = "nwu_schedule/navigation"
         private const val PREFERENCES = "nwu_schedule_notifications"
         private const val SCHEDULED_IDS = "scheduled_ids"
