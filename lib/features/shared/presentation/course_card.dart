@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/theme/schedule_theme.dart';
 import '../../../core/nwu/periods.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/week_mask.dart';
@@ -25,6 +26,7 @@ class CourseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final themeTokens = scheduleThemeTokensOf(context);
     final accent = Color(
       instance.course.colorOverride ?? scheme.primary.toARGB32(),
     );
@@ -47,10 +49,12 @@ class CourseCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(width: 5, color: accent),
+                Container(width: themeTokens.courseAccentWidth, color: accent),
                 Expanded(
                   child: Padding(
-                    padding: EdgeInsets.all(compact ? 12 : 16),
+                    padding: EdgeInsets.all(
+                      compact ? themeTokens.compactCoursePadding : 16,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

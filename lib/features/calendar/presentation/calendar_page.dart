@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/theme/schedule_theme.dart';
 import '../../../core/time/campus_clock.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../domain/calendar/calendar_engine.dart';
@@ -71,6 +72,7 @@ class _MonthContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeTokens = scheduleThemeTokensOf(context);
     final leading = firstDay.weekday - 1;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
@@ -127,9 +129,9 @@ class _MonthContent extends StatelessWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: leading + days.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 7,
-            mainAxisExtent: 78,
+            mainAxisExtent: themeTokens.monthCellHeight,
           ),
           itemBuilder: (context, index) {
             if (index < leading) {
@@ -162,6 +164,7 @@ class _MonthCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeTokens = scheduleThemeTokensOf(context);
     final isToday = isSameDate(date, CampusClock.now());
     final label = resolved.label;
     final holiday = resolved.override?.type == CalendarOverrideType.holiday;
@@ -177,7 +180,7 @@ class _MonthCell extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         onTap: () => _showDailyAgenda(context, date, courses),
         child: Padding(
-          padding: const EdgeInsets.all(7),
+          padding: EdgeInsets.all(themeTokens.monthCellPadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

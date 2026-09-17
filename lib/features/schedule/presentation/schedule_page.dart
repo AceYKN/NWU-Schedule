@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/theme/schedule_theme.dart';
 import '../../../core/nwu/periods.dart';
 import '../../../core/time/campus_clock.dart';
 import '../../../core/utils/date_utils.dart';
@@ -161,6 +162,7 @@ class _ScheduleGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeTokens = scheduleThemeTokensOf(context);
     final rows = <TableRow>[
       TableRow(
         children: [
@@ -195,10 +197,10 @@ class _ScheduleGrid extends StatelessWidget {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Table(
-        defaultColumnWidth: const FixedColumnWidth(118),
+        defaultColumnWidth: FixedColumnWidth(themeTokens.gridColumnWidth),
         border: TableBorder.all(
           color: Theme.of(context).dividerColor.withAlpha(89),
-          width: 0.6,
+          width: themeTokens.gridBorderWidth,
         ),
         children: rows,
       ),
@@ -250,9 +252,10 @@ class _PeriodCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeTokens = scheduleThemeTokensOf(context);
     final period = const NwuPeriodRepository().byNumber(section);
     return Container(
-      height: 70,
+      height: themeTokens.gridCellHeight,
       alignment: Alignment.center,
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: Text(
@@ -279,10 +282,11 @@ class _ScheduleCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeTokens = scheduleThemeTokensOf(context);
     final isStart = instance != null && instance!.startSection == section;
     if (!isStart) {
       return Container(
-        height: 70,
+        height: themeTokens.gridCellHeight,
         decoration: showCurrentTime
             ? BoxDecoration(
                 border: Border(
@@ -304,7 +308,7 @@ class _ScheduleCell extends StatelessWidget {
         InkWell(
           onTap: () => showCourseDetails(context, instance!),
           child: Container(
-            height: 70,
+            height: themeTokens.gridCellHeight,
             padding: const EdgeInsets.all(6),
             color: color.withAlpha(46),
             child: Text(

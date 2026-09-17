@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/theme/schedule_theme.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../domain/calendar/calendar_engine.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
@@ -281,10 +282,14 @@ class _HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeTokens = scheduleThemeTokensOf(context);
     return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(themeTokens.todayCardRadius),
+      ),
       color: background,
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(themeTokens.todayCardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
