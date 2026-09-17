@@ -154,6 +154,16 @@ void showCourseDetails(
                         runSpacing: 8,
                         children: [
                           OutlinedButton.icon(
+                            onPressed: () => _showCourseColorPicker(
+                              context,
+                              sheetContext,
+                              ref,
+                              instance,
+                            ),
+                            icon: const Icon(Icons.palette_outlined),
+                            label: const Text('修改颜色'),
+                          ),
+                          OutlinedButton.icon(
                             onPressed: () => _showExceptionEditor(
                               context,
                               sheetContext,
@@ -312,6 +322,87 @@ Future<void> _showExceptionEditor(
     }
   }
 }
+
+Future<void> _showCourseColorPicker(
+  BuildContext pageContext,
+  BuildContext sheetContext,
+  WidgetRef ref,
+  EffectiveCourseInstance instance,
+) async {
+  final selected = await showModalBottomSheet<int>(
+    context: sheetContext,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          const ListTile(
+            title: Text('修改课程颜色'),
+            subtitle: Text('颜色覆盖只保存在本机，重新导入不会清除'),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final color in _courseColors)
+                  InkWell(
+                    onTap: () => Navigator.pop(context, color),
+                    borderRadius: BorderRadius.circular(24),
+                    child: CircleAvatar(
+                      radius: 22,
+                      backgroundColor: Color(color),
+                      child: instance.course.colorOverride == color
+                          ? const Icon(Icons.check, color: Colors.white)
+                          : null,
+                    ),
+                  ),
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(context, -1),
+                  child: const Text('清除覆盖色'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (selected == null || !sheetContext.mounted) return;
+  try {
+    final repository = ref.read(scheduleDataRepositoryProvider);
+    final snapshot = await repository.loadSemester(instance.course.semesterId);
+    final rules = snapshot.meetingRules
+        .where((rule) => rule.courseId == instance.course.id)
+        .toList(growable: false);
+    await repository.saveCourse(
+      instance.course.copyWith(colorOverride: selected == -1 ? null : selected),
+      rules,
+    );
+    if (!sheetContext.mounted || !pageContext.mounted) return;
+    final messenger = ScaffoldMessenger.of(pageContext);
+    Navigator.of(sheetContext).pop();
+    messenger.showSnackBar(const SnackBar(content: Text('课程颜色已更新')));
+  } catch (error) {
+    if (sheetContext.mounted) {
+      ScaffoldMessenger.of(sheetContext).showSnackBar(
+        SnackBar(content: Text('更新课程颜色失败：$error')),
+      );
+    }
+  }
+}
+
+const _courseColors = <int>[
+  0xff52766c,
+  0xff526579,
+  0xff9a7354,
+  0xff7b5ea7,
+  0xffb25d5d,
+  0xff3f7f8f,
+  0xff8a6d3b,
+  0xff4f7d57,
+];
 
 class _ExceptionEditorSheet extends StatefulWidget {
   const _ExceptionEditorSheet({required this.instance});
