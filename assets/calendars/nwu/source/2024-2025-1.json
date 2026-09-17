@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "nwu-2024-2025-1",
+  "school": "NWU",
+  "academicYear": "2024-2025",
+  "term": 1,
+  "label": "2024-2025学年第一学期",
+  "semesterStartDate": "2024-08-26",
+  "week1StartDate": "2024-08-26",
+  "semesterEndDate": "2025-01-10",
+  "totalWeeks": 20,
+  "revision": 1,
+  "followingBreak": {
+    "kind": "winter",
+    "label": "寒假",
+    "startDate": "2025-01-11",
+    "endDate": "2025-02-23",
+    "reportedWeeks": 6,
+    "reportedDays": 44
+  },
+  "holidayPeriods": [
+    {
+      "name": "中秋节",
+      "startDate": "2024-09-15",
+      "endDate": "2024-09-17"
+    },
+    {
+      "name": "国庆节",
+      "startDate": "2024-10-01",
+      "endDate": "2024-10-07"
+    }
+  ],
+  "makeupDays": [
+    {
+      "date": "2024-09-14",
+      "useScheduleOf": "2024-09-16",
+      "label": "中秋节调休"
+    },
+    {
+      "date": "2024-09-29",
+      "useScheduleOf": "2024-10-04",
+      "label": "国庆节调休"
+    },
+    {
+      "date": "2024-10-12",
+      "useScheduleOf": "2024-10-07",
+      "label": "国庆节调休"
+    }
+  ]
+}
