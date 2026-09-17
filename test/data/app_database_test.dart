@@ -6,6 +6,56 @@ import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
 
 void main() {
+  test('migrates a schema v1 database to v2 without losing data', () async {
+    final directory = Directory.systemTemp.createTempSync('nwu-schedule-db-');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final file = File('${directory.path}/legacy.sqlite');
+    final created = DateTime(2026, 9, 1);
+
+    var database = AppDatabase(NativeDatabase(file));
+    await database.into(database.semesters).insert(
+          SemestersCompanion.insert(
+            id: '2026-2027-1',
+            academicYear: '2026-2027',
+            term: 1,
+            label: '第一学期',
+            createdAt: created,
+          ),
+        );
+    await database.into(database.courses).insert(
+          CoursesCompanion.insert(
+            id: 'legacy-course',
+            semesterId: '2026-2027-1',
+            sourceType: 'manual',
+            name: '迁移保留课程',
+            createdAt: created,
+            updatedAt: created,
+          ),
+        );
+    await database.close();
+
+    // Start from the current on-disk schema, then remove the v2-only column
+    // and lower user_version to create a faithful v1 migration fixture.
+    final legacyExecutor = NativeDatabase(
+      file,
+      enableMigrations: false,
+      setup: (sqlite) {
+        sqlite.execute('ALTER TABLE semesters DROP COLUMN calendar_revision');
+        sqlite.execute('PRAGMA user_version = 1');
+      },
+    );
+    await legacyExecutor.close();
+
+    database = AppDatabase(NativeDatabase(file));
+    expect(database.schemaVersion, 2);
+    final semester = await database.select(database.semesters).getSingle();
+    final course = await database.select(database.courses).getSingle();
+    expect(semester.calendarRevision, isNull);
+    expect(course.id, 'legacy-course');
+    expect(course.name, '迁移保留课程');
+    await database.close();
+  });
+
   test('schema v2 survives close and reopen with its course data', () async {
     final directory = Directory.systemTemp.createTempSync('nwu-schedule-db-');
     addTearDown(() => directory.deleteSync(recursive: true));
