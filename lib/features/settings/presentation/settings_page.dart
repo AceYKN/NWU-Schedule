@@ -426,6 +426,9 @@ Future<void> _restoreBackup(BuildContext context, WidgetRef ref) async {
       await repository.setSetting('appearance.themeId', themeId);
     }
     ref.invalidate(themeIdProvider);
+    ref.invalidate(onboardingCompletedProvider);
+    ref.invalidate(notificationEnabledProvider);
+    ref.invalidate(notificationLeadMinutesProvider);
     ref.invalidate(scheduleLoadProvider);
     if (context.mounted) _showMessage(context, '备份已恢复');
   } catch (error) {
@@ -464,6 +467,9 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
     await WebViewCookieManager().clearCookies();
     await const WebViewSessionService().clear();
     ref.invalidate(themeIdProvider);
+    ref.invalidate(onboardingCompletedProvider);
+    ref.invalidate(notificationEnabledProvider);
+    ref.invalidate(notificationLeadMinutesProvider);
     ref.invalidate(scheduleLoadProvider);
     if (context.mounted) _showMessage(context, '本地数据已清除');
   } catch (error) {
