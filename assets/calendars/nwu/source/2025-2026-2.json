@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "nwu-2025-2026-2",
+  "school": "NWU",
+  "academicYear": "2025-2026",
+  "term": 2,
+  "label": "2025-2026学年第二学期",
+  "semesterStartDate": "2026-03-02",
+  "week1StartDate": "2026-03-02",
+  "semesterEndDate": "2026-07-17",
+  "totalWeeks": 20,
+  "revision": 1,
+  "followingBreak": {
+    "kind": "summer",
+    "label": "暑假",
+    "startDate": "2026-07-18",
+    "endDate": "2026-08-30",
+    "reportedWeeks": 6,
+    "reportedDays": 44
+  },
+  "holidayPeriods": [
+    {
+      "name": "清明节",
+      "startDate": "2026-04-04",
+      "endDate": "2026-04-06"
+    },
+    {
+      "name": "劳动节",
+      "startDate": "2026-05-01",
+      "endDate": "2026-05-05"
+    },
+    {
+      "name": "端午节",
+      "startDate": "2026-06-19",
+      "endDate": "2026-06-21"
+    }
+  ],
+  "makeupDays": [
+    {
+      "date": "2026-05-09",
+      "useScheduleOf": "2026-05-04",
+      "label": "劳动节调休"
+    }
+  ]
+}
