@@ -45,6 +45,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   ImportDiagnostic? _diagnostic;
   String? _error;
   String? _currentUrl;
+  int? _lastHttpStatus;
   bool _bridgeEnabled = false;
   bool _reading = false;
   bool _saving = false;
@@ -71,6 +72,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
           onWebResourceError: (error) {
             unawaited(_recordWebResourceError(error));
           },
+          onHttpError: _recordHttpError,
         ),
       )
       ..loadRequest(NwuZhengfangV9Importer.entryUri);
@@ -126,6 +128,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       _reading = true;
       _error = null;
       _diagnostic = null;
+      _lastHttpStatus = null;
       _diff = null;
       _resolution = ImportConflictResolution.empty;
     });
@@ -292,7 +295,6 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
         adapterVersion: 'nwu-zhengfang-v9',
         parserStage: 'web-resource',
         currentUrlPath: _currentUrlPath,
-        httpStatus: error.errorCode,
         error: redactImportError(error.description),
       ),
     );
@@ -300,6 +302,15 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       importFailureUserMessage(failure),
       await _enrichDiagnostic(failure.diagnostic),
     );
+  }
+
+  void _recordHttpError(HttpResponseError error) {
+    final response = error.response;
+    final uri = response?.uri;
+    if (response == null || uri == null) return;
+    if (NwuZhengfangV9Importer.isAllowedUri(uri)) {
+      _lastHttpStatus = response.statusCode;
+    }
   }
 
   void _setFailure(String message, ImportDiagnostic diagnostic) {
@@ -366,6 +377,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       androidVersion: Platform.operatingSystemVersion,
       webViewVersion: _webViewVersion(userAgent),
       currentUrlPath: _currentUrlPath,
+      httpStatus: diagnostic.httpStatus ?? _lastHttpStatus,
       selectors: diagnostic.selectors.isEmpty
           ? _payloadSelectors
           : diagnostic.selectors,
