@@ -207,4 +207,22 @@ void main() {
     );
     expect(diff.changes.single.kind, ImportChangeKind.locallyDeleted);
   });
+
+  test('explicitly restoring a tombstone turns it into an added course', () {
+    final diff = const ImportDiffEngine().build(
+      incoming: timetable([course(name: '已恢复课程')]),
+      local: null,
+      previousImport: timetable([course()]),
+      deletedSourceCourseKeys: {'course-1'},
+    );
+    final restored = diff.resolve(
+      ImportConflictResolution.copy(
+        const {},
+        restoreDeletedCourseKeys: {'course-1'},
+      ),
+    );
+
+    expect(restored.changes.single.kind, ImportChangeKind.added);
+    expect(restored.hasLocallyDeleted, isFalse);
+  });
 }

@@ -314,7 +314,9 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
 
   Future<void> _showConflictResolution() async {
     final diff = _diff;
-    if (diff == null || !diff.hasConflicts) return;
+    if (diff == null || (!diff.hasConflicts && !diff.hasLocallyDeleted)) {
+      return;
+    }
     final resolution = await showModalBottomSheet<ImportConflictResolution>(
       context: context,
       isScrollControlled: true,
@@ -461,7 +463,8 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
                   child: _ImportPreview(
                     timetable: timetable,
                     diff: _resolvedDiff,
-                    hasConflictItems: _diff?.hasConflicts == true,
+                    hasConflictItems: _diff?.hasConflicts == true ||
+                        _diff?.hasLocallyDeleted == true,
                     saving: _saving,
                     onConfirm: _confirmImport,
                     onRetry: _readCurrentPage,
@@ -534,7 +537,9 @@ class _ImportPreview extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 '新增 ${diff!.addedCount} · 更新 ${diff!.modifiedCount} · '
-                '删除 ${diff!.removedCount} · 冲突 ${diff!.conflictCount}',
+                '删除 ${diff!.removedCount} · '
+                '本地删除 ${diff!.locallyDeletedCount} · '
+                '冲突 ${diff!.conflictCount}',
                 style: TextStyle(
                   color: diff!.hasConflicts
                       ? Theme.of(context).colorScheme.error
@@ -554,7 +559,9 @@ class _ImportPreview extends StatelessWidget {
                   child: OutlinedButton.icon(
                     onPressed: onResolveConflicts,
                     icon: const Icon(Icons.merge_type),
-                    label: Text(diff!.hasConflicts ? '解决冲突' : '调整冲突选择'),
+                    label: Text(
+                      diff!.hasConflicts ? '解决冲突' : '处理本地删除课程',
+                    ),
                   ),
                 ),
             ],
@@ -617,11 +624,19 @@ class _ConflictResolutionSheetState extends State<_ConflictResolutionSheet> {
     for (final entry in widget.initial.choices.entries)
       entry.key: Map<String, MergeDecision>.from(entry.value),
   };
+  late final Set<String> _restoreDeleted = {
+    ...widget.initial.restoreDeletedCourseKeys,
+  };
 
   List<_ConflictEntry> get _entries => [
         for (final change in widget.diff.changes)
           for (final field in change.fields)
             if (field.hasConflict) _ConflictEntry(change, field),
+      ];
+
+  List<ImportChange> get _deletedChanges => [
+        for (final change in widget.diff.changes)
+          if (change.kind == ImportChangeKind.locallyDeleted) change,
       ];
 
   bool get _complete => _entries.every(
@@ -635,6 +650,16 @@ class _ConflictResolutionSheetState extends State<_ConflictResolutionSheet> {
     );
     next[entry.field.field] = decision;
     setState(() => _choices[entry.change.sourceCourseKey] = next);
+  }
+
+  void _toggleRestore(ImportChange change, bool restore) {
+    setState(() {
+      if (restore) {
+        _restoreDeleted.add(change.sourceCourseKey);
+      } else {
+        _restoreDeleted.remove(change.sourceCourseKey);
+      }
+    });
   }
 
   @override
@@ -654,20 +679,39 @@ class _ConflictResolutionSheetState extends State<_ConflictResolutionSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '解决导入冲突',
+                '处理导入变更',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
               ),
               const SizedBox(height: 4),
-              const Text('每个冲突字段都需要明确选择保留本地值或教务系统值。'),
+              const Text('本地删除默认保留；冲突字段和恢复动作都由你明确选择。'),
               const SizedBox(height: 12),
               Expanded(
                 child: ListView.separated(
-                  itemCount: entries.length,
+                  itemCount: _deletedChanges.length + entries.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
-                    final entry = entries[index];
+                    if (index < _deletedChanges.length) {
+                      final change = _deletedChanges[index];
+                      final courseName =
+                          change.remoteCourse?.name ?? change.sourceCourseKey;
+                      return Card(
+                        child: CheckboxListTile(
+                          value: _restoreDeleted.contains(
+                            change.sourceCourseKey,
+                          ),
+                          onChanged: (value) => _toggleRestore(
+                            change,
+                            value ?? false,
+                          ),
+                          title: Text('恢复 $courseName'),
+                          subtitle: const Text('教务系统中仍存在这门课程，勾选后本次导入会恢复它。'),
+                          secondary: const Icon(Icons.restore),
+                        ),
+                      );
+                    }
+                    final entry = entries[index - _deletedChanges.length];
                     final selected = _choices[entry.change.sourceCourseKey]
                         ?[entry.field.field];
                     return Card(
@@ -723,7 +767,10 @@ class _ConflictResolutionSheetState extends State<_ConflictResolutionSheet> {
                 child: FilledButton(
                   onPressed: _complete
                       ? () => Navigator.of(context).pop(
-                            ImportConflictResolution.copy(_choices),
+                            ImportConflictResolution.copy(
+                              _choices,
+                              restoreDeletedCourseKeys: _restoreDeleted,
+                            ),
                           )
                       : null,
                   child: Text(_complete ? '应用选择' : '请完成全部选择'),

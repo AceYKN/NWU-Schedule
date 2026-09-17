@@ -386,4 +386,57 @@ void main() {
     );
     expect(await database.select(database.importSnapshots).get(), hasLength(2));
   });
+
+  test('restoring a locally deleted import removes its tombstone', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final timetable = RemoteTimetable(
+      semester: const RemoteSemester(
+        remoteTermKey: '2026-2027-1',
+        academicYear: '2026-2027',
+        term: 1,
+        label: '2026-2027 第一学期',
+      ),
+      totalWeeks: 20,
+      courses: [
+        ImportedCourse(
+          sourceCourseKey: 'course-1',
+          name: '已删除课程',
+          code: null,
+          teachingClass: null,
+          credits: null,
+          assessment: null,
+          meetings: [
+            ImportedMeeting(
+              sourceMeetingKey: 'rule-1',
+              weekday: 1,
+              startSection: 1,
+              endSection: 2,
+              teacher: null,
+              campus: null,
+              room: '3406',
+              weekMask: WeekMask.all(20),
+            ),
+          ],
+        ),
+      ],
+    );
+    await repository.commitImportedTimetable(timetable);
+    final course =
+        (await repository.loadSemester(timetable.semester.id)).courses.single;
+    await repository.deleteCourse(course.id);
+
+    await repository.commitImportedTimetable(
+      timetable,
+      resolution: ImportConflictResolution.copy(
+        const {},
+        restoreDeletedCourseKeys: {'course-1'},
+      ),
+    );
+
+    final restored = await repository.loadSemester(timetable.semester.id);
+    expect(restored.courses.single.deleted, isFalse);
+    expect(await database.select(database.deletedSourceItems).get(), isEmpty);
+  });
 }

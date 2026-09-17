@@ -659,6 +659,15 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         }
         if (change.kind == ImportChangeKind.locallyDeleted) continue;
         if (change.kind == ImportChangeKind.unchanged) continue;
+        final restoreDeleted = resolution.shouldRestore(
+          remote.sourceCourseKey,
+        );
+        if (restoreDeleted) {
+          await (database.delete(database.deletedSourceItems)
+                ..where((table) => table.id
+                    .equals('course:${semester.id}:${remote.sourceCourseKey}')))
+              .go();
+        }
         final existing = localCourses[remote.sourceCourseKey];
         final course = _courseFromRemote(
           semester: semester,
@@ -666,6 +675,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
           existing: existing,
           fields: change.fields,
           now: now,
+          restoreDeleted: restoreDeleted,
         );
         final existingRules = existing == null
             ? const <domain.MeetingRule>[]
@@ -778,6 +788,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     required domain.Course? existing,
     required List<ImportFieldChange> fields,
     required DateTime now,
+    bool restoreDeleted = false,
   }) {
     Object? value(String field, Object? remoteValue, Object? localValue) {
       ImportFieldChange? change;
@@ -809,7 +820,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
       note: existing?.note,
       colorOverride: existing?.colorOverride,
       hidden: existing?.hidden ?? false,
-      deleted: existing?.deleted ?? false,
+      deleted: restoreDeleted ? false : existing?.deleted ?? false,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     );

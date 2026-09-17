@@ -60,6 +60,14 @@ class ImportDiff {
 
   bool get hasConflicts => changes.any((change) => change.hasConflict);
 
+  bool get hasLocallyDeleted => changes.any(
+        (change) => change.kind == ImportChangeKind.locallyDeleted,
+      );
+
+  int get locallyDeletedCount => changes
+      .where((change) => change.kind == ImportChangeKind.locallyDeleted)
+      .length;
+
   int get addedCount =>
       changes.where((change) => change.kind == ImportChangeKind.added).length;
 
@@ -73,7 +81,7 @@ class ImportDiff {
   int get conflictCount => changes.where((change) => change.hasConflict).length;
 
   ImportDiff resolve(ImportConflictResolution resolution) {
-    if (!hasConflicts) return this;
+    if (!hasConflicts && !hasLocallyDeleted) return this;
     return ImportDiff([
       for (final change in changes) _resolveChange(change, resolution),
     ]);
@@ -83,6 +91,15 @@ class ImportDiff {
     ImportChange change,
     ImportConflictResolution resolution,
   ) {
+    if (change.kind == ImportChangeKind.locallyDeleted &&
+        resolution.shouldRestore(change.sourceCourseKey)) {
+      return ImportChange(
+        kind: ImportChangeKind.added,
+        sourceCourseKey: change.sourceCourseKey,
+        localCourse: change.localCourse,
+        remoteCourse: change.remoteCourse,
+      );
+    }
     if (!change.hasConflict) return change;
     final fields = [
       for (final field in change.fields)
@@ -117,23 +134,34 @@ class ImportDiff {
 }
 
 class ImportConflictResolution {
-  const ImportConflictResolution(this.choices);
+  const ImportConflictResolution({
+    required this.choices,
+    this.restoreDeletedCourseKeys = const {},
+  });
 
   factory ImportConflictResolution.copy(
-    Map<String, Map<String, MergeDecision>> choices,
-  ) {
-    return ImportConflictResolution({
-      for (final entry in choices.entries)
-        entry.key: Map<String, MergeDecision>.from(entry.value),
-    });
+    Map<String, Map<String, MergeDecision>> choices, {
+    Set<String> restoreDeletedCourseKeys = const {},
+  }) {
+    return ImportConflictResolution(
+      choices: {
+        for (final entry in choices.entries)
+          entry.key: Map<String, MergeDecision>.from(entry.value),
+      },
+      restoreDeletedCourseKeys: restoreDeletedCourseKeys,
+    );
   }
 
-  static const empty = ImportConflictResolution({});
+  static const empty = ImportConflictResolution(choices: {});
 
   final Map<String, Map<String, MergeDecision>> choices;
+  final Set<String> restoreDeletedCourseKeys;
 
   MergeDecision? choiceFor(String sourceCourseKey, String field) =>
       choices[sourceCourseKey]?[field];
+
+  bool shouldRestore(String sourceCourseKey) =>
+      restoreDeletedCourseKeys.contains(sourceCourseKey);
 }
 
 class ImportDiffEngine {
