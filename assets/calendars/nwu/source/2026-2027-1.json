@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "nwu-2026-2027-1",
+  "school": "NWU",
+  "academicYear": "2026-2027",
+  "term": 1,
+  "label": "2026-2027学年第一学期",
+  "semesterStartDate": "2026-08-31",
+  "week1StartDate": "2026-08-31",
+  "semesterEndDate": "2027-01-15",
+  "totalWeeks": 20,
+  "revision": 1,
+  "followingBreak": {
+    "kind": "winter",
+    "label": "寒假",
+    "startDate": "2027-01-16",
+    "endDate": "2027-02-28",
+    "reportedWeeks": 6,
+    "reportedDays": 44
+  },
+  "holidayPeriods": [
+    {
+      "name": "中秋节",
+      "startDate": "2026-09-25",
+      "endDate": "2026-09-27"
+    },
+    {
+      "name": "国庆节",
+      "startDate": "2026-10-01",
+      "endDate": "2026-10-07"
+    }
+  ],
+  "makeupDays": [
+    {
+      "date": "2026-09-20",
+      "useScheduleOf": "2026-10-05",
+      "label": "国庆节调休"
+    },
+    {
+      "date": "2026-10-10",
+      "useScheduleOf": "2026-10-06",
+      "label": "国庆节调休"
+    }
+  ]
+}
