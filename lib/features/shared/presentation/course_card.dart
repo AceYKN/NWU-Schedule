@@ -131,7 +131,13 @@ void showCourseDetails(
                       _DetailLine(
                           label: '教师', value: instance.teacher ?? '未提供'),
                       _DetailLine(
-                          label: '地点', value: instance.location ?? '未提供'),
+                        label: '校区',
+                        value: instance.campus ?? '未提供',
+                      ),
+                      _DetailLine(
+                        label: '教室',
+                        value: instance.room ?? '未提供',
+                      ),
                       _DetailLine(
                         label: '时间',
                         value:
@@ -147,6 +153,21 @@ void showCourseDetails(
                       if (instance.course.code != null)
                         _DetailLine(
                             label: '课程代码', value: instance.course.code!),
+                      if (instance.course.teachingClass != null)
+                        _DetailLine(
+                          label: '教学班',
+                          value: instance.course.teachingClass!,
+                        ),
+                      if (instance.course.credits != null)
+                        _DetailLine(
+                          label: '学分',
+                          value: '${instance.course.credits}',
+                        ),
+                      if (instance.course.assessment != null)
+                        _DetailLine(
+                          label: '考核方式',
+                          value: instance.course.assessment!,
+                        ),
                       if (instance.course.note != null)
                         _DetailLine(label: '备注', value: instance.course.note!),
                       const SizedBox(height: 14),
