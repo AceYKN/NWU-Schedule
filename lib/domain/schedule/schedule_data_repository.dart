@@ -43,6 +43,8 @@ abstract interface class ScheduleDataRepository {
 
   Future<void> saveException(CourseException exception);
 
+  Future<void> deleteException(String exceptionId);
+
   Future<void> setCourseHidden(String courseId, bool hidden);
 
   Future<void> deleteCourse(String courseId);

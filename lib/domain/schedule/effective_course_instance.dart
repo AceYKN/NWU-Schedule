@@ -17,6 +17,7 @@ class EffectiveCourseInstance {
     this.room,
     this.isException = false,
     this.exceptionType,
+    this.exceptionId,
   });
 
   final Course course;
@@ -32,6 +33,7 @@ class EffectiveCourseInstance {
   final String? room;
   final bool isException;
   final CourseExceptionType? exceptionType;
+  final String? exceptionId;
 
   String get courseName => course.name;
 
@@ -53,6 +55,7 @@ class EffectiveCourseInstance {
     String? room,
     bool? isException,
     CourseExceptionType? exceptionType,
+    String? exceptionId,
     DateTime? date,
   }) {
     return EffectiveCourseInstance(
@@ -69,6 +72,7 @@ class EffectiveCourseInstance {
       room: room ?? this.room,
       isException: isException ?? this.isException,
       exceptionType: exceptionType ?? this.exceptionType,
+      exceptionId: exceptionId ?? this.exceptionId,
     );
   }
 }

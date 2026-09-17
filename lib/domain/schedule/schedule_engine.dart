@@ -281,6 +281,7 @@ class ScheduleEngine {
       room: room ?? syntheticRule.room,
       isException: true,
       exceptionType: exception.type,
+      exceptionId: exception.id,
     );
   }
 
@@ -324,6 +325,7 @@ class ScheduleEngine {
     String? room,
     bool isException = false,
     CourseExceptionType? exceptionType,
+    String? exceptionId,
   }) {
     final startPeriod = periodRepository.byNumber(startSection);
     final endPeriod = periodRepository.byNumber(endSection);
@@ -341,6 +343,7 @@ class ScheduleEngine {
       room: room,
       isException: isException,
       exceptionType: exceptionType,
+      exceptionId: exceptionId,
     );
   }
 

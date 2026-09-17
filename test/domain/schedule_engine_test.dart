@@ -180,6 +180,7 @@ void main() {
     expect(target, hasLength(1));
     expect(target.single.startSection, 7);
     expect(target.single.room, '3508');
+    expect(target.single.exceptionId, 'move-1');
     expect(
       engine.getCoursesForDate(DateTime(2026, 9, 14)),
       hasLength(1),

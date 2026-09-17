@@ -286,6 +286,13 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   }
 
   @override
+  Future<void> deleteException(String exceptionId) async {
+    await (database.delete(database.courseExceptions)
+          ..where((table) => table.id.equals(exceptionId)))
+        .go();
+  }
+
+  @override
   Future<void> setCourseHidden(String courseId, bool hidden) async {
     await (database.update(database.courses)
           ..where((table) => table.id.equals(courseId)))

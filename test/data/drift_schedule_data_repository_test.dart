@@ -4,6 +4,7 @@ import 'package:nwu_schedule/core/utils/week_mask.dart';
 import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
 import 'package:nwu_schedule/domain/course/course.dart' as domain;
+import 'package:nwu_schedule/domain/course/course_exception.dart' as domain;
 import 'package:nwu_schedule/domain/course/meeting_rule.dart' as domain;
 import 'package:nwu_schedule/domain/import/import_diff.dart';
 import 'package:nwu_schedule/domain/import/timetable_import.dart';
@@ -147,6 +148,37 @@ void main() {
     expect((await repository.loadSemester(semester.id)).courses.single.deleted,
         isFalse);
     expect(await database.select(database.deletedSourceItems).get(), isEmpty);
+  });
+
+  test('saves and deletes a temporary exception', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final semester = domain.Semester(
+      id: 's1',
+      academicYear: '2026-2027',
+      term: domain.SemesterTerm.first,
+      label: '第一学期',
+      createdAt: DateTime(2026, 9, 1),
+    );
+    await repository.saveSemester(semester);
+    final exception = domain.CourseException(
+      id: 'exception-1',
+      semesterId: semester.id,
+      type: domain.CourseExceptionType.add,
+      targetDate: DateTime(2026, 9, 8),
+      targetStartSection: 3,
+      targetEndSection: 4,
+      addedCourseName: '临时课程',
+    );
+
+    await repository.saveException(exception);
+    expect(
+      (await repository.loadSemester(semester.id)).exceptions,
+      hasLength(1),
+    );
+    await repository.deleteException(exception.id);
+    expect((await repository.loadSemester(semester.id)).exceptions, isEmpty);
   });
 
   test('imports atomically, keeps snapshots, and preserves local-only fields',

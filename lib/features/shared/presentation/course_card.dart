@@ -153,6 +153,18 @@ void showCourseDetails(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
+                          if (instance.isException &&
+                              instance.exceptionId != null)
+                            OutlinedButton.icon(
+                              onPressed: () => _deleteException(
+                                context,
+                                sheetContext,
+                                ref,
+                                instance.exceptionId!,
+                              ),
+                              icon: const Icon(Icons.undo_outlined),
+                              label: const Text('撤销临时变更'),
+                            ),
                           OutlinedButton.icon(
                             onPressed: () => _showCourseColorPicker(
                               context,
@@ -263,6 +275,45 @@ Future<void> _deleteCourse(
     if (sheetContext.mounted) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
         SnackBar(content: Text('删除失败：$error')),
+      );
+    }
+  }
+}
+
+Future<void> _deleteException(
+  BuildContext pageContext,
+  BuildContext sheetContext,
+  WidgetRef ref,
+  String exceptionId,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: sheetContext,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('撤销临时变更？'),
+      content: const Text('这条单次调课记录会被删除，原始课表将恢复。'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('撤销'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !sheetContext.mounted) return;
+  try {
+    await ref.read(scheduleDataRepositoryProvider).deleteException(exceptionId);
+    if (!sheetContext.mounted || !pageContext.mounted) return;
+    final messenger = ScaffoldMessenger.of(pageContext);
+    Navigator.of(sheetContext).pop();
+    messenger.showSnackBar(const SnackBar(content: Text('临时变更已撤销')));
+  } catch (error) {
+    if (sheetContext.mounted) {
+      ScaffoldMessenger.of(sheetContext).showSnackBar(
+        SnackBar(content: Text('撤销临时变更失败：$error')),
       );
     }
   }
