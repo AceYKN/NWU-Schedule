@@ -25,7 +25,9 @@ void main() {
     expect(find.text('课表'), findsOneWidget);
     expect(find.text('日历'), findsOneWidget);
     expect(find.text('设置'), findsOneWidget);
-    expect(find.text('还没有课表'), findsOneWidget);
+    expect(find.text('欢迎'), findsOneWidget);
+    expect(find.text('导入我的课表'), findsOneWidget);
+    expect(find.text('稍后再说'), findsOneWidget);
 
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();

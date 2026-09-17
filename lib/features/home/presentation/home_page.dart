@@ -55,7 +55,17 @@ class _HomePageState extends ConsumerState<HomePage>
       ),
       data: (value) {
         if (value is ScheduleNoSemester) {
-          return const _NoSemesterContent();
+          final completed =
+              ref.watch(onboardingCompletedProvider).asData?.value ?? false;
+          return completed
+              ? const _NoSemesterContent()
+              : _WelcomeContent(
+                  onImport: () {
+                    unawaited(_completeOnboarding(ref));
+                    context.go('/import');
+                  },
+                  onLater: () => _completeOnboarding(ref),
+                );
         }
         if (value is ScheduleCalendarMissing) {
           return Center(
@@ -98,6 +108,60 @@ class _NoSemesterContent extends StatelessWidget {
       ),
     );
   }
+}
+
+class _WelcomeContent extends StatelessWidget {
+  const _WelcomeContent({required this.onImport, required this.onLater});
+
+  final VoidCallback onImport;
+  final Future<void> Function() onLater;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('欢迎', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 8),
+            Text(
+              '西北大学课程表',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 16),
+            const Text('无广告\n本地存储\n结合学校校历'),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: onImport,
+                child: const Text('导入我的课表'),
+              ),
+            ),
+            Align(
+              alignment: Alignment.center,
+              child: TextButton(
+                onPressed: () => onLater(),
+                child: const Text('稍后再说'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _completeOnboarding(WidgetRef ref) async {
+  await ref
+      .read(scheduleDataRepositoryProvider)
+      .setSetting('onboarding.completed', 'true');
+  ref.invalidate(onboardingCompletedProvider);
 }
 
 class _HomeContent extends StatelessWidget {

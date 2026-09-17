@@ -76,6 +76,13 @@ final notificationLeadMinutesProvider = FutureProvider<int>((ref) async {
       : notificationDefaultLeadMinutes;
 });
 
+final onboardingCompletedProvider = FutureProvider<bool>((ref) async {
+  final value = await ref
+      .watch(scheduleDataRepositoryProvider)
+      .getSetting('onboarding.completed');
+  return value == 'true';
+});
+
 final themeIdProvider = FutureProvider<String>((ref) async {
   final value = await ref
       .watch(scheduleDataRepositoryProvider)
