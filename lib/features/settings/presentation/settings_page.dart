@@ -63,9 +63,9 @@ class SettingsPage extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.download_outlined),
                 title: const Text('从教务系统导入'),
-                subtitle: const Text('正方 WebView 导入将在后续阶段接入'),
+                subtitle: const Text('在临时 WebView 中登录并读取课表'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => _showPrototypeMessage(context, '教务导入'),
+                onTap: () => context.go('/import'),
               ),
             ],
           ),
@@ -426,10 +426,4 @@ class _SectionTitle extends StatelessWidget {
       ),
     );
   }
-}
-
-void _showPrototypeMessage(BuildContext context, String feature) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('$feature将在对应开发阶段接入')),
-  );
 }

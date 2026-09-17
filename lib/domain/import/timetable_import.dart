@@ -8,6 +8,7 @@ class RemoteSemester {
     required this.term,
     required this.label,
     this.calendarId,
+    this.totalWeeks,
   });
 
   final String remoteTermKey;
@@ -15,6 +16,7 @@ class RemoteSemester {
   final int term;
   final String label;
   final String? calendarId;
+  final int? totalWeeks;
 
   String get id => 'nwu-$academicYear-$term';
 
@@ -24,6 +26,7 @@ class RemoteSemester {
         'term': term,
         'label': label,
         if (calendarId != null) 'calendarId': calendarId,
+        if (totalWeeks != null) 'totalWeeks': totalWeeks,
       };
 }
 
@@ -205,6 +208,7 @@ class TimetableImportParser {
         term: term,
         label: label,
         calendarId: rawSemester['calendarId'] as String?,
+        totalWeeks: totalWeeks,
       ),
       totalWeeks: totalWeeks,
       courses: List.unmodifiable(courses),

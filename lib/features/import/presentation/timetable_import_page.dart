@@ -1,0 +1,560 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+
+import '../../../app/bootstrap.dart';
+import '../../../domain/import/import_diff.dart';
+import '../../../domain/import/timetable_import.dart';
+import '../../../domain/import/timetable_importer.dart';
+import '../../../domain/schedule/schedule_data_repository.dart';
+import '../../../infrastructure/backup/backup_file_service.dart';
+import '../../../infrastructure/import/nwu_zhengfang_v9_importer.dart';
+
+class TimetableImportPage extends ConsumerStatefulWidget {
+  const TimetableImportPage({super.key});
+
+  @override
+  ConsumerState<TimetableImportPage> createState() =>
+      _TimetableImportPageState();
+}
+
+class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
+  static const _bridgeName = 'nwuScheduleBridge';
+
+  late final WebViewController _controller;
+  final _cookieManager = WebViewCookieManager();
+  RemoteTimetable? _timetable;
+  ImportDiff? _diff;
+  ImportDiagnostic? _diagnostic;
+  String? _error;
+  String? _currentUrl;
+  bool _bridgeEnabled = false;
+  bool _reading = false;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (request) {
+            final uri = Uri.tryParse(request.url);
+            if (uri == null || !NwuZhengfangV9Importer.isAllowedUri(uri)) {
+              _setError('已阻止非西北大学教务域名的页面');
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+          onPageStarted: (url) {
+            if (mounted) setState(() => _currentUrl = url);
+          },
+          onPageFinished: (url) => _onPageFinished(url),
+          onWebResourceError: (error) {
+            _setError('教务页面加载失败：${error.description}');
+          },
+        ),
+      )
+      ..loadRequest(NwuZhengfangV9Importer.entryUri);
+  }
+
+  @override
+  void dispose() {
+    unawaited(_clearSession());
+    super.dispose();
+  }
+
+  Future<void> _onPageFinished(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !NwuZhengfangV9Importer.isAllowedUri(uri)) return;
+    if (mounted) setState(() => _currentUrl = url);
+    final isLoginPage = uri.path.contains('login') ||
+        uri.path.contains('sso') ||
+        uri.path.contains('auth');
+    if (isLoginPage) {
+      if (_bridgeEnabled) {
+        await _controller.removeJavaScriptChannel(_bridgeName);
+        _bridgeEnabled = false;
+      }
+      return;
+    }
+    if (_bridgeEnabled) return;
+    await _controller.addJavaScriptChannel(
+      _bridgeName,
+      onMessageReceived: (message) => _handleBridgeMessage(message.message),
+    );
+    _bridgeEnabled = true;
+  }
+
+  Future<Map<String, dynamic>> _readPayload() async {
+    if (!_bridgeEnabled) {
+      throw const FormatException('登录完成后请先打开课表页面');
+    }
+    final result = await _controller.runJavaScriptReturningResult(
+      _payloadExtractionScript,
+    );
+    final payload = _decodePayload(result);
+    if (payload == null) {
+      throw const FormatException(
+        '当前页面没有暴露可识别的课表数据，请打开个人课表页面后重试',
+      );
+    }
+    return payload;
+  }
+
+  Future<void> _readCurrentPage() async {
+    if (_reading) return;
+    setState(() {
+      _reading = true;
+      _error = null;
+      _diagnostic = null;
+      _diff = null;
+    });
+    try {
+      final importer = NwuZhengfangV9Importer(readPayload: _readPayload);
+      final semesters = await importer.getSemesters();
+      final timetable = await importer.importSemester(semesters.single);
+      final diff = await _buildDiff(timetable);
+      if (!mounted) return;
+      setState(() {
+        _timetable = timetable;
+        _diff = diff;
+      });
+    } on TimetableImportFailure catch (error) {
+      _setFailure(error.message, error.diagnostic);
+    } on Object catch (error) {
+      _setFailure(
+        '无法读取课表：$error',
+        ImportDiagnostic(
+          adapterVersion: 'nwu-zhengfang-v9',
+          parserStage: 'webview-read',
+          currentUrlPath: _currentUrlPath,
+          error: error.toString(),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _reading = false);
+    }
+  }
+
+  void _handleBridgeMessage(String message) {
+    try {
+      final decoded = jsonDecode(message);
+      final payload = decoded is Map && decoded['payload'] is Map
+          ? Map<String, dynamic>.from(decoded['payload'] as Map)
+          : decoded is Map
+              ? Map<String, dynamic>.from(decoded)
+              : null;
+      if (payload == null) throw const FormatException('桥接消息不是对象');
+      final timetable = const TimetableImportParser().parse(payload);
+      final report = validateTimetable(timetable);
+      if (!report.isValid) throw FormatException(report.issues.join('; '));
+      if (mounted) {
+        setState(() {
+          _timetable = timetable;
+          _diff = null;
+          _error = null;
+          _diagnostic = null;
+        });
+      }
+    } on Object catch (error) {
+      _setFailure(
+        '课表桥接数据无效：$error',
+        ImportDiagnostic(
+          adapterVersion: 'nwu-zhengfang-v9',
+          parserStage: 'bridge-message',
+          currentUrlPath: _currentUrlPath,
+          error: error.toString(),
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmImport() async {
+    final timetable = _timetable;
+    if (timetable == null || _saving || _diff?.hasConflicts == true) return;
+    setState(() => _saving = true);
+    try {
+      await ref.read(scheduleDataRepositoryProvider).commitImportedTimetable(
+            timetable,
+          );
+      ref.invalidate(scheduleLoadProvider);
+      if (mounted) context.go('/');
+    } on TimetableImportConflictException {
+      _setError('发现本地与教务系统同时修改的课程，导入已取消，未写入部分数据');
+    } on Object catch (error) {
+      _setError('确认导入失败：$error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _exportDiagnostic() async {
+    final diagnostic = _diagnostic;
+    if (diagnostic == null) return;
+    try {
+      final saved = await const BackupFileService().save(
+        jsonEncode({
+          'format': 'nwu-schedule-diagnostic',
+          'schemaVersion': 1,
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+          'diagnostic': diagnostic.toJson(),
+        }),
+        suggestedName: 'nwu-schedule-diagnostic.json',
+      );
+      if (mounted) _showMessage(saved ? '诊断信息已导出' : '已取消导出');
+    } on Object catch (error) {
+      if (mounted) _showMessage('诊断导出失败：$error');
+    }
+  }
+
+  void _setError(String message) {
+    if (mounted) setState(() => _error = message);
+  }
+
+  void _setFailure(String message, ImportDiagnostic diagnostic) {
+    if (!mounted) return;
+    setState(() {
+      _error = message;
+      _diagnostic = diagnostic;
+      _timetable = null;
+      _diff = null;
+    });
+  }
+
+  Future<ImportDiff> _buildDiff(RemoteTimetable timetable) async {
+    final repository = ref.read(scheduleDataRepositoryProvider);
+    final semesters = await repository.loadSemesters();
+    ScheduleDataSnapshot? local;
+    for (final semester in semesters) {
+      if (semester.id == timetable.semester.id) {
+        local = await repository.loadSemester(semester.id);
+        break;
+      }
+    }
+    return const ImportDiffEngine().build(
+      incoming: timetable,
+      local: local,
+      previousImport: await repository.loadLatestImport(timetable.semester.id),
+    );
+  }
+
+  String? get _currentUrlPath {
+    final uri = _currentUrl == null ? null : Uri.tryParse(_currentUrl!);
+    return uri?.path;
+  }
+
+  Future<void> _clearSession() async {
+    try {
+      if (_bridgeEnabled) {
+        await _controller.removeJavaScriptChannel(_bridgeName);
+      }
+      await _controller.runJavaScript(
+        'try { localStorage.clear(); sessionStorage.clear(); '
+        'document.querySelectorAll("input").forEach((e) => e.value = ""); } catch (_) {}',
+      );
+      await _controller.clearLocalStorage();
+      await _controller.clearCache();
+      await _cookieManager.clearCookies();
+    } on Object {
+      // The importer is best-effort cleanup even when the WebView is closing.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final timetable = _timetable;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: '取消',
+                onPressed: () => context.pop(),
+                icon: const Icon(Icons.close),
+              ),
+              Expanded(
+                child: Text(
+                  '从教务系统导入',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: _reading ? null : _readCurrentPage,
+                icon: _reading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.download_outlined),
+                label: const Text('读取课表'),
+              ),
+            ],
+          ),
+        ),
+        if (_error != null)
+          MaterialBanner(
+            content: Text(_error!),
+            leading: const Icon(Icons.error_outline),
+            actions: [
+              if (_diagnostic != null)
+                TextButton(
+                  onPressed: _exportDiagnostic,
+                  child: const Text('导出诊断'),
+                ),
+              TextButton(
+                onPressed: () => setState(() => _error = null),
+                child: const Text('关闭'),
+              ),
+            ],
+          ),
+        Expanded(
+          child: Stack(
+            children: [
+              WebViewWidget(controller: _controller),
+              if (timetable != null)
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: _ImportPreview(
+                    timetable: timetable,
+                    diff: _diff,
+                    saving: _saving,
+                    onConfirm: _confirmImport,
+                    onRetry: _readCurrentPage,
+                    onCancel: () => setState(() {
+                      _timetable = null;
+                      _diff = null;
+                    }),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _ImportPreview extends StatelessWidget {
+  const _ImportPreview({
+    required this.timetable,
+    required this.diff,
+    required this.saving,
+    required this.onConfirm,
+    required this.onRetry,
+    required this.onCancel,
+  });
+
+  final RemoteTimetable timetable;
+  final ImportDiff? diff;
+  final bool saving;
+  final VoidCallback onConfirm;
+  final VoidCallback onRetry;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final meetingCount = timetable.courses.fold<int>(
+      0,
+      (total, course) => total + course.meetings.length,
+    );
+    return Card(
+      margin: const EdgeInsets.all(12),
+      elevation: 5,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '读取完成 · ${timetable.semester.label}',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text('${timetable.courses.length} 门课程 · $meetingCount 个上课安排'),
+            if (diff != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '新增 ${diff!.addedCount} · 更新 ${diff!.modifiedCount} · '
+                '删除 ${diff!.removedCount} · 冲突 ${diff!.conflictCount}',
+                style: TextStyle(
+                  color: diff!.hasConflicts
+                      ? Theme.of(context).colorScheme.error
+                      : null,
+                ),
+              ),
+              if (diff!.hasConflicts)
+                Text(
+                  '检测到本地与远端同时修改，请先解决冲突后再确认导入。',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+            ],
+            const SizedBox(height: 8),
+            ...timetable.courses.take(3).map(
+                  (course) => Text(
+                    '${course.name} · ${course.meetings.length} 个安排',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            if (timetable.courses.length > 3)
+              Text('还有 ${timetable.courses.length - 3} 门课程…'),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(onPressed: onCancel, child: const Text('取消')),
+                TextButton(onPressed: onRetry, child: const Text('重新读取')),
+                const SizedBox(width: 4),
+                FilledButton(
+                  onPressed:
+                      saving || diff?.hasConflicts == true ? null : onConfirm,
+                  child: Text(saving ? '导入中…' : '确认导入'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Map<String, dynamic>? _decodePayload(Object? result) {
+  if (result is! String) return null;
+  try {
+    final first = jsonDecode(result);
+    if (first is Map) return Map<String, dynamic>.from(first);
+    if (first is String) {
+      final second = jsonDecode(first);
+      if (second is Map) return Map<String, dynamic>.from(second);
+    }
+  } on Object {
+    return null;
+  }
+  return null;
+}
+
+const _payloadExtractionScript = r'''(() => {
+  const candidates = [
+    window.__NWU_SCHEDULE_PAYLOAD__,
+    window.__NWU_TIMETABLE__,
+    window.nwuSchedulePayload,
+  ];
+  for (const candidate of candidates) {
+    if (candidate == null) continue;
+    try {
+      return JSON.stringify(typeof candidate === 'string' ? JSON.parse(candidate) : candidate);
+    } catch (_) {}
+  }
+  const bodyText = document.body ? document.body.innerText : '';
+  const year = bodyText.match(/(20\d{2})\s*[-—~至]\s*(20\d{2})/);
+  const termText = bodyText.match(/第\s*([一二三123])\s*学期/);
+  if (!year) return JSON.stringify(null);
+  const termMap = { '一': 1, '二': 2, '三': 3, '1': 1, '2': 2, '3': 3 };
+  const term = termMap[termText ? termText[1] : '1'] || 1;
+  const text = (node) => (node && node.innerText ? node.innerText : '').trim();
+  const headerIndex = (headers, patterns) => headers.findIndex((header) =>
+    patterns.some((pattern) => header.includes(pattern)));
+  const dayNumber = (value) => {
+    const match = String(value).match(/[一二三四五六日天1-7]/);
+    if (!match) return null;
+    return ({ '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+      '六': 6, '日': 7, '天': 7, '1': 1, '2': 2, '3': 3,
+      '4': 4, '5': 5, '6': 6, '7': 7 })[match[0]] || null;
+  };
+  const sectionRange = (value) => {
+    const numbers = String(value).match(/\d+/g) || [];
+    if (!numbers.length) return null;
+    const start = Number(numbers[0]);
+    const end = Number(numbers[1] || numbers[0]);
+    return { startSection: Math.min(start, end), endSection: Math.max(start, end) };
+  };
+  const courses = [];
+  let maxWeek = 20;
+  for (const table of Array.from(document.querySelectorAll('table'))) {
+    const rows = Array.from(table.querySelectorAll('tr'));
+    if (!rows.length) continue;
+    const headers = Array.from(rows[0].querySelectorAll('th,td')).map(text);
+    const nameIndex = headerIndex(headers, ['课程名称', '课程名', '课程']);
+    const dayIndex = headerIndex(headers, ['星期', '周几', '上课星期']);
+    const sectionIndex = headerIndex(headers, ['节次', '上课节次']);
+    const weekIndex = headerIndex(headers, ['周次', '上课周次']);
+    if (nameIndex < 0 || dayIndex < 0 || sectionIndex < 0 || weekIndex < 0) continue;
+    const codeIndex = headerIndex(headers, ['课程代码', '课程编号', '课程号']);
+    const teacherIndex = headerIndex(headers, ['教师', '任课教师', '上课教师']);
+    const roomIndex = headerIndex(headers, ['教室', '上课地点', '地点']);
+    const classIndex = headerIndex(headers, ['教学班', '班级']);
+    const creditIndex = headerIndex(headers, ['学分']);
+    const assessmentIndex = headerIndex(headers, ['考核方式', '考试性质']);
+    for (let rowIndex = 1; rowIndex < rows.length; rowIndex++) {
+      const cells = Array.from(rows[rowIndex].querySelectorAll('td,th')).map(text);
+      const name = cells[nameIndex] || '';
+      const weekday = dayNumber(cells[dayIndex]);
+      const range = sectionRange(cells[sectionIndex]);
+      const weekText = cells[weekIndex] || '';
+      if (!name || !weekday || !range || !weekText) continue;
+      for (const match of weekText.matchAll(/\d+/g)) maxWeek = Math.max(maxWeek, Number(match[0]));
+      const code = codeIndex >= 0 ? cells[codeIndex] || null : null;
+      const teachingClass = classIndex >= 0 ? cells[classIndex] || null : null;
+      const key = code || (name + '|' + (teachingClass || '') + '|' + rowIndex);
+      let course = courses.find((item) => item.sourceCourseKey === key);
+      if (!course) {
+        course = {
+          sourceCourseKey: key,
+          name: name,
+          code: code,
+          teachingClass: teachingClass,
+          credits: creditIndex >= 0 && cells[creditIndex] ? Number(cells[creditIndex]) : null,
+          assessment: assessmentIndex >= 0 ? cells[assessmentIndex] || null : null,
+          meetings: [],
+        };
+        courses.push(course);
+      }
+      course.meetings.push({
+        sourceMeetingKey: key + '|meeting|' + course.meetings.length,
+        weekday: weekday,
+        startSection: range.startSection,
+        endSection: range.endSection,
+        teacher: teacherIndex >= 0 ? cells[teacherIndex] || null : null,
+        campus: null,
+        room: roomIndex >= 0 ? cells[roomIndex] || null : null,
+        weekText: weekText,
+      });
+    }
+  }
+  if (!courses.length) return JSON.stringify(null);
+  const totalWeeks = Math.min(Math.max(maxWeek, 1), 64);
+  const academicYear = year[1] + '-' + year[2];
+  return JSON.stringify({
+    semester: {
+      remoteTermKey: academicYear + '-' + term,
+      academicYear: academicYear,
+      term: term,
+      label: academicYear + ' 第' + term + '学期',
+      totalWeeks: totalWeeks,
+    },
+    totalWeeks: totalWeeks,
+    courses: courses,
+  });
+})()''';

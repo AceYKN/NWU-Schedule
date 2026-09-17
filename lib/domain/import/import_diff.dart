@@ -69,6 +69,8 @@ class ImportDiff {
   int get modifiedCount => changes
       .where((change) => change.kind == ImportChangeKind.modified)
       .length;
+
+  int get conflictCount => changes.where((change) => change.hasConflict).length;
 }
 
 class ImportDiffEngine {

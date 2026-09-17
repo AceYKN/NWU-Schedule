@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'bootstrap.dart';
 import '../features/calendar/presentation/calendar_page.dart';
 import '../features/home/presentation/home_page.dart';
+import '../features/import/presentation/timetable_import_page.dart';
 import '../features/schedule/presentation/schedule_page.dart';
 import '../features/schedule/presentation/manual_course_page.dart';
 import '../features/schedule/presentation/course_detail_page.dart';
@@ -42,6 +43,10 @@ final appRouter = GoRouter(
         GoRoute(
           path: '/calendar',
           builder: (context, state) => const CalendarPage(),
+        ),
+        GoRoute(
+          path: '/import',
+          builder: (context, state) => const TimetableImportPage(),
         ),
         GoRoute(
           path: '/settings',
