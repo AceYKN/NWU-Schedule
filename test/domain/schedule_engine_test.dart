@@ -239,6 +239,39 @@ void main() {
     expect(courses.single.isException, isTrue);
   });
 
+  test('MOVE remains visible when its target date is a holiday', () {
+    final engine = makeEngine(
+      calendar: makeCalendar(
+        overrides: [
+          CalendarDateOverride(
+            date: DateTime(2026, 9, 8),
+            type: CalendarOverrideType.holiday,
+            label: '校庆假期',
+          ),
+        ],
+      ),
+      exceptions: [
+        CourseException(
+          id: 'move-holiday',
+          semesterId: 'nwu-test-2026-1',
+          courseId: 'course-software-testing',
+          sourceMeetingId: 'rule-software-testing',
+          sourceDate: DateTime(2026, 9, 7),
+          type: CourseExceptionType.move,
+          targetDate: DateTime(2026, 9, 8),
+          targetStartSection: 5,
+          targetEndSection: 6,
+        ),
+      ],
+    );
+
+    expect(engine.getCoursesForDate(DateTime(2026, 9, 7)), isEmpty);
+    final target = engine.getCoursesForDate(DateTime(2026, 9, 8));
+    expect(target, hasLength(1));
+    expect(target.single.isException, isTrue);
+    expect(target.single.exceptionId, 'move-holiday');
+  });
+
   test('finds the next course across a weekend', () {
     final engine = makeEngine(
       rules: [makeRule(weekday: DateTime.monday)],
@@ -248,6 +281,37 @@ void main() {
 
     expect(next, isNotNull);
     expect(next!.date, DateTime(2026, 9, 14));
+  });
+
+  test('finds the next course beyond a holiday week', () {
+    final engine = makeEngine(
+      calendar: makeCalendar(
+        overrides: [
+          for (final date in [
+            DateTime(2026, 9, 14),
+            DateTime(2026, 9, 15),
+            DateTime(2026, 9, 16),
+            DateTime(2026, 9, 17),
+            DateTime(2026, 9, 18),
+          ])
+            CalendarDateOverride(
+              date: date,
+              type: CalendarOverrideType.holiday,
+              label: '校历假期',
+            ),
+        ],
+      ),
+      rules: [makeRule(weekday: DateTime.monday)],
+    );
+
+    final next = engine.getNextCourse(DateTime.utc(2026, 9, 11, 12));
+    expect(next?.date, DateTime(2026, 9, 21));
+  });
+
+  test('returns no next course after the semester ends', () {
+    final engine = makeEngine();
+
+    expect(engine.getNextCourse(DateTime.utc(2027, 2, 1)), isNull);
   });
 
   test('returns current, next, finished, and no-class states', () {

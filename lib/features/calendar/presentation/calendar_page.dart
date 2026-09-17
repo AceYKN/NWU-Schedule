@@ -170,48 +170,61 @@ class _MonthCell extends StatelessWidget {
     final holiday = resolved.override?.type == CalendarOverrideType.holiday;
     final outsideSemester =
         !resolved.isTeachingDay && !holiday && resolved.teachingWeek == null;
-    return Card(
-      color: isToday
-          ? Theme.of(context).colorScheme.primaryContainer
-          : holiday
-              ? Theme.of(context).colorScheme.surfaceContainerHighest
-              : null,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => _showDailyAgenda(context, date, courses),
-        child: Padding(
-          padding: EdgeInsets.all(themeTokens.monthCellPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${date.day}',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              if (label != null && label.isNotEmpty)
+    final semanticParts = [
+      '${date.month}月${date.day}日',
+      if (label != null && label.isNotEmpty) label,
+      if (resolved.teachingWeek != null) '第${resolved.teachingWeek}教学周',
+      if (outsideSemester) '学期外',
+      if (courses.isEmpty) '无课程' else '${courses.length}节课程',
+    ];
+    return Semantics(
+      button: true,
+      excludeSemantics: true,
+      label: '${semanticParts.join('，')}，点击查看当天课程',
+      onTap: () => _showDailyAgenda(context, date, courses),
+      child: Card(
+        color: isToday
+            ? Theme.of(context).colorScheme.primaryContainer
+            : holiday
+                ? Theme.of(context).colorScheme.surfaceContainerHighest
+                : null,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _showDailyAgenda(context, date, courses),
+          child: Padding(
+            padding: EdgeInsets.all(themeTokens.monthCellPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall,
+                  '${date.day}',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
-              if (resolved.teachingWeek != null)
-                Text(
-                  '第${resolved.teachingWeek}周',
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-              if (outsideSemester)
-                Text('学期外', style: Theme.of(context).textTheme.labelSmall),
-              if (courses.isNotEmpty)
-                Text(
-                  '${courses.length} 节',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
+                if (label != null && label.isNotEmpty)
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall,
                   ),
-                ),
-            ],
+                if (resolved.teachingWeek != null)
+                  Text(
+                    '第${resolved.teachingWeek}周',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                if (outsideSemester)
+                  Text('学期外', style: Theme.of(context).textTheme.labelSmall),
+                if (courses.isNotEmpty)
+                  Text(
+                    '${courses.length} 节',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

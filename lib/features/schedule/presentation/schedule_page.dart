@@ -305,20 +305,27 @@ class _ScheduleCell extends StatelessWidget {
     );
     return Stack(
       children: [
-        InkWell(
+        Semantics(
+          button: true,
+          excludeSemantics: true,
+          label:
+              '${instance!.courseName}，${weekdayName(day)}，第 $section 至 ${instance!.endSection} 节，点击查看课程详情',
           onTap: () => showCourseDetails(context, instance!),
-          child: Container(
-            height: themeTokens.gridCellHeight,
-            padding: const EdgeInsets.all(6),
-            color: color.withAlpha(46),
-            child: Text(
-              instance!.courseName,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+          child: InkWell(
+            onTap: () => showCourseDetails(context, instance!),
+            child: Container(
+              height: themeTokens.gridCellHeight,
+              padding: const EdgeInsets.all(6),
+              color: color.withAlpha(46),
+              child: Text(
+                instance!.courseName,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),

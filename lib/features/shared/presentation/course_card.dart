@@ -31,6 +31,7 @@ class CourseCard extends StatelessWidget {
       instance.course.colorOverride ?? scheme.primary.toARGB32(),
     );
     final label = [
+      if (status != null) status!,
       instance.courseName,
       if (instance.location != null) instance.location!,
       '${formatMinutes(instance.startTime.hour * 60 + instance.startTime.minute)}–'
@@ -40,7 +41,9 @@ class CourseCard extends StatelessWidget {
 
     return Semantics(
       button: true,
+      excludeSemantics: true,
       label: label,
+      onTap: () => showCourseDetails(context, instance),
       child: Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -460,15 +463,27 @@ Future<void> _showCourseColorPicker(
               runSpacing: 12,
               children: [
                 for (final color in _courseColors)
-                  InkWell(
+                  Semantics(
+                    button: true,
+                    excludeSemantics: true,
+                    label: instance.course.colorOverride == color
+                        ? '课程颜色，已选择'
+                        : '选择课程颜色',
                     onTap: () => Navigator.pop(context, color),
-                    borderRadius: BorderRadius.circular(24),
-                    child: CircleAvatar(
-                      radius: 22,
-                      backgroundColor: Color(color),
-                      child: instance.course.colorOverride == color
-                          ? const Icon(Icons.check, color: Colors.white)
-                          : null,
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: InkWell(
+                        onTap: () => Navigator.pop(context, color),
+                        borderRadius: BorderRadius.circular(24),
+                        child: CircleAvatar(
+                          radius: 22,
+                          backgroundColor: Color(color),
+                          child: instance.course.colorOverride == color
+                              ? const Icon(Icons.check, color: Colors.white)
+                              : null,
+                        ),
+                      ),
                     ),
                   ),
                 OutlinedButton(
