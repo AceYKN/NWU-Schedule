@@ -155,28 +155,31 @@ class _HeroState extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     if (state is ScheduleCurrent) {
+      final currentState = state as ScheduleCurrent;
       return _HeroCard(
         eyebrow: 'NOW',
-        title: state.current.courseName,
-        subtitle: _courseSubtitle(state.current),
+        title: currentState.current.courseName,
+        subtitle: _courseSubtitle(currentState.current),
         background: scheme.primaryContainer,
       );
     }
     if (state is ScheduleNext) {
+      final nextState = state as ScheduleNext;
       return _HeroCard(
         eyebrow: 'NEXT',
-        title: state.next.courseName,
-        subtitle: _courseSubtitle(state.next),
+        title: nextState.next.courseName,
+        subtitle: _courseSubtitle(nextState.next),
         background: scheme.secondaryContainer,
       );
     }
     if (state is ScheduleFinishedToday) {
+      final finishedState = state as ScheduleFinishedToday;
       return _HeroCard(
         eyebrow: 'TODAY DONE',
         title: '今天的课程已经结束',
-        subtitle: state.next == null
+        subtitle: finishedState.next == null
             ? '当前学期没有更多课程'
-            : '下一节：${_nextDescription(state.next!)}',
+            : '下一节：${_nextDescription(finishedState.next!)}',
         background: scheme.surfaceContainerHighest,
       );
     }
@@ -270,7 +273,8 @@ class _HomeError extends StatelessWidget {
 }
 
 String _courseSubtitle(EffectiveCourseInstance course) {
-  final time = '${course.startTime.hour.toString().padLeft(2, '0')}:${course.startTime.minute.toString().padLeft(2, '0')}'
+  final time =
+      '${course.startTime.hour.toString().padLeft(2, '0')}:${course.startTime.minute.toString().padLeft(2, '0')}'
       '–${course.endTime.hour.toString().padLeft(2, '0')}:${course.endTime.minute.toString().padLeft(2, '0')}';
   return '$time\n${course.location ?? '地点待补充'}${course.teacher == null ? '' : ' · ${course.teacher}'}';
 }

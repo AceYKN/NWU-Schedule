@@ -30,6 +30,7 @@ class Course {
   final double? credits;
   final String? assessment;
   final String? note;
+
   /// ARGB color value. Domain stays independent from Flutter's Color class.
   final int? colorOverride;
   final bool hidden;

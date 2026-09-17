@@ -153,7 +153,8 @@ void main() {
     );
   });
 
-  test('MOVE removes source, adds target, and keeps later recurrence', () async {
+  test('MOVE removes source, adds target, and keeps later recurrence',
+      () async {
     final engine = makeEngine(
       exceptions: [
         CourseException(

@@ -17,6 +17,7 @@ class MeetingRule {
   final String id;
   final String courseId;
   final String? sourceMeetingKey;
+
   /// ISO weekday: Monday = 1, Sunday = 7.
   final int weekday;
   final int startSection;

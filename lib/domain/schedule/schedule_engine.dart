@@ -19,11 +19,10 @@ class ScheduleEngine {
     required Iterable<Course> courses,
     required Iterable<MeetingRule> meetingRules,
     required Iterable<CourseException> exceptions,
-    NwuPeriodRepository periodRepository = const NwuPeriodRepository(),
+    this.periodRepository = const NwuPeriodRepository(),
   })  : courses = List.unmodifiable(courses),
         meetingRules = List.unmodifiable(meetingRules),
-        exceptions = List.unmodifiable(exceptions),
-        periodRepository = periodRepository;
+        exceptions = List.unmodifiable(exceptions);
 
   final CalendarEngine calendarEngine;
   final List<Course> courses;
@@ -41,8 +40,7 @@ class ScheduleEngine {
     final current = todayCourses
         .where(
           (course) =>
-              !now.isBefore(course.startTime) &&
-              now.isBefore(course.endTime),
+              !now.isBefore(course.startTime) && now.isBefore(course.endTime),
         )
         .toList();
     if (current.isNotEmpty) {
@@ -53,9 +51,8 @@ class ScheduleEngine {
       );
     }
 
-    final nextToday = todayCourses
-        .where((course) => course.startTime.isAfter(now))
-        .toList();
+    final nextToday =
+        todayCourses.where((course) => course.startTime.isAfter(now)).toList();
     if (nextToday.isNotEmpty) {
       return ScheduleNext(
         now: now,
@@ -231,14 +228,12 @@ class ScheduleEngine {
         course = _findCourse(exception.courseId!);
         sourceRule = _findRule(exception.courseId!, exception.sourceMeetingId);
       }
-      if (course == null) {
-        course = Course(
-          id: exception.id,
-          semesterId: calendarEngine.definition.id,
-          sourceType: CourseSourceType.manual,
-          name: exception.addedCourseName ?? '临时课程',
-        );
-      }
+      course ??= Course(
+        id: exception.id,
+        semesterId: calendarEngine.definition.id,
+        sourceType: CourseSourceType.manual,
+        name: exception.addedCourseName ?? '临时课程',
+      );
       if (sourceRule != null) {
         teacher ??= sourceRule.teacher;
         campus ??= sourceRule.campus;
@@ -252,9 +247,6 @@ class ScheduleEngine {
       return null;
     }
     final resolvedCourse = course;
-    if (resolvedCourse == null) {
-      return null;
-    }
     final syntheticRule = sourceRule ??
         MeetingRule(
           id: exception.sourceMeetingId ?? '${exception.id}-rule',
@@ -293,8 +285,7 @@ class ScheduleEngine {
 
   MeetingRule? _findRule(String courseId, String? ruleId) {
     for (final rule in meetingRules) {
-      if (rule.courseId == courseId &&
-          (ruleId == null || rule.id == ruleId)) {
+      if (rule.courseId == courseId && (ruleId == null || rule.id == ruleId)) {
         return rule;
       }
     }

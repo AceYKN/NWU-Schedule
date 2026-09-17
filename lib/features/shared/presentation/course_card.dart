@@ -18,7 +18,9 @@ class CourseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final accent = Color(instance.course.colorOverride ?? scheme.primary.value);
+    final accent = Color(
+      instance.course.colorOverride ?? scheme.primary.toARGB32(),
+    );
     final label = [
       instance.courseName,
       if (instance.location != null) instance.location!,
@@ -57,7 +59,9 @@ class CourseCard extends StatelessWidget {
                           ),
                         Text(
                           instance.courseName,
-                          style: Theme.of(context).textTheme.titleMedium
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 6),

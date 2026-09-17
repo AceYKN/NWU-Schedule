@@ -59,9 +59,8 @@ class _WeekContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final maxWeekday = instances.fold<int>(
       5,
-      (max, instance) => instance.date.weekday > max
-          ? instance.date.weekday
-          : max,
+      (max, instance) =>
+          instance.date.weekday > max ? instance.date.weekday : max,
     );
     final weekdays = List<int>.generate(maxWeekday, (index) => index + 1);
     return ListView(
@@ -92,9 +91,8 @@ class _WeekContent extends StatelessWidget {
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
-            onPressed: week == currentWeek
-                ? null
-                : () => onWeekChanged(currentWeek),
+            onPressed:
+                week == currentWeek ? null : () => onWeekChanged(currentWeek),
             child: const Text('本周'),
           ),
         ),
@@ -225,7 +223,7 @@ class _ScheduleCell extends StatelessWidget {
     }
     final color = Color(
       instance!.course.colorOverride ??
-          Theme.of(context).colorScheme.primary.value,
+          Theme.of(context).colorScheme.primary.toARGB32(),
     );
     return InkWell(
       onTap: () => showCourseDetails(context, instance!),

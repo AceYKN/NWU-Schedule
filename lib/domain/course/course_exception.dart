@@ -22,6 +22,7 @@ class CourseException {
   final String? sourceMeetingId;
   final DateTime? sourceDate;
   final CourseExceptionType type;
+
   /// Required for MOVE/ADD and omitted for CANCEL.
   final DateTime? targetDate;
   final int? targetStartSection;

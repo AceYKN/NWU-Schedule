@@ -19,7 +19,8 @@ class CalendarDateOverride {
     final rawType = json['type'] as String?;
     final type = switch (rawType) {
       'holiday' || 'NO_CLASS' => CalendarOverrideType.holiday,
-      'useScheduleOf' || 'USE_SCHEDULE_OF' =>
+      'useScheduleOf' ||
+      'USE_SCHEDULE_OF' =>
         CalendarOverrideType.useScheduleOf,
       _ => throw FormatException('Unsupported calendar override: $rawType'),
     };
@@ -27,9 +28,8 @@ class CalendarDateOverride {
     return CalendarDateOverride(
       date: dateOnly(parseDateOnly(json['date'] as String)),
       type: type,
-      sourceDate: rawSourceDate == null
-          ? null
-          : dateOnly(parseDateOnly(rawSourceDate)),
+      sourceDate:
+          rawSourceDate == null ? null : dateOnly(parseDateOnly(rawSourceDate)),
       label: json['label'] as String? ?? '',
     );
   }
@@ -37,9 +37,8 @@ class CalendarDateOverride {
   Map<String, Object?> toJson() {
     return {
       'date': dateKey(date),
-      'type': type == CalendarOverrideType.holiday
-          ? 'holiday'
-          : 'useScheduleOf',
+      'type':
+          type == CalendarOverrideType.holiday ? 'holiday' : 'useScheduleOf',
       if (sourceDate != null) 'sourceDate': dateKey(sourceDate!),
       'label': label,
     };
@@ -72,10 +71,11 @@ class CalendarDefinition {
   final List<CalendarDateOverride> dateOverrides;
 
   factory CalendarDefinition.fromJson(Map<String, dynamic> json) {
-    final overrides = (json['dateOverrides'] ?? json['exceptions'] ?? [])
-        as List<dynamic>;
+    final overrides =
+        (json['dateOverrides'] ?? json['exceptions'] ?? []) as List<dynamic>;
     final definition = CalendarDefinition(
-      id: json['id'] as String? ?? 'nwu-${json['academicYear']}-${json['term']}',
+      id: json['id'] as String? ??
+          'nwu-${json['academicYear']}-${json['term']}',
       school: json['school'] as String? ?? 'NWU',
       academicYear: json['academicYear'] as String,
       term: (json['term'] as num).toInt(),
@@ -86,7 +86,8 @@ class CalendarDefinition {
       ),
       week1StartDate: dateOnly(
         parseDateOnly(
-          (json['week1StartDate'] ?? json['semesterStartDate'] ??
+          (json['week1StartDate'] ??
+              json['semesterStartDate'] ??
               json['startDate']) as String,
         ),
       ),

@@ -10,10 +10,8 @@ void main() {
   }
 
   final ids = <String>{};
-  final files = root
-      .listSync()
-      .whereType<File>()
-      .where((file) => file.path.endsWith('.json') && !file.path.endsWith('index.json'));
+  final files = root.listSync().whereType<File>().where((file) =>
+      file.path.endsWith('.json') && !file.path.endsWith('index.json'));
   for (final file in files) {
     final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
     final id = json['id'];
