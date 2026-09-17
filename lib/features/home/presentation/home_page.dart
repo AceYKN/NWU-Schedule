@@ -11,6 +11,7 @@ import '../../../domain/calendar/calendar_engine.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
 import '../../../domain/schedule/schedule_engine.dart';
 import '../../../domain/schedule/schedule_now_state.dart';
+import '../../../domain/semester/semester.dart';
 import '../../shared/presentation/course_card.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -68,9 +69,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 );
         }
         if (value is ScheduleCalendarMissing) {
-          return Center(
-            child: Text('${value.semester.label}的校历尚未包含在当前版本中'),
-          );
+          return _MissingCalendarContent(semester: value.semester);
         }
         final ready = value as ScheduleReady;
         return _HomeContent(
@@ -108,6 +107,51 @@ class _NoSemesterContent extends StatelessWidget {
               child: const Text('导入课表'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MissingCalendarContent extends StatelessWidget {
+  const _MissingCalendarContent({required this.semester});
+
+  final Semester semester;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '课表已保存',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '当前版本尚未包含\n${semester.label}校历。\n\n'
+                  '课程数据已经保存；在校历更新前，教学周、放假和调休信息可能无法完全准确计算。',
+                ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton(
+                    onPressed: () => context.go('/settings'),
+                    child: const Text('查看设置'),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

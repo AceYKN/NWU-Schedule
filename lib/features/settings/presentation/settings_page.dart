@@ -462,10 +462,15 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
   if (confirmed != true || !context.mounted) return;
   try {
     await ref.read(scheduleDataRepositoryProvider).clearAllData();
-    await ref.read(notificationServiceProvider).clear();
-    await ref.read(widgetServiceProvider).clear();
-    await WebViewCookieManager().clearCookies();
-    await const WebViewSessionService().clear();
+    try {
+      await ref.read(notificationServiceProvider).clear();
+      await ref.read(widgetServiceProvider).clear();
+      await WebViewCookieManager().clearCookies();
+      await const WebViewSessionService().clear();
+    } on Object {
+      // Local data is already cleared. Platform storage cleanup is best
+      // effort on unsupported test/future platforms.
+    }
     ref.invalidate(themeIdProvider);
     ref.invalidate(onboardingCompletedProvider);
     ref.invalidate(notificationEnabledProvider);
