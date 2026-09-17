@@ -20,6 +20,10 @@ class ManualCoursePage extends ConsumerStatefulWidget {
 class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
+  final _code = TextEditingController();
+  final _teachingClass = TextEditingController();
+  final _credits = TextEditingController();
+  final _assessment = TextEditingController();
   final _teacher = TextEditingController();
   final _campus = TextEditingController();
   final _room = TextEditingController();
@@ -36,7 +40,18 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
 
   @override
   void dispose() {
-    for (final controller in [_name, _teacher, _campus, _room, _weeks, _note]) {
+    for (final controller in [
+      _name,
+      _code,
+      _teachingClass,
+      _credits,
+      _assessment,
+      _teacher,
+      _campus,
+      _room,
+      _weeks,
+      _note,
+    ]) {
       controller.dispose();
     }
     super.dispose();
@@ -45,6 +60,11 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
   String? _optional(TextEditingController controller) {
     final value = controller.text.trim();
     return value.isEmpty ? null : value;
+  }
+
+  double? _optionalCredits() {
+    final value = _credits.text.trim();
+    return value.isEmpty ? null : double.parse(value);
   }
 
   void _loadRule(MeetingRule rule) {
@@ -67,6 +87,10 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
         .where((rule) => rule.courseId == widget.courseId)
         .toList(growable: false);
     _name.text = _existingCourse!.name;
+    _code.text = _existingCourse!.code ?? '';
+    _teachingClass.text = _existingCourse!.teachingClass ?? '';
+    _credits.text = _existingCourse!.credits?.toString() ?? '';
+    _assessment.text = _existingCourse!.assessment ?? '';
     _note.text = _existingCourse!.note ?? '';
     if (_existingRules.isNotEmpty) _loadRule(_existingRules.first);
     _initialized = true;
@@ -82,6 +106,10 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
           'manual-${DateTime.now().microsecondsSinceEpoch}';
       final course = _existingCourse?.copyWith(
             name: _name.text.trim(),
+            code: _optional(_code),
+            teachingClass: _optional(_teachingClass),
+            credits: _optionalCredits(),
+            assessment: _optional(_assessment),
             note: _optional(_note),
           ) ??
           Course(
@@ -89,6 +117,10 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
             semesterId: ready.semester.id,
             sourceType: CourseSourceType.manual,
             name: _name.text.trim(),
+            code: _optional(_code),
+            teachingClass: _optional(_teachingClass),
+            credits: _optionalCredits(),
+            assessment: _optional(_assessment),
             note: _optional(_note),
           );
       final rules = List<MeetingRule>.of(_existingRules);
@@ -168,6 +200,29 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
                 maxLength: 80,
                 validator: (value) =>
                     value == null || value.trim().isEmpty ? '请输入课程名' : null,
+              ),
+              TextFormField(
+                controller: _code,
+                decoration: const InputDecoration(labelText: '课程代码'),
+              ),
+              TextFormField(
+                controller: _teachingClass,
+                decoration: const InputDecoration(labelText: '教学班'),
+              ),
+              TextFormField(
+                controller: _credits,
+                decoration: const InputDecoration(labelText: '学分'),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) return null;
+                  final parsed = double.tryParse(value.trim());
+                  return parsed == null || parsed < 0 ? '请输入有效学分' : null;
+                },
+              ),
+              TextFormField(
+                controller: _assessment,
+                decoration: const InputDecoration(labelText: '考核方式'),
               ),
               if (_existingRules.length > 1) ...[
                 DropdownButtonFormField<int>(

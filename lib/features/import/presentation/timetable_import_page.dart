@@ -243,6 +243,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     try {
       await ref.read(scheduleDataRepositoryProvider).commitImportedTimetable(
             timetable,
+            adapterVersion: 'nwu-zhengfang-v9',
             resolution: _resolution,
           );
       ref.invalidate(scheduleLoadProvider);

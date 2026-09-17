@@ -89,7 +89,7 @@ class _NoSemesterContent extends StatelessWidget {
                 textAlign: TextAlign.center),
             const SizedBox(height: 20),
             FilledButton(
-              onPressed: () => context.go('/settings'),
+              onPressed: () => context.go('/import'),
               child: const Text('导入课表'),
             ),
           ],
