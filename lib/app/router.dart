@@ -7,6 +7,7 @@ import '../features/calendar/presentation/calendar_page.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/schedule/presentation/schedule_page.dart';
 import '../features/schedule/presentation/manual_course_page.dart';
+import '../features/schedule/presentation/course_detail_page.dart';
 import '../features/settings/presentation/settings_page.dart';
 import '../features/settings/presentation/course_management_page.dart';
 
@@ -26,6 +27,12 @@ final appRouter = GoRouter(
         GoRoute(
           path: '/course/new',
           builder: (context, state) => const ManualCoursePage(),
+        ),
+        GoRoute(
+          path: '/course/:id',
+          builder: (context, state) => CourseDetailPage(
+            courseId: state.pathParameters['id']!,
+          ),
         ),
         GoRoute(
           path: '/course/:id/edit',

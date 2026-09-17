@@ -2,6 +2,7 @@ package io.github.aceykn.nwuschedule
 
 import android.app.Activity
 import android.app.AlarmManager
+import android.appwidget.AppWidgetManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -13,6 +14,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    private var navigationChannel: MethodChannel? = null
     private var pendingResult: MethodChannel.Result? = null
     private var pendingOperation: String? = null
     private var pendingContent: String? = null
@@ -41,6 +43,38 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            WIDGET_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "updateSnapshot" -> updateWidgetSnapshot(call, result)
+                "clearSnapshot" -> clearWidgetSnapshot(result)
+                else -> result.notImplemented()
+            }
+        }
+        navigationChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            NAVIGATION_CHANNEL,
+        )
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        deliverRoute(intent)
+    }
+
+    override fun onPostResume() {
+        super.onPostResume()
+        deliverRoute(intent)
+    }
+
+    private fun deliverRoute(intent: Intent) {
+        val route = intent.getStringExtra(ROUTE_EXTRA) ?: return
+        val channel = navigationChannel ?: return
+        intent.removeExtra(ROUTE_EXTRA)
+        channel.invokeMethod("openRoute", route)
     }
 
     private fun startSaveBackup(call: MethodCall, result: MethodChannel.Result) {
@@ -213,6 +247,29 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun updateWidgetSnapshot(call: MethodCall, result: MethodChannel.Result) {
+        val json = call.argument<String>("json")
+        if (json == null) {
+            result.error("invalid_args", "缺少 Widget 快照", null)
+            return
+        }
+        getSharedPreferences(WIDGET_PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .putString(WIDGET_SNAPSHOT, json)
+            .apply()
+        CourseWidgetProvider.refresh(this)
+        result.success(null)
+    }
+
+    private fun clearWidgetSnapshot(result: MethodChannel.Result) {
+        getSharedPreferences(WIDGET_PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .remove(WIDGET_SNAPSHOT)
+            .apply()
+        CourseWidgetProvider.refresh(this)
+        result.success(null)
+    }
+
     private fun cancelNotificationAlarm(alarmManager: AlarmManager, id: Int) {
         val intent = Intent(this, CourseNotificationReceiver::class.java)
         val pendingIntent = PendingIntent.getBroadcast(
@@ -252,12 +309,17 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "nwu_schedule/backup_files"
         private const val NOTIFICATION_CHANNEL = "nwu_schedule/notifications"
+        private const val WIDGET_CHANNEL = "nwu_schedule/widget"
+        private const val NAVIGATION_CHANNEL = "nwu_schedule/navigation"
         private const val PREFERENCES = "nwu_schedule_notifications"
         private const val SCHEDULED_IDS = "scheduled_ids"
+        const val WIDGET_PREFERENCES = "nwu_schedule_widget"
+        const val WIDGET_SNAPSHOT = "snapshot_json"
         private const val REQUEST_SAVE = 4101
         private const val REQUEST_PICK = 4102
         private const val REQUEST_NOTIFICATION_PERMISSION = 4103
         private const val OP_SAVE = "save"
         private const val OP_PICK = "pick"
+        const val ROUTE_EXTRA = "nwu_route"
     }
 }

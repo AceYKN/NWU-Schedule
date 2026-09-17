@@ -12,8 +12,10 @@ import '../domain/schedule/schedule_data_repository.dart';
 import '../domain/schedule/schedule_engine.dart';
 import '../domain/semester/semester.dart';
 import '../domain/semester/semester_selector.dart';
+import '../domain/widget/widget_snapshot.dart';
 import '../infrastructure/calendar/bundled_calendar_repository.dart';
 import '../infrastructure/notifications/notification_service.dart';
+import '../infrastructure/widget/widget_service.dart';
 
 sealed class ScheduleLoadState {
   const ScheduleLoadState();
@@ -50,6 +52,10 @@ const notificationDefaultLeadMinutes = 15;
 
 final notificationServiceProvider = Provider<NotificationService>(
   (ref) => const NotificationService(),
+);
+
+final widgetServiceProvider = Provider<WidgetService>(
+  (ref) => const WidgetService(),
 );
 
 final notificationEnabledProvider = FutureProvider<bool>((ref) async {
@@ -132,6 +138,34 @@ final notificationCoordinatorProvider = Provider<void>((ref) {
     }
   });
 });
+
+final widgetCoordinatorProvider = Provider<void>((ref) {
+  ref.listen(scheduleLoadProvider, (_, next) {
+    if (next.hasValue) {
+      unawaited(
+        rebuildWidgetForCurrentSchedule(
+          service: ref.read(widgetServiceProvider),
+          state: ref.read(scheduleLoadProvider).asData?.value,
+        ),
+      );
+    }
+  });
+});
+
+Future<void> rebuildWidgetForCurrentSchedule({
+  required WidgetService service,
+  required ScheduleLoadState? state,
+}) async {
+  if (state is! ScheduleReady) {
+    await service.clear();
+    return;
+  }
+  final snapshot = const WidgetSnapshotBuilder().build(
+    engine: state.engine,
+    now: DateTime.now().toUtc(),
+  );
+  await service.publish(snapshot);
+}
 
 Future<void> rebuildNotificationsForCurrentSchedule({
   required ScheduleDataRepository repository,
