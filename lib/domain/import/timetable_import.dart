@@ -168,7 +168,31 @@ class TimetableImportParser {
   const TimetableImportParser();
 
   RemoteTimetable parse(Map<String, dynamic> json) {
-    final rawSemester = _map(json['semester'] ?? json['remoteSemester']);
+    final semester = parseSemester(json);
+    final totalWeeks = semester.totalWeeks ?? 20;
+    final rawCourses = json['courses'] ?? json['courseList'] ?? json['rows'];
+    if (rawCourses is! List) {
+      throw const FormatException('courses must be a list');
+    }
+    final courses = <ImportedCourse>[];
+    for (var index = 0; index < rawCourses.length; index++) {
+      courses.add(_parseCourse(
+        _map(rawCourses[index]),
+        index: index,
+        totalWeeks: totalWeeks,
+      ));
+    }
+    return RemoteTimetable(
+      semester: semester,
+      totalWeeks: totalWeeks,
+      courses: List.unmodifiable(courses),
+    );
+  }
+
+  RemoteSemester parseSemester(Map<String, dynamic> json) {
+    final rawSemester = _map(
+      json['semester'] ?? json['remoteSemester'] ?? json,
+    );
     final remoteTermKey = _string(
       rawSemester['remoteTermKey'] ??
           rawSemester['termKey'] ??
@@ -189,29 +213,13 @@ class TimetableImportParser {
       rawSemester['totalWeeks'] ?? json['totalWeeks'] ?? 20,
       'totalWeeks',
     );
-    final rawCourses = json['courses'] ?? json['courseList'] ?? json['rows'];
-    if (rawCourses is! List) {
-      throw const FormatException('courses must be a list');
-    }
-    final courses = <ImportedCourse>[];
-    for (var index = 0; index < rawCourses.length; index++) {
-      courses.add(_parseCourse(
-        _map(rawCourses[index]),
-        index: index,
-        totalWeeks: totalWeeks,
-      ));
-    }
-    return RemoteTimetable(
-      semester: RemoteSemester(
-        remoteTermKey: remoteTermKey,
-        academicYear: academicYear,
-        term: term,
-        label: label,
-        calendarId: rawSemester['calendarId'] as String?,
-        totalWeeks: totalWeeks,
-      ),
+    return RemoteSemester(
+      remoteTermKey: remoteTermKey,
+      academicYear: academicYear,
+      term: term,
+      label: label,
+      calendarId: rawSemester['calendarId'] as String?,
       totalWeeks: totalWeeks,
-      courses: List.unmodifiable(courses),
     );
   }
 

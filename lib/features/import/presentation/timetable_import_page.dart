@@ -127,10 +127,12 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       _diff = null;
       _resolution = ImportConflictResolution.empty;
     });
+    final importer = NwuZhengfangV9Importer(readPayload: _readPayload);
     try {
-      final importer = NwuZhengfangV9Importer(readPayload: _readPayload);
       final semesters = await importer.getSemesters();
-      final timetable = await importer.importSemester(semesters.single);
+      final selected = await _selectRemoteSemester(semesters);
+      if (selected == null) return;
+      final timetable = await importer.importSemester(selected);
       final diff = await _buildDiff(timetable);
       if (!mounted) return;
       setState(() {
@@ -151,8 +153,42 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
         )),
       );
     } finally {
+      await importer.dispose();
       if (mounted) setState(() => _reading = false);
     }
+  }
+
+  Future<RemoteSemester?> _selectRemoteSemester(
+    List<RemoteSemester> semesters,
+  ) async {
+    if (semesters.isEmpty) {
+      throw const FormatException('教务系统没有可导入的学期');
+    }
+    if (semesters.length == 1) return semesters.single;
+    if (!mounted) return null;
+    return showModalBottomSheet<RemoteSemester>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(
+              title: Text('选择要导入的学期'),
+              subtitle: Text('课表读取完成后才会写入本地数据'),
+            ),
+            ...semesters.map(
+              (semester) => ListTile(
+                leading: const Icon(Icons.calendar_month_outlined),
+                title: Text(semester.label),
+                subtitle: Text(semester.remoteTermKey),
+                onTap: () => Navigator.pop(sheetContext, semester),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _handleBridgeMessage(String message) {

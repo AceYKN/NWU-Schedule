@@ -26,6 +26,48 @@ void main() {
     expect(importer.runtimeType.toString(), contains('NwuZhengfangV9Importer'));
   });
 
+  test('discovers and imports the selected semester from one payload',
+      () async {
+    var reads = 0;
+    final payload = <String, dynamic>{
+      'semesters': [
+        {
+          'remoteTermKey': '2025-2026-2',
+          'academicYear': '2025-2026',
+          'term': 2,
+          'label': '2025-2026 第二学期',
+          'totalWeeks': 18,
+          'courses': fixture['courses'],
+        },
+        {
+          'remoteTermKey': '2026-2027-1',
+          'academicYear': '2026-2027',
+          'term': 1,
+          'label': '2026-2027 第一学期',
+          'totalWeeks': 20,
+          'courses': fixture['courses'],
+        },
+      ],
+    };
+    final importer = NwuZhengfangV9Importer(
+      readPayload: () async {
+        reads++;
+        return payload;
+      },
+    );
+
+    final semesters = await importer.getSemesters();
+    final timetable = await importer.importSemester(semesters.last);
+
+    expect(semesters.map((semester) => semester.id), [
+      'nwu-2025-2026-2',
+      'nwu-2026-2027-1',
+    ]);
+    expect(timetable.semester.id, 'nwu-2026-2027-1');
+    expect(timetable.totalWeeks, 20);
+    expect(reads, 1);
+  });
+
   test('only allows the official HTTPS host', () {
     expect(
       NwuZhengfangV9Importer.isAllowedUri(
