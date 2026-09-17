@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../core/nwu/constants.dart';
 import '../../../domain/import/import_diff.dart';
 import '../../../domain/import/timetable_import.dart';
 import '../../../domain/import/timetable_importer.dart';
@@ -25,6 +27,13 @@ class TimetableImportPage extends ConsumerStatefulWidget {
 
 class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   static const _bridgeName = 'nwuScheduleBridge';
+  static const _maxPayloadCharacters = 2 * 1024 * 1024;
+  static const _payloadSelectors = [
+    'window.__NWU_SCHEDULE_PAYLOAD__',
+    'window.__NWU_TIMETABLE__',
+    'window.nwuSchedulePayload',
+    'table',
+  ];
 
   late final WebViewController _controller;
   final _cookieManager = WebViewCookieManager();
@@ -130,16 +139,16 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
         _resolution = ImportConflictResolution.empty;
       });
     } on TimetableImportFailure catch (error) {
-      _setFailure(error.message, error.diagnostic);
+      _setFailure(error.message, await _enrichDiagnostic(error.diagnostic));
     } on Object catch (error) {
       _setFailure(
-        '无法读取课表：$error',
-        ImportDiagnostic(
+        '无法读取课表：${redactImportError(error)}',
+        await _enrichDiagnostic(ImportDiagnostic(
           adapterVersion: 'nwu-zhengfang-v9',
           parserStage: 'webview-read',
           currentUrlPath: _currentUrlPath,
-          error: error.toString(),
-        ),
+          error: redactImportError(error),
+        )),
       );
     } finally {
       if (mounted) setState(() => _reading = false);
@@ -152,6 +161,9 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
 
   Future<void> _handleBridgeMessageAsync(String message) async {
     try {
+      if (message.length > _maxPayloadCharacters) {
+        throw const FormatException('课表桥接数据超过大小限制');
+      }
       final decoded = jsonDecode(message);
       final payload = decoded is Map && decoded['payload'] is Map
           ? Map<String, dynamic>.from(decoded['payload'] as Map)
@@ -174,13 +186,13 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       }
     } on Object catch (error) {
       _setFailure(
-        '课表桥接数据无效：$error',
-        ImportDiagnostic(
+        '课表桥接数据无效：${redactImportError(error)}',
+        await _enrichDiagnostic(ImportDiagnostic(
           adapterVersion: 'nwu-zhengfang-v9',
           parserStage: 'bridge-message',
           currentUrlPath: _currentUrlPath,
-          error: error.toString(),
-        ),
+          error: redactImportError(error),
+        )),
       );
     }
   }
@@ -277,6 +289,34 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       local: local,
       previousImport: await repository.loadLatestImport(timetable.semester.id),
     );
+  }
+
+  Future<ImportDiagnostic> _enrichDiagnostic(
+    ImportDiagnostic diagnostic,
+  ) async {
+    String? userAgent;
+    try {
+      userAgent = await _controller.getUserAgent();
+    } on Object {
+      // Diagnostics should still be exportable if WebView metadata is absent.
+    }
+    return diagnostic.copyWith(
+      appVersion: nwuAppVersion,
+      androidVersion: Platform.operatingSystemVersion,
+      webViewVersion: _webViewVersion(userAgent),
+      currentUrlPath: _currentUrlPath,
+      selectors: diagnostic.selectors.isEmpty
+          ? _payloadSelectors
+          : diagnostic.selectors,
+    );
+  }
+
+  static String? _webViewVersion(String? userAgent) {
+    if (userAgent == null || userAgent.isEmpty) return null;
+    return RegExp(r'(?:Chrome|Version)/([0-9.]+)')
+            .firstMatch(userAgent)
+            ?.group(1) ??
+        userAgent;
   }
 
   String? get _currentUrlPath {
@@ -657,6 +697,9 @@ String _displayValue(Object? value, String field) {
 
 Map<String, dynamic>? _decodePayload(Object? result) {
   if (result is! String) return null;
+  if (result.length > _TimetableImportPageState._maxPayloadCharacters) {
+    return null;
+  }
   try {
     final first = jsonDecode(result);
     if (first is Map) return Map<String, dynamic>.from(first);

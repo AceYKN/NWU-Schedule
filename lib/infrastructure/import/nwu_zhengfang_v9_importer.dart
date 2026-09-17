@@ -10,7 +10,9 @@ class NwuZhengfangV9Importer implements TimetableImporter {
   static final entryUri = Uri.parse('https://jwgl.nwu.edu.cn/jwglxt/');
 
   static bool isAllowedUri(Uri uri) =>
-      uri.scheme == 'https' && uri.host == 'jwgl.nwu.edu.cn';
+      uri.scheme == 'https' &&
+      uri.host == 'jwgl.nwu.edu.cn' &&
+      (uri.path == '/jwglxt' || uri.path.startsWith('/jwglxt/'));
 
   NwuZhengfangV9Importer({
     required this.readPayload,
@@ -37,6 +39,7 @@ class NwuZhengfangV9Importer implements TimetableImporter {
         ImportDiagnostic(
           adapterVersion: 'nwu-zhengfang-v9',
           parserStage: 'semester-match',
+          selectedSemesterId: semester.id,
         ),
       );
     }
@@ -64,12 +67,13 @@ class NwuZhengfangV9Importer implements TimetableImporter {
     } on TimetableImportFailure {
       rethrow;
     } on Object catch (error) {
+      final safeError = redactImportError(error);
       throw TimetableImportFailure(
-        '无法读取课表：$error',
+        '无法读取课表：$safeError',
         ImportDiagnostic(
           adapterVersion: 'nwu-zhengfang-v9',
           parserStage: stage,
-          error: error.toString(),
+          error: redactImportError(error),
         ),
       );
     }

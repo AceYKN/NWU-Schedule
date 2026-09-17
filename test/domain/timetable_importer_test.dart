@@ -45,11 +45,39 @@ void main() {
       ),
       isFalse,
     );
+    expect(
+      NwuZhengfangV9Importer.isAllowedUri(
+        Uri.parse('https://jwgl.nwu.edu.cn/other/'),
+      ),
+      isFalse,
+    );
+  });
+
+  test('diagnostic export contains runtime metadata fields', () {
+    final diagnostic = const ImportDiagnostic(
+      adapterVersion: 'nwu-zhengfang-v9',
+      parserStage: 'bridge-message',
+      appVersion: '0.1.0+1',
+      androidVersion: 'Android 15',
+      webViewVersion: '132.0.0',
+      currentUrlPath: '/jwglxt/xk/list',
+      selectedSemesterId: 'nwu-2026-2027-1',
+      selectors: ['table'],
+      responseSchemaKeys: ['courses'],
+    );
+    final json = diagnostic.toJson();
+    expect(json['appVersion'], '0.1.0+1');
+    expect(json['androidVersion'], 'Android 15');
+    expect(json['webViewVersion'], '132.0.0');
+    expect(json['selectedSemesterId'], 'nwu-2026-2027-1');
+    expect(json['selectors'], ['table']);
   });
 
   test('adapter failure exposes only redacted diagnostics', () async {
     final importer = NwuZhengfangV9Importer(
-      readPayload: () async => {'username': 'student', 'password': 'secret'},
+      readPayload: () async => throw StateError(
+        '{username: student, password: secret, token: abc123}',
+      ),
     );
 
     await expectLater(
