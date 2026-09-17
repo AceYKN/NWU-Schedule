@@ -7,6 +7,8 @@ import '../../../app/theme/schedule_theme.dart';
 import '../../../core/nwu/periods.dart';
 import '../../../core/time/campus_clock.dart';
 import '../../../core/utils/date_utils.dart';
+import '../../../domain/calendar/calendar_definition.dart';
+import '../../../domain/calendar/calendar_engine.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
 import '../../shared/presentation/course_card.dart';
 
@@ -40,6 +42,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           currentWeek: currentWeek,
           maxWeek: maxWeek,
           instances: engine.getCoursesForWeek(week),
+          calendarEngine: engine.calendarEngine,
           onWeekChanged: (value) => setState(() => selectedWeek = value),
           onAddCourse: () => context.go('/course/new'),
           onAddException: () => showStandaloneAddException(
@@ -60,6 +63,7 @@ class _WeekContent extends StatelessWidget {
     required this.currentWeek,
     required this.maxWeek,
     required this.instances,
+    required this.calendarEngine,
     required this.onWeekChanged,
     required this.onAddCourse,
     required this.onAddException,
@@ -69,6 +73,7 @@ class _WeekContent extends StatelessWidget {
   final int currentWeek;
   final int maxWeek;
   final List<EffectiveCourseInstance> instances;
+  final CalendarEngine calendarEngine;
   final ValueChanged<int> onWeekChanged;
   final VoidCallback onAddCourse;
   final VoidCallback onAddException;
@@ -138,6 +143,8 @@ class _WeekContent extends StatelessWidget {
         _ScheduleGrid(
           weekdays: weekdays,
           instances: instances,
+          calendarEngine: calendarEngine,
+          week: week,
           now: CampusClock.now(),
         ),
         if (instances.isEmpty) ...[
@@ -153,11 +160,15 @@ class _ScheduleGrid extends StatelessWidget {
   const _ScheduleGrid({
     required this.weekdays,
     required this.instances,
+    required this.calendarEngine,
+    required this.week,
     required this.now,
   });
 
   final List<int> weekdays;
   final List<EffectiveCourseInstance> instances;
+  final CalendarEngine calendarEngine;
+  final int week;
   final DateTime now;
 
   @override
@@ -168,10 +179,23 @@ class _ScheduleGrid extends StatelessWidget {
         children: [
           const _GridHeader(text: '节次'),
           ...weekdays.map(
-            (day) => _GridHeader(
-              text: weekdayName(day),
-              highlighted: day == CampusClock.now().weekday,
-            ),
+            (day) {
+              final date = calendarEngine.definition
+                  .weekStart(week)
+                  .add(Duration(days: day - 1));
+              final resolved = calendarEngine.resolve(date);
+              return _GridHeader(
+                text: '${weekdayName(day)}\n${date.day}',
+                marker: switch (resolved.override?.type) {
+                  CalendarOverrideType.holiday =>
+                    resolved.label?.isNotEmpty == true ? resolved.label : '放假',
+                  CalendarOverrideType.useScheduleOf =>
+                    resolved.label?.isNotEmpty == true ? resolved.label : '调课',
+                  null => null,
+                },
+                highlighted: day == now.weekday && isSameDate(date, now),
+              );
+            },
           ),
         ],
       ),
@@ -227,20 +251,43 @@ class _ScheduleGrid extends StatelessWidget {
 }
 
 class _GridHeader extends StatelessWidget {
-  const _GridHeader({required this.text, this.highlighted = false});
+  const _GridHeader({
+    required this.text,
+    this.marker,
+    this.highlighted = false,
+  });
 
   final String text;
+  final String? marker;
   final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 48,
+      height: marker == null ? 48 : 60,
       alignment: Alignment.center,
       color: highlighted
           ? Theme.of(context).colorScheme.primaryContainer
           : Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+          if (marker != null)
+            Text(
+              marker!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

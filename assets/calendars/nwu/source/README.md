@@ -19,4 +19,4 @@ holidayPeriods -> CalendarDateOverride(holiday)
 makeupDays      -> CalendarDateOverride(useScheduleOf)
 ```
 
-五份数据来自项目讨论中提供的西北大学校历图片；正式发布前仍建议对照学校官方发布版本做一次复核。
+五份数据来自项目讨论中提供的西北大学校历资料，已由项目方核实，可作为当前运行时校历资产使用。若学校后续发布修订版，应新增或更新对应资产并递增 `revision`，不要覆盖历史学期的数据语义。
