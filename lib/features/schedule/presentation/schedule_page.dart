@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../core/nwu/periods.dart';
 import '../../../core/time/campus_clock.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
@@ -113,7 +114,11 @@ class _WeekContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        _ScheduleGrid(weekdays: weekdays, instances: instances),
+        _ScheduleGrid(
+          weekdays: weekdays,
+          instances: instances,
+          now: CampusClock.now(),
+        ),
         if (instances.isEmpty) ...[
           const SizedBox(height: 24),
           const Center(child: Text('本周没有课程')),
@@ -124,10 +129,15 @@ class _WeekContent extends StatelessWidget {
 }
 
 class _ScheduleGrid extends StatelessWidget {
-  const _ScheduleGrid({required this.weekdays, required this.instances});
+  const _ScheduleGrid({
+    required this.weekdays,
+    required this.instances,
+    required this.now,
+  });
 
   final List<int> weekdays;
   final List<EffectiveCourseInstance> instances;
+  final DateTime now;
 
   @override
   Widget build(BuildContext context) {
@@ -154,6 +164,7 @@ class _ScheduleGrid extends StatelessWidget {
                 day: day,
                 section: section,
                 instance: _findInstance(day, section),
+                showCurrentTime: _isCurrentTime(day, section),
               ),
             ),
           ],
@@ -184,6 +195,13 @@ class _ScheduleGrid extends StatelessWidget {
     }
     return null;
   }
+
+  bool _isCurrentTime(int day, int section) {
+    if (now.weekday != day) return false;
+    final period = const NwuPeriodRepository().byNumber(section);
+    final minutes = now.hour * 60 + now.minute;
+    return minutes >= period.startMinutes && minutes < period.endMinutes;
+  }
 }
 
 class _GridHeader extends StatelessWidget {
@@ -212,11 +230,16 @@ class _PeriodCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final period = const NwuPeriodRepository().byNumber(section);
     return Container(
       height: 70,
       alignment: Alignment.center,
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Text('$section'),
+      child: Text(
+        '$section\n${period.startLabel}-${period.endLabel}',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.labelSmall,
+      ),
     );
   }
 }
@@ -226,38 +249,67 @@ class _ScheduleCell extends StatelessWidget {
     required this.day,
     required this.section,
     required this.instance,
+    required this.showCurrentTime,
   });
 
   final int day;
   final int section;
   final EffectiveCourseInstance? instance;
+  final bool showCurrentTime;
 
   @override
   Widget build(BuildContext context) {
-    if (instance == null || instance!.startSection != section) {
-      return const SizedBox(height: 70);
+    final isStart = instance != null && instance!.startSection == section;
+    if (!isStart) {
+      return Container(
+        height: 70,
+        decoration: showCurrentTime
+            ? BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: Theme.of(context).colorScheme.error,
+                    width: 2,
+                  ),
+                ),
+              )
+            : null,
+      );
     }
     final color = Color(
       instance!.course.colorOverride ??
           Theme.of(context).colorScheme.primary.toARGB32(),
     );
-    return InkWell(
-      onTap: () => showCourseDetails(context, instance!),
-      child: Container(
-        height: 70,
-        padding: const EdgeInsets.all(6),
-        color: color.withAlpha(46),
-        child: Text(
-          instance!.courseName,
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
+    return Stack(
+      children: [
+        InkWell(
+          onTap: () => showCourseDetails(context, instance!),
+          child: Container(
+            height: 70,
+            padding: const EdgeInsets.all(6),
+            color: color.withAlpha(46),
+            child: Text(
+              instance!.courseName,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ),
-      ),
+        if (showCurrentTime)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 2,
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+      ],
     );
   }
 }

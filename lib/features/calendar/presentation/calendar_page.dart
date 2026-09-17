@@ -192,6 +192,11 @@ class _MonthCell extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall,
                 ),
+              if (resolved.teachingWeek != null)
+                Text(
+                  '第${resolved.teachingWeek}周',
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
               if (outsideSemester)
                 Text('学期外', style: Theme.of(context).textTheme.labelSmall),
               if (courses.isNotEmpty)

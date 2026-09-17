@@ -1,43 +1,49 @@
 # NWU Schedule
 
-西北大学本科课程表 App，首发目标为 Android，采用 Flutter/Dart 构建。
+面向西北大学本科生的 Android-first、本地优先课程表 App。项目以
+`SPEC.md` 为产品与验收依据，不提供账号服务器、云同步、广告或统计服务。
 
-当前实现完成了 SPEC.md 中 Phase 1 和 Phase 2 的第一版切片，并搭好了 Phase 0 应用壳：
+## 当前实现
 
-- Flutter 应用壳、Riverpod、go_router、主题契约和离线静态原型；
-- `CalendarEngine` 统一计算教学周、假期和 `useScheduleOf` 调课日期；
-- `ScheduleEngine` 根据课程、MeetingRule、校历和 `MOVE/CANCEL/ADD` 生成真实日期课表；
-- `WeekMask` 使用 64-bit bitmask 支持连续周、单双周和离散周；
-- `ScheduleNowState` 支持 NOW、NEXT、TODAY DONE、NO CLASS，并跨天寻找下一节课；
-- 基础首页、周课表、月日历和课程详情 Bottom Sheet 已接入同一个 ScheduleEngine；
-- 当前页面使用脱敏静态示例课表；Drift/SQLite、正方 WebView、通知和 Widget 将按 SPEC 的后续阶段接入。
+- `CalendarEngine` / `ScheduleEngine` 统一处理教学周、单双周、节假日、调休、补课、NOW/NEXT 和跨天查找；
+- Drift/SQLite 本地保存多学期、课程、MeetingRule、临时调课、导入快照和删除墓碑；
+- Today、Week、Month、课程详情、手动添加/编辑/隐藏/删除和课程颜色覆盖；
+- MOVE、CANCEL、ADD 临时变更，支持在课程管理中撤销；
+- 正方 WebView 导入：官方 HTTPS 域名白名单、学期选择、Normalize/Validate、Diff 预览、三方合并冲突选择、原子提交和 Cookie 清理；
+- 本地通知、Android Small/Medium/Large Widget、手动备份/恢复/清除数据；
+- 三套官方主题，可持久化并随备份恢复；
+- 五份 NWU 校历资源及 CI 校历校验。
 
-## 开发
+正方教务的真实认证后 endpoint/schema 仍需要在真实西北大学学生账号环境做一次手动集成验收。适配器不硬编码未经验证的参数；当前同时支持规范化 payload 和页面 DOM 兜底。
 
-需要 Flutter stable SDK。执行：
+## 开发与验证
+
+需要 Flutter stable SDK：
 
 ```bash
 flutter pub get
-flutter test
 flutter analyze
-flutter run
+flutter test
+dart run tool/validate_calendars.dart
+flutter build apk --debug
+flutter build apk --release
 ```
 
-当前工作树环境没有安装 Flutter SDK，因此本次尚未取得本机 `flutter test` / `flutter analyze` 结果；CI 配置会在 Flutter 环境中执行这些检查。
+Android SDK、Flutter SDK 和项目都可以分别放在不同磁盘；应用运行数据只保存在本机。
 
 ## 目录约定
 
 ```text
-lib/
-├── app/                 # 应用、路由、主题
-├── core/nwu/            # 西北大学作息和常量
-├── domain/              # 与 Flutter/数据库无关的业务模型和引擎
-├── features/            # 页面
-└── infrastructure/      # 校历资源和后续平台适配层
+lib/app/                 应用、路由、主题和 Provider
+lib/core/                西北大学作息、时间和工具
+lib/domain/              纯 Dart 领域模型与引擎
+lib/data/                Drift/SQLite 数据库和 Repository
+lib/features/            Flutter 页面
+lib/infrastructure/      校历、WebView、通知、Widget、备份平台适配
+assets/calendars/nwu/    校历资源
+android/                 Kotlin Widget、通知和 Document Picker 桥接
 ```
-
-校历资源位于 `assets/calendars/nwu/`。发布前应以当学期正式校历核对其中的学期起止日期和特殊安排；ScheduleEngine 的假期、调课、单双周、跨天查找和单次异常已经由单元测试覆盖。
 
 ## 隐私边界
 
-当前版本没有账号、服务器、广告或统计 SDK。当前静态原型不执行网络请求；后续数据库阶段仍会把课程和设置限制在设备本地 SQLite，正方 WebView 导入、通知、Widget、备份恢复也将在后续阶段接入。
+正常页面、通知、Widget 和校历不主动联网。只有用户主动进入“从教务系统导入”时，临时 WebView 才访问西北大学教务域名；导入结束会清理 WebView Cookie、缓存和页面存储。诊断导出会脱敏敏感键值，不包含账号、密码、Cookie 或 Token。
