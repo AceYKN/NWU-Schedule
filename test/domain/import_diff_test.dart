@@ -127,6 +127,28 @@ void main() {
     expect(diff.hasConflicts, isTrue);
   });
 
+  test('explicit conflict resolution turns a conflict into an import choice',
+      () {
+    final diff = const ImportDiffEngine().build(
+      incoming: timetable([course(room: '3201')]),
+      local: local(room: '3508'),
+      previousImport: timetable([course()]),
+    );
+    final resolved = diff.resolve(
+      ImportConflictResolution.copy({
+        'course-1': {'meetings': MergeDecision.remote},
+      }),
+    );
+    expect(resolved.hasConflicts, isFalse);
+    expect(resolved.changes.single.kind, ImportChangeKind.modified);
+    expect(
+      resolved.changes.single.fields
+          .firstWhere((field) => field.field == 'meetings')
+          .decision,
+      MergeDecision.remote,
+    );
+  });
+
   test('handles remote add, delete and manual-course exclusion', () {
     final manual = Course(
       id: 'manual',

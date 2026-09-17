@@ -3,6 +3,7 @@ import '../course/course_exception.dart';
 import '../course/meeting_rule.dart';
 import '../backup/schedule_backup.dart';
 import '../import/timetable_import.dart';
+import '../import/import_diff.dart';
 import '../semester/semester.dart';
 
 class ScheduleDataSnapshot {
@@ -53,6 +54,7 @@ abstract interface class ScheduleDataRepository {
   Future<void> commitImportedTimetable(
     RemoteTimetable timetable, {
     String adapterVersion = 'nwu-zhengfang-v1',
+    ImportConflictResolution resolution = ImportConflictResolution.empty,
   });
 
   Future<ScheduleBackup> createBackup({

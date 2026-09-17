@@ -560,6 +560,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   Future<void> commitImportedTimetable(
     RemoteTimetable timetable, {
     String adapterVersion = 'nwu-zhengfang-v1',
+    ImportConflictResolution resolution = ImportConflictResolution.empty,
   }) async {
     final report = validateTimetable(timetable);
     if (!report.isValid) {
@@ -580,13 +581,14 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     final tombstones = await (database.select(database.deletedSourceItems)
           ..where((table) => table.semesterId.equals(semesterId)))
         .get();
-    final diff = const ImportDiffEngine().build(
+    final rawDiff = const ImportDiffEngine().build(
       incoming: timetable,
       local: local,
       previousImport: previous,
       deletedSourceCourseKeys:
           tombstones.map((row) => row.sourceCourseKey).toSet(),
     );
+    final diff = rawDiff.resolve(resolution);
     if (diff.hasConflicts) {
       throw TimetableImportConflictException(diff);
     }

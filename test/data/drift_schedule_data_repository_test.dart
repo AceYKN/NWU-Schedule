@@ -5,7 +5,9 @@ import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
 import 'package:nwu_schedule/domain/course/course.dart' as domain;
 import 'package:nwu_schedule/domain/course/meeting_rule.dart' as domain;
+import 'package:nwu_schedule/domain/import/import_diff.dart';
 import 'package:nwu_schedule/domain/import/timetable_import.dart';
+import 'package:nwu_schedule/domain/import/three_way_merge.dart';
 import 'package:nwu_schedule/domain/semester/semester.dart' as domain;
 
 void main() {
@@ -293,5 +295,20 @@ void main() {
             .single
             .room,
         '3508');
+
+    await repository.commitImportedTimetable(
+      incoming,
+      resolution: ImportConflictResolution.copy({
+        'c1': {'meetings': MergeDecision.remote},
+      }),
+    );
+    expect(
+      (await repository.loadSemester(base.semester.id))
+          .meetingRules
+          .single
+          .room,
+      '3201',
+    );
+    expect(await database.select(database.importSnapshots).get(), hasLength(2));
   });
 }

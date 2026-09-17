@@ -71,6 +71,69 @@ class ImportDiff {
       .length;
 
   int get conflictCount => changes.where((change) => change.hasConflict).length;
+
+  ImportDiff resolve(ImportConflictResolution resolution) {
+    if (!hasConflicts) return this;
+    return ImportDiff([
+      for (final change in changes) _resolveChange(change, resolution),
+    ]);
+  }
+
+  static ImportChange _resolveChange(
+    ImportChange change,
+    ImportConflictResolution resolution,
+  ) {
+    if (!change.hasConflict) return change;
+    final fields = [
+      for (final field in change.fields)
+        ImportFieldChange(
+          field: field.field,
+          decision: field.hasConflict
+              ? resolution.choiceFor(change.sourceCourseKey, field.field) ??
+                  field.decision
+              : field.decision,
+          localValue: field.localValue,
+          remoteValue: field.remoteValue,
+        ),
+    ];
+    final hasConflict = fields.any((field) => field.hasConflict);
+    final changed = fields.any(
+      (field) =>
+          field.decision != MergeDecision.local ||
+          !_sameImportValue(field.localValue, field.remoteValue),
+    );
+    return ImportChange(
+      kind: hasConflict
+          ? ImportChangeKind.conflict
+          : changed
+              ? ImportChangeKind.modified
+              : ImportChangeKind.unchanged,
+      sourceCourseKey: change.sourceCourseKey,
+      localCourse: change.localCourse,
+      remoteCourse: change.remoteCourse,
+      fields: fields,
+    );
+  }
+}
+
+class ImportConflictResolution {
+  const ImportConflictResolution(this.choices);
+
+  factory ImportConflictResolution.copy(
+    Map<String, Map<String, MergeDecision>> choices,
+  ) {
+    return ImportConflictResolution({
+      for (final entry in choices.entries)
+        entry.key: Map<String, MergeDecision>.from(entry.value),
+    });
+  }
+
+  static const empty = ImportConflictResolution({});
+
+  final Map<String, Map<String, MergeDecision>> choices;
+
+  MergeDecision? choiceFor(String sourceCourseKey, String field) =>
+      choices[sourceCourseKey]?[field];
 }
 
 class ImportDiffEngine {
@@ -244,7 +307,10 @@ class ImportDiffEngine {
       };
 
   static bool _same(Object? left, Object? right) =>
-      _canonical(left) == _canonical(right);
+      _sameImportValue(left, right);
 
   static String _canonical(Object? value) => jsonEncode(value);
 }
+
+bool _sameImportValue(Object? left, Object? right) =>
+    jsonEncode(left) == jsonEncode(right);

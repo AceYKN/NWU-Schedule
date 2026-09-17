@@ -10,6 +10,7 @@ import '../../../app/bootstrap.dart';
 import '../../../domain/import/import_diff.dart';
 import '../../../domain/import/timetable_import.dart';
 import '../../../domain/import/timetable_importer.dart';
+import '../../../domain/import/three_way_merge.dart';
 import '../../../domain/schedule/schedule_data_repository.dart';
 import '../../../infrastructure/backup/backup_file_service.dart';
 import '../../../infrastructure/import/nwu_zhengfang_v9_importer.dart';
@@ -29,6 +30,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   final _cookieManager = WebViewCookieManager();
   RemoteTimetable? _timetable;
   ImportDiff? _diff;
+  ImportConflictResolution _resolution = ImportConflictResolution.empty;
   ImportDiagnostic? _diagnostic;
   String? _error;
   String? _currentUrl;
@@ -114,6 +116,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       _error = null;
       _diagnostic = null;
       _diff = null;
+      _resolution = ImportConflictResolution.empty;
     });
     try {
       final importer = NwuZhengfangV9Importer(readPayload: _readPayload);
@@ -124,6 +127,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       setState(() {
         _timetable = timetable;
         _diff = diff;
+        _resolution = ImportConflictResolution.empty;
       });
     } on TimetableImportFailure catch (error) {
       _setFailure(error.message, error.diagnostic);
@@ -143,6 +147,10 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   }
 
   void _handleBridgeMessage(String message) {
+    unawaited(_handleBridgeMessageAsync(message));
+  }
+
+  Future<void> _handleBridgeMessageAsync(String message) async {
     try {
       final decoded = jsonDecode(message);
       final payload = decoded is Map && decoded['payload'] is Map
@@ -154,10 +162,12 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       final timetable = const TimetableImportParser().parse(payload);
       final report = validateTimetable(timetable);
       if (!report.isValid) throw FormatException(report.issues.join('; '));
+      final diff = await _buildDiff(timetable);
       if (mounted) {
         setState(() {
           _timetable = timetable;
-          _diff = null;
+          _diff = diff;
+          _resolution = ImportConflictResolution.empty;
           _error = null;
           _diagnostic = null;
         });
@@ -177,11 +187,15 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
 
   Future<void> _confirmImport() async {
     final timetable = _timetable;
-    if (timetable == null || _saving || _diff?.hasConflicts == true) return;
+    final diff = _resolvedDiff;
+    if (timetable == null || diff == null || _saving || diff.hasConflicts) {
+      return;
+    }
     setState(() => _saving = true);
     try {
       await ref.read(scheduleDataRepositoryProvider).commitImportedTimetable(
             timetable,
+            resolution: _resolution,
           );
       ref.invalidate(scheduleLoadProvider);
       if (mounted) context.go('/');
@@ -224,7 +238,28 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       _diagnostic = diagnostic;
       _timetable = null;
       _diff = null;
+      _resolution = ImportConflictResolution.empty;
     });
+  }
+
+  Future<void> _showConflictResolution() async {
+    final diff = _diff;
+    if (diff == null || !diff.hasConflicts) return;
+    final resolution = await showModalBottomSheet<ImportConflictResolution>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _ConflictResolutionSheet(
+        diff: diff,
+        initial: _resolution,
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _resolution = resolution ?? _resolution);
+  }
+
+  ImportDiff? get _resolvedDiff {
+    final diff = _diff;
+    return diff?.resolve(_resolution);
   }
 
   Future<ImportDiff> _buildDiff(RemoteTimetable timetable) async {
@@ -327,14 +362,17 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
                   alignment: Alignment.bottomCenter,
                   child: _ImportPreview(
                     timetable: timetable,
-                    diff: _diff,
+                    diff: _resolvedDiff,
+                    hasConflictItems: _diff?.hasConflicts == true,
                     saving: _saving,
                     onConfirm: _confirmImport,
                     onRetry: _readCurrentPage,
                     onCancel: () => setState(() {
                       _timetable = null;
                       _diff = null;
+                      _resolution = ImportConflictResolution.empty;
                     }),
+                    onResolveConflicts: _showConflictResolution,
                   ),
                 ),
             ],
@@ -355,17 +393,21 @@ class _ImportPreview extends StatelessWidget {
     required this.timetable,
     required this.diff,
     required this.saving,
+    required this.hasConflictItems,
     required this.onConfirm,
     required this.onRetry,
     required this.onCancel,
+    required this.onResolveConflicts,
   });
 
   final RemoteTimetable timetable;
   final ImportDiff? diff;
+  final bool hasConflictItems;
   final bool saving;
   final VoidCallback onConfirm;
   final VoidCallback onRetry;
   final VoidCallback onCancel;
+  final VoidCallback onResolveConflicts;
 
   @override
   Widget build(BuildContext context) {
@@ -408,6 +450,15 @@ class _ImportPreview extends StatelessWidget {
                     color: Theme.of(context).colorScheme.error,
                   ),
                 ),
+              if (hasConflictItems)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: onResolveConflicts,
+                    icon: const Icon(Icons.merge_type),
+                    label: Text(diff!.hasConflicts ? '解决冲突' : '调整冲突选择'),
+                  ),
+                ),
             ],
             const SizedBox(height: 8),
             ...timetable.courses.take(3).map(
@@ -428,7 +479,9 @@ class _ImportPreview extends StatelessWidget {
                 const SizedBox(width: 4),
                 FilledButton(
                   onPressed:
-                      saving || diff?.hasConflicts == true ? null : onConfirm,
+                      saving || diff == null || diff?.hasConflicts == true
+                          ? null
+                          : onConfirm,
                   child: Text(saving ? '导入中…' : '确认导入'),
                 ),
               ],
@@ -438,6 +491,168 @@ class _ImportPreview extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ConflictEntry {
+  const _ConflictEntry(this.change, this.field);
+
+  final ImportChange change;
+  final ImportFieldChange field;
+}
+
+class _ConflictResolutionSheet extends StatefulWidget {
+  const _ConflictResolutionSheet({
+    required this.diff,
+    required this.initial,
+  });
+
+  final ImportDiff diff;
+  final ImportConflictResolution initial;
+
+  @override
+  State<_ConflictResolutionSheet> createState() =>
+      _ConflictResolutionSheetState();
+}
+
+class _ConflictResolutionSheetState extends State<_ConflictResolutionSheet> {
+  late final Map<String, Map<String, MergeDecision>> _choices = {
+    for (final entry in widget.initial.choices.entries)
+      entry.key: Map<String, MergeDecision>.from(entry.value),
+  };
+
+  List<_ConflictEntry> get _entries => [
+        for (final change in widget.diff.changes)
+          for (final field in change.fields)
+            if (field.hasConflict) _ConflictEntry(change, field),
+      ];
+
+  bool get _complete => _entries.every(
+        (entry) =>
+            _choices[entry.change.sourceCourseKey]?[entry.field.field] != null,
+      );
+
+  void _choose(_ConflictEntry entry, MergeDecision decision) {
+    final next = Map<String, MergeDecision>.from(
+      _choices[entry.change.sourceCourseKey] ?? const {},
+    );
+    next[entry.field.field] = decision;
+    setState(() => _choices[entry.change.sourceCourseKey] = next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = _entries;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          12 + MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * .78,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '解决导入冲突',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              const Text('每个冲突字段都需要明确选择保留本地值或教务系统值。'),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: entries.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final entry = entries[index];
+                    final selected = _choices[entry.change.sourceCourseKey]
+                        ?[entry.field.field];
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ListTile(
+                              dense: true,
+                              title: Text(
+                                '${entry.change.remoteCourse?.name ?? entry.change.sourceCourseKey} · ${_fieldLabel(entry.field.field)}',
+                              ),
+                              subtitle: Text(
+                                '本地：${_displayValue(entry.field.localValue, entry.field.field)}\n'
+                                '教务：${_displayValue(entry.field.remoteValue, entry.field.field)}',
+                              ),
+                            ),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: SegmentedButton<MergeDecision>(
+                                segments: const [
+                                  ButtonSegment(
+                                    value: MergeDecision.local,
+                                    label: Text('保留本地'),
+                                  ),
+                                  ButtonSegment(
+                                    value: MergeDecision.remote,
+                                    label: Text('采用教务'),
+                                  ),
+                                ],
+                                selected: {
+                                  if (selected != null) selected,
+                                },
+                                onSelectionChanged: (selection) {
+                                  if (selection.isNotEmpty) {
+                                    _choose(entry, selection.first);
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _complete
+                      ? () => Navigator.of(context).pop(
+                            ImportConflictResolution.copy(_choices),
+                          )
+                      : null,
+                  child: Text(_complete ? '应用选择' : '请完成全部选择'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _fieldLabel(String field) => switch (field) {
+      'name' => '课程名',
+      'code' => '课程代码',
+      'teachingClass' => '教学班',
+      'credits' => '学分',
+      'assessment' => '考核方式',
+      'meetings' => '上课安排',
+      _ => field,
+    };
+
+String _displayValue(Object? value, String field) {
+  if (value == null) return '未填写';
+  if (field == 'meetings' && value is List) return '${value.length} 个上课安排';
+  return value.toString();
 }
 
 Map<String, dynamic>? _decodePayload(Object? result) {
