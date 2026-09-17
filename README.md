@@ -12,9 +12,10 @@
 - 正方 WebView 导入：官方 HTTPS 域名白名单、学期选择、Normalize/Validate、Diff 预览、三方合并冲突选择、原子提交和 Cookie 清理；
 - 本地通知、Android Small/Medium/Large Widget、手动备份/恢复/清除数据；
 - 三套官方主题，可持久化并随备份恢复；
-- 五份 NWU 校历资源及 CI 校历校验。
+- 五份 NWU 校历资源及 CI 校历校验；校历 revision 检测、非阻断更新提示和缺失校历说明；
+- 三套官方主题的 Golden UI 回归，以及数据库 schema v1→v2 migration。
 
-正方教务的真实认证后 endpoint/schema 仍需要在真实西北大学学生账号环境做一次手动集成验收。适配器不硬编码未经验证的参数；当前同时支持规范化 payload 和页面 DOM 兜底。
+正方教务的真实认证后 endpoint/schema 仍需要在真实西北大学学生账号环境做一次手动集成验收。适配器不硬编码未经验证的参数；当前同时支持规范化 payload 和页面 DOM 兜底。验收步骤见 [`docs/manual-integration.md`](docs/manual-integration.md)。
 
 ## 开发与验证
 
@@ -28,6 +29,8 @@ dart run tool/validate_calendars.dart
 flutter build apk --debug
 flutter build apk --release
 ```
+
+`flutter test` 已包含三套主题的 Golden UI 回归。由于不同系统的字体栅格化存在小幅差异，Golden comparator 对 1% 以内的跨平台字体像素差异放行；布局、颜色和明显内容变化仍会失败。
 
 Release 构建不会使用 debug keystore。正式发布前请把未提交的
 `android/key.properties.example` 复制为 `android/key.properties`，替换为
