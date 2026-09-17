@@ -219,6 +219,38 @@ void showCourseDetails(
   );
 }
 
+Future<void> showStandaloneAddException({
+  required BuildContext pageContext,
+  required WidgetRef ref,
+  required String semesterId,
+  required DateTime initialDate,
+}) async {
+  final exception = await showModalBottomSheet<CourseException>(
+    context: pageContext,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => _StandaloneAddExceptionSheet(
+      semesterId: semesterId,
+      initialDate: initialDate,
+    ),
+  );
+  if (exception == null || !pageContext.mounted) return;
+  try {
+    await ref.read(scheduleDataRepositoryProvider).saveException(exception);
+    if (pageContext.mounted) {
+      ScaffoldMessenger.of(pageContext).showSnackBar(
+        const SnackBar(content: Text('临时加课已保存')),
+      );
+    }
+  } catch (error) {
+    if (pageContext.mounted) {
+      ScaffoldMessenger.of(pageContext).showSnackBar(
+        SnackBar(content: Text(nwuUserMessage(error, action: '保存临时加课失败'))),
+      );
+    }
+  }
+}
+
 Future<void> _hideCourse(
   BuildContext pageContext,
   BuildContext sheetContext,
@@ -467,6 +499,193 @@ class _ExceptionEditorSheet extends StatefulWidget {
 
   @override
   State<_ExceptionEditorSheet> createState() => _ExceptionEditorSheetState();
+}
+
+class _StandaloneAddExceptionSheet extends StatefulWidget {
+  const _StandaloneAddExceptionSheet({
+    required this.semesterId,
+    required this.initialDate,
+  });
+
+  final String semesterId;
+  final DateTime initialDate;
+
+  @override
+  State<_StandaloneAddExceptionSheet> createState() =>
+      _StandaloneAddExceptionSheetState();
+}
+
+class _StandaloneAddExceptionSheetState
+    extends State<_StandaloneAddExceptionSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _teacher = TextEditingController();
+  final _campus = TextEditingController();
+  final _room = TextEditingController();
+  final _note = TextEditingController();
+  late DateTime _targetDate;
+  int _startSection = 1;
+  int _endSection = 2;
+
+  @override
+  void initState() {
+    super.initState();
+    _targetDate = dateOnly(widget.initialDate);
+  }
+
+  @override
+  void dispose() {
+    for (final controller in [_name, _teacher, _campus, _room, _note]) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  String? _optional(TextEditingController controller) {
+    final value = controller.text.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  Future<void> _pickDate() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _targetDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (selected != null && mounted) setState(() => _targetDate = selected);
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop(
+      CourseException(
+        id: 'exception-${DateTime.now().microsecondsSinceEpoch}',
+        semesterId: widget.semesterId,
+        type: CourseExceptionType.add,
+        targetDate: dateOnly(_targetDate),
+        targetStartSection: _startSection,
+        targetEndSection: _endSection,
+        teacherOverride: _optional(_teacher),
+        campusOverride: _optional(_campus),
+        roomOverride: _optional(_room),
+        addedCourseName: _name.text.trim(),
+        note: _optional(_note),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * .82,
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              4,
+              20,
+              24 + MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            children: [
+              Text(
+                '临时加课',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              const Text('只在指定日期显示，不会修改周期课表。'),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _name,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: '课程名 *'),
+                validator: (value) =>
+                    value == null || value.trim().isEmpty ? '请输入课程名' : null,
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.event_outlined),
+                title: const Text('上课日期'),
+                subtitle: Text(
+                  MaterialLocalizations.of(context)
+                      .formatMediumDate(_targetDate),
+                ),
+                onTap: _pickDate,
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      initialValue: _startSection,
+                      decoration: const InputDecoration(labelText: '开始节'),
+                      items: _sectionItems(),
+                      onChanged: (value) => setState(() {
+                        _startSection = value ?? 1;
+                        if (_endSection < _startSection) {
+                          _endSection = _startSection;
+                        }
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      key: ValueKey(_endSection),
+                      initialValue: _endSection,
+                      decoration: const InputDecoration(labelText: '结束节'),
+                      items: _sectionItems(),
+                      onChanged: (value) =>
+                          setState(() => _endSection = value ?? 1),
+                      validator: (value) =>
+                          value == null || value < _startSection
+                              ? '结束节不能早于开始节'
+                              : null,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _teacher,
+                decoration: const InputDecoration(labelText: '教师（可选）'),
+              ),
+              TextFormField(
+                controller: _campus,
+                decoration: const InputDecoration(labelText: '校区（可选）'),
+              ),
+              TextFormField(
+                controller: _room,
+                decoration: const InputDecoration(labelText: '教室（可选）'),
+              ),
+              TextFormField(
+                controller: _note,
+                decoration: const InputDecoration(labelText: '备注（可选）'),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _submit,
+                child: const Text('保存临时加课'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<DropdownMenuItem<int>> _sectionItems() => List.generate(
+        NwuPeriodRepository.all.length,
+        (index) => DropdownMenuItem(
+          value: index + 1,
+          child: Text('第 ${index + 1} 节'),
+        ),
+      );
 }
 
 class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {

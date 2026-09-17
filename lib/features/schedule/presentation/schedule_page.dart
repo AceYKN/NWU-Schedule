@@ -41,6 +41,12 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           instances: engine.getCoursesForWeek(week),
           onWeekChanged: (value) => setState(() => selectedWeek = value),
           onAddCourse: () => context.go('/course/new'),
+          onAddException: () => showStandaloneAddException(
+            pageContext: context,
+            ref: ref,
+            semesterId: engine.semesterId,
+            initialDate: engine.calendarEngine.definition.weekStart(week),
+          ),
         );
       },
     );
@@ -55,6 +61,7 @@ class _WeekContent extends StatelessWidget {
     required this.instances,
     required this.onWeekChanged,
     required this.onAddCourse,
+    required this.onAddException,
   });
 
   final int week;
@@ -63,6 +70,7 @@ class _WeekContent extends StatelessWidget {
   final List<EffectiveCourseInstance> instances;
   final ValueChanged<int> onWeekChanged;
   final VoidCallback onAddCourse;
+  final VoidCallback onAddException;
 
   @override
   Widget build(BuildContext context) {
@@ -107,10 +115,22 @@ class _WeekContent extends StatelessWidget {
         ),
         Align(
           alignment: Alignment.centerRight,
-          child: FilledButton.icon(
-            onPressed: onAddCourse,
-            icon: const Icon(Icons.add),
-            label: const Text('手动添加课程'),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onAddException,
+                icon: const Icon(Icons.event_repeat_outlined),
+                label: const Text('临时加课'),
+              ),
+              FilledButton.icon(
+                onPressed: onAddCourse,
+                icon: const Icon(Icons.add),
+                label: const Text('手动添加课程'),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
