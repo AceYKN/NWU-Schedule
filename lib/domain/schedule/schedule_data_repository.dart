@@ -1,6 +1,7 @@
 import '../course/course.dart';
 import '../course/course_exception.dart';
 import '../course/meeting_rule.dart';
+import '../backup/schedule_backup.dart';
 import '../import/timetable_import.dart';
 import '../semester/semester.dart';
 
@@ -49,4 +50,12 @@ abstract interface class ScheduleDataRepository {
     RemoteTimetable timetable, {
     String adapterVersion = 'nwu-zhengfang-v1',
   });
+
+  Future<ScheduleBackup> createBackup({
+    Map<String, Object?> appearance = const {},
+  });
+
+  Future<void> restoreBackup(ScheduleBackup backup);
+
+  Future<void> clearAllData();
 }

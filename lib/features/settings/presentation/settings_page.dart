@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
+import '../../../domain/backup/schedule_backup.dart';
 import '../../../domain/semester/semester.dart';
+import '../../../infrastructure/backup/backup_file_service.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -126,13 +128,13 @@ class SettingsPage extends ConsumerWidget {
                 leading: const Icon(Icons.file_download_outlined),
                 title: const Text('导出完整备份'),
                 subtitle: const Text('只包含本地课程和设置，不包含账号或 Cookie'),
-                onTap: () => _showPrototypeMessage(context, '备份导出'),
+                onTap: () => _exportBackup(context, ref),
               ),
               const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.file_upload_outlined),
                 title: const Text('导入完整备份'),
-                onTap: () => _showPrototypeMessage(context, '备份恢复'),
+                onTap: () => _restoreBackup(context, ref),
               ),
               const Divider(height: 1),
               ListTile(
@@ -141,7 +143,7 @@ class SettingsPage extends ConsumerWidget {
                   color: Theme.of(context).colorScheme.error,
                 ),
                 title: const Text('清除所有数据'),
-                onTap: () => _showPrototypeMessage(context, '清除数据'),
+                onTap: () => _clearAllData(context, ref),
               ),
             ],
           ),
@@ -242,6 +244,85 @@ Future<void> _selectSemester(BuildContext context, WidgetRef ref) async {
     if (selected != null) await repository.setPreferredSemesterId(selected);
   } catch (error) {
     if (context.mounted) _showMessage(context, '切换学期失败：$error');
+  }
+}
+
+Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
+  try {
+    final backup =
+        await ref.read(scheduleDataRepositoryProvider).createBackup();
+    final saved = await const BackupFileService().save(backup.encode());
+    if (!context.mounted) return;
+    _showMessage(context, saved ? '备份已导出' : '已取消导出');
+  } catch (error) {
+    if (context.mounted) _showMessage(context, '备份导出失败：$error');
+  }
+}
+
+Future<void> _restoreBackup(BuildContext context, WidgetRef ref) async {
+  try {
+    final content = await const BackupFileService().pick();
+    if (content == null || !context.mounted) return;
+    final backup = ScheduleBackup.decode(content);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('确认恢复备份？'),
+        content: Text(
+          '恢复将替换当前本地数据。\n\n'
+          '${backup.semesters.length} 个学期 · '
+          '${backup.courses.length} 门课程 · '
+          '${backup.exceptions.length} 条调课记录',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('确认恢复'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await ref.read(scheduleDataRepositoryProvider).restoreBackup(backup);
+    ref.invalidate(scheduleLoadProvider);
+    if (context.mounted) _showMessage(context, '备份已恢复');
+  } catch (error) {
+    if (context.mounted) _showMessage(context, '备份恢复失败：$error');
+  }
+}
+
+Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('清除所有数据？'),
+      content: const Text('这会删除本地学期、课程、调课记录、设置和导入快照，且无法撤销。'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('清除'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  try {
+    await ref.read(scheduleDataRepositoryProvider).clearAllData();
+    ref.invalidate(scheduleLoadProvider);
+    if (context.mounted) _showMessage(context, '本地数据已清除');
+  } catch (error) {
+    if (context.mounted) _showMessage(context, '清除数据失败：$error');
   }
 }
 

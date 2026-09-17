@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart' show OrderingTerm, Value;
 
 import '../../core/utils/week_mask.dart';
+import '../../domain/backup/schedule_backup.dart';
 import '../../domain/course/course.dart' as domain;
 import '../../domain/course/course_exception.dart' as domain;
 import '../../domain/course/meeting_rule.dart' as domain;
@@ -333,6 +334,188 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         updatedAt: Value(DateTime.now()),
       ));
     });
+  }
+
+  @override
+  Future<ScheduleBackup> createBackup({
+    Map<String, Object?> appearance = const {},
+  }) async {
+    final semesters = await loadSemesters();
+    final snapshots = <ScheduleDataSnapshot>[];
+    for (final semester in semesters) {
+      snapshots.add(await loadSemester(semester.id));
+    }
+    final settings = await database.select(database.appSettings).get();
+    final importSnapshots =
+        await database.select(database.importSnapshots).get();
+    final deletedSourceItems =
+        await database.select(database.deletedSourceItems).get();
+    return ScheduleBackup(
+      createdAt: DateTime.now().toUtc(),
+      semesters: semesters,
+      courses: [
+        for (final snapshot in snapshots) ...snapshot.courses,
+      ],
+      meetingRules: [
+        for (final snapshot in snapshots) ...snapshot.meetingRules,
+      ],
+      exceptions: [
+        for (final snapshot in snapshots) ...snapshot.exceptions,
+      ],
+      settings: {
+        for (final setting in settings) setting.key: setting.value,
+      },
+      appearance: appearance,
+      importSnapshots: [
+        for (final snapshot in importSnapshots)
+          BackupImportSnapshot(
+            id: snapshot.id,
+            semesterId: snapshot.semesterId,
+            importedAt: snapshot.importedAt,
+            adapterVersion: snapshot.adapterVersion,
+            schemaVersion: snapshot.schemaVersion,
+            normalizedJson: snapshot.normalizedJson,
+            hash: snapshot.hash,
+          ),
+      ],
+      deletedSourceItems: [
+        for (final item in deletedSourceItems)
+          BackupDeletedSourceItem(
+            id: item.id,
+            semesterId: item.semesterId,
+            sourceCourseKey: item.sourceCourseKey,
+            sourceMeetingKey: item.sourceMeetingKey,
+            deletedAt: item.deletedAt,
+          ),
+      ],
+    );
+  }
+
+  @override
+  Future<void> restoreBackup(ScheduleBackup backup) async {
+    final validated = ScheduleBackup.fromJson(backup.toJson());
+    await database.transaction(() async {
+      await _clearAllTables();
+      for (final semester in validated.semesters) {
+        await database.into(database.semesters).insert(
+              db.SemestersCompanion.insert(
+                id: semester.id,
+                academicYear: semester.academicYear,
+                term: semester.term.index + 1,
+                label: semester.label,
+                remoteTermKey: Value(semester.remoteTermKey),
+                calendarId: Value(semester.calendarId),
+                createdAt: semester.createdAt,
+              ),
+            );
+      }
+      for (final course in validated.courses) {
+        await database.into(database.courses).insert(
+              db.CoursesCompanion.insert(
+                id: course.id,
+                semesterId: course.semesterId,
+                sourceType: course.sourceType.name,
+                sourceCourseKey: Value(course.sourceCourseKey),
+                name: course.name,
+                code: Value(course.code),
+                teachingClass: Value(course.teachingClass),
+                credits: Value(course.credits),
+                assessment: Value(course.assessment),
+                note: Value(course.note),
+                colorOverride: Value(course.colorOverride),
+                hidden: Value(course.hidden),
+                deleted: Value(course.deleted),
+                createdAt: course.createdAt,
+                updatedAt: course.updatedAt,
+              ),
+            );
+      }
+      for (final rule in validated.meetingRules) {
+        await database.into(database.meetingRules).insert(
+              db.MeetingRulesCompanion.insert(
+                id: rule.id,
+                courseId: rule.courseId,
+                sourceMeetingKey: Value(rule.sourceMeetingKey),
+                weekday: rule.weekday,
+                startSection: rule.startSection,
+                endSection: rule.endSection,
+                teacher: Value(rule.teacher),
+                campus: Value(rule.campus),
+                room: Value(rule.room),
+                weekMask: rule.weekMask.value,
+                rawWeekText: rule.weekMask.rawText,
+              ),
+            );
+      }
+      for (final exception in validated.exceptions) {
+        await database.into(database.courseExceptions).insert(
+              db.CourseExceptionsCompanion.insert(
+                id: exception.id,
+                semesterId: exception.semesterId,
+                courseId: Value(exception.courseId),
+                sourceMeetingId: Value(exception.sourceMeetingId),
+                sourceDate: Value(exception.sourceDate),
+                type: exception.type.name,
+                targetDate: Value(exception.targetDate),
+                targetStartSection: Value(exception.targetStartSection),
+                targetEndSection: Value(exception.targetEndSection),
+                teacherOverride: Value(exception.teacherOverride),
+                campusOverride: Value(exception.campusOverride),
+                roomOverride: Value(exception.roomOverride),
+                addedCourseName: Value(exception.addedCourseName),
+                note: Value(exception.note),
+                createdAt: validated.createdAt,
+              ),
+            );
+      }
+      for (final snapshot in validated.importSnapshots) {
+        await database.into(database.importSnapshots).insert(
+              db.ImportSnapshotsCompanion.insert(
+                id: snapshot.id,
+                semesterId: snapshot.semesterId,
+                importedAt: snapshot.importedAt,
+                adapterVersion: snapshot.adapterVersion,
+                schemaVersion: snapshot.schemaVersion,
+                normalizedJson: snapshot.normalizedJson,
+                hash: snapshot.hash,
+              ),
+            );
+      }
+      for (final item in validated.deletedSourceItems) {
+        await database.into(database.deletedSourceItems).insert(
+              db.DeletedSourceItemsCompanion.insert(
+                id: item.id,
+                semesterId: item.semesterId,
+                sourceCourseKey: item.sourceCourseKey,
+                sourceMeetingKey: Value(item.sourceMeetingKey),
+                deletedAt: item.deletedAt,
+              ),
+            );
+      }
+      for (final entry in validated.settings.entries) {
+        await database.into(database.appSettings).insert(
+              db.AppSettingsCompanion.insert(
+                key: entry.key,
+                value: entry.value,
+              ),
+            );
+      }
+    });
+  }
+
+  @override
+  Future<void> clearAllData() async {
+    await database.transaction(_clearAllTables);
+  }
+
+  Future<void> _clearAllTables() async {
+    await database.delete(database.meetingRules).go();
+    await database.delete(database.courseExceptions).go();
+    await database.delete(database.importSnapshots).go();
+    await database.delete(database.deletedSourceItems).go();
+    await database.delete(database.courses).go();
+    await database.delete(database.semesters).go();
+    await database.delete(database.appSettings).go();
   }
 
   @override
