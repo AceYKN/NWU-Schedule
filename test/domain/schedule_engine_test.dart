@@ -63,6 +63,7 @@ ScheduleEngine makeEngine({
 }) {
   final course = makeCourse();
   return ScheduleEngine(
+    semesterId: 'nwu-test-2026-1',
     calendarEngine: CalendarEngine(calendar ?? makeCalendar()),
     courses: [course],
     meetingRules: rules ?? [makeRule()],
@@ -71,10 +72,10 @@ ScheduleEngine makeEngine({
 }
 
 void main() {
-  test('matches a course by template weekday and teaching week', () async {
+  test('matches a course by template weekday and teaching week', () {
     final engine = makeEngine();
 
-    final courses = await engine.getCoursesForDate(DateTime(2026, 9, 7));
+    final courses = engine.getCoursesForDate(DateTime(2026, 9, 7));
 
     expect(courses, hasLength(1));
     expect(courses.single.courseName, '软件测试');
@@ -83,7 +84,7 @@ void main() {
     expect(courses.single.endTime, DateTime(2026, 9, 7, 12));
   });
 
-  test('uses the source date for a makeup day', () async {
+  test('uses the source date for a makeup day', () {
     final engine = makeEngine(
       calendar: makeCalendar(
         overrides: [
@@ -97,7 +98,7 @@ void main() {
       ),
     );
 
-    final courses = await engine.getCoursesForDate(DateTime(2026, 9, 12));
+    final courses = engine.getCoursesForDate(DateTime(2026, 9, 12));
 
     expect(courses, hasLength(1));
     expect(courses.single.date, DateTime(2026, 9, 12));
@@ -105,7 +106,7 @@ void main() {
     expect(courses.single.isException, isFalse);
   });
 
-  test('makeup day keeps the source teaching week', () async {
+  test('makeup day keeps the source teaching week', () {
     final engine = makeEngine(
       calendar: makeCalendar(
         overrides: [
@@ -125,13 +126,13 @@ void main() {
       ],
     );
 
-    final courses = await engine.getCoursesForDate(DateTime(2026, 10, 17));
+    final courses = engine.getCoursesForDate(DateTime(2026, 10, 17));
 
     expect(courses, hasLength(1));
     expect(courses.single.templateDate, DateTime(2026, 10, 7));
   });
 
-  test('honors odd and even week masks', () async {
+  test('honors odd and even week masks', () {
     final oddEngine = makeEngine(
       rules: [makeRule(weekMask: WeekMask.parse('单周', maxWeek: 20))],
     );
@@ -140,25 +141,25 @@ void main() {
     );
 
     expect(
-      await oddEngine.getCoursesForDate(DateTime(2026, 9, 7)),
+      oddEngine.getCoursesForDate(DateTime(2026, 9, 7)),
       hasLength(1),
     );
     expect(
-      await evenEngine.getCoursesForDate(DateTime(2026, 9, 7)),
+      evenEngine.getCoursesForDate(DateTime(2026, 9, 7)),
       isEmpty,
     );
     expect(
-      await evenEngine.getCoursesForDate(DateTime(2026, 9, 14)),
+      evenEngine.getCoursesForDate(DateTime(2026, 9, 14)),
       hasLength(1),
     );
   });
 
-  test('MOVE removes source, adds target, and keeps later recurrence',
-      () async {
+  test('MOVE removes source, adds target, and keeps later recurrence', () {
     final engine = makeEngine(
       exceptions: [
         CourseException(
           id: 'move-1',
+          semesterId: 'nwu-test-2026-1',
           courseId: 'course-software-testing',
           sourceMeetingId: 'rule-software-testing',
           sourceDate: DateTime(2026, 9, 7),
@@ -172,24 +173,25 @@ void main() {
     );
 
     expect(
-      await engine.getCoursesForDate(DateTime(2026, 9, 7)),
+      engine.getCoursesForDate(DateTime(2026, 9, 7)),
       isEmpty,
     );
-    final target = await engine.getCoursesForDate(DateTime(2026, 9, 8));
+    final target = engine.getCoursesForDate(DateTime(2026, 9, 8));
     expect(target, hasLength(1));
     expect(target.single.startSection, 7);
     expect(target.single.room, '3508');
     expect(
-      await engine.getCoursesForDate(DateTime(2026, 9, 14)),
+      engine.getCoursesForDate(DateTime(2026, 9, 14)),
       hasLength(1),
     );
   });
 
-  test('CANCEL removes only one occurrence', () async {
+  test('CANCEL removes only one occurrence', () {
     final engine = makeEngine(
       exceptions: [
         CourseException(
           id: 'cancel-1',
+          semesterId: 'nwu-test-2026-1',
           courseId: 'course-software-testing',
           sourceMeetingId: 'rule-software-testing',
           sourceDate: DateTime(2026, 9, 7),
@@ -199,16 +201,16 @@ void main() {
     );
 
     expect(
-      await engine.getCoursesForDate(DateTime(2026, 9, 7)),
+      engine.getCoursesForDate(DateTime(2026, 9, 7)),
       isEmpty,
     );
     expect(
-      await engine.getCoursesForDate(DateTime(2026, 9, 14)),
+      engine.getCoursesForDate(DateTime(2026, 9, 14)),
       hasLength(1),
     );
   });
 
-  test('ADD remains visible on a holiday', () async {
+  test('ADD remains visible on a holiday', () {
     final holiday = CalendarDateOverride(
       date: DateTime(2026, 9, 9),
       type: CalendarOverrideType.holiday,
@@ -219,6 +221,7 @@ void main() {
       exceptions: [
         CourseException(
           id: 'add-1',
+          semesterId: 'nwu-test-2026-1',
           type: CourseExceptionType.add,
           targetDate: DateTime(2026, 9, 9),
           targetStartSection: 5,
@@ -229,37 +232,113 @@ void main() {
       ],
     );
 
-    final courses = await engine.getCoursesForDate(DateTime(2026, 9, 9));
+    final courses = engine.getCoursesForDate(DateTime(2026, 9, 9));
     expect(courses, hasLength(1));
     expect(courses.single.courseName, '临时实验课');
     expect(courses.single.isException, isTrue);
   });
 
-  test('finds the next course across a weekend', () async {
+  test('finds the next course across a weekend', () {
     final engine = makeEngine(
       rules: [makeRule(weekday: DateTime.monday)],
     );
 
-    final next = await engine.getNextCourse(DateTime.utc(2026, 9, 11, 12));
+    final next = engine.getNextCourse(DateTime.utc(2026, 9, 11, 12));
 
     expect(next, isNotNull);
     expect(next!.date, DateTime(2026, 9, 14));
   });
 
-  test('returns current, next, finished, and no-class states', () async {
+  test('returns current, next, finished, and no-class states', () {
     final engine = makeEngine();
 
-    final current = await engine.getStateAt(DateTime.utc(2026, 9, 7, 2, 30));
+    final current = engine.getStateAt(DateTime.utc(2026, 9, 7, 2, 30));
     expect(current, isA<ScheduleCurrent>());
 
-    final next = await engine.getStateAt(DateTime.utc(2026, 9, 7, 0));
+    final next = engine.getStateAt(DateTime.utc(2026, 9, 7, 0));
     expect(next, isA<ScheduleNext>());
 
-    final finished = await engine.getStateAt(DateTime.utc(2026, 9, 7, 8));
+    final finished = engine.getStateAt(DateTime.utc(2026, 9, 7, 8));
     expect(finished, isA<ScheduleFinishedToday>());
 
-    final noClass = await engine.getStateAt(DateTime.utc(2026, 9, 8, 0));
+    final noClass = engine.getStateAt(DateTime.utc(2026, 9, 8, 0));
     expect(noClass, isA<ScheduleNoClassToday>());
     expect((noClass as ScheduleNoClassToday).next, isNotNull);
+  });
+
+  test('strict next skips the course currently in progress', () {
+    final engine = makeEngine(
+      rules: [
+        makeRule(),
+        MeetingRule(
+          id: 'later-rule',
+          courseId: 'course-software-testing',
+          weekday: DateTime.monday,
+          startSection: 5,
+          endSection: 6,
+          weekMask: WeekMask.all(20),
+        ),
+      ],
+    );
+    final instant = DateTime.utc(2026, 9, 7, 2, 30);
+
+    final state = engine.getStateAt(instant);
+    expect(state, isA<ScheduleCurrent>());
+    expect((state as ScheduleCurrent).current.startSection, 3);
+    expect(engine.getNextCourse(instant)?.startSection, 5);
+  });
+
+  test('strict next skips a current final course until next teaching day', () {
+    final engine = makeEngine();
+
+    final next = engine.getNextCourse(DateTime.utc(2026, 9, 7, 2, 30));
+
+    expect(next?.date, DateTime(2026, 9, 14));
+  });
+
+  test('another semester cannot leak courses or exceptions', () {
+    final otherCourse = makeCourse().copyWith(name: '其他学期课程');
+    final engine = ScheduleEngine(
+      semesterId: 'different-semester',
+      calendarEngine: CalendarEngine(makeCalendar()),
+      courses: [otherCourse],
+      meetingRules: [makeRule()],
+      exceptions: [
+        CourseException(
+          id: 'other-add',
+          semesterId: 'nwu-test-2026-1',
+          type: CourseExceptionType.add,
+          targetDate: DateTime(2026, 9, 7),
+          targetStartSection: 5,
+          targetEndSection: 6,
+          addedCourseName: '加课',
+        ),
+      ],
+    );
+
+    expect(engine.getCoursesForDate(DateTime(2026, 9, 7)), isEmpty);
+  });
+
+  test('temporary ADD belongs to semester rather than calendar id', () {
+    final engine = ScheduleEngine(
+      semesterId: 'local-semester-id',
+      calendarEngine: CalendarEngine(makeCalendar()),
+      courses: const [],
+      meetingRules: const [],
+      exceptions: [
+        CourseException(
+          id: 'add-local',
+          semesterId: 'local-semester-id',
+          type: CourseExceptionType.add,
+          targetDate: DateTime(2026, 9, 7),
+          targetStartSection: 5,
+          targetEndSection: 6,
+          addedCourseName: '临时课',
+        ),
+      ],
+    );
+
+    final result = engine.getCoursesForDate(DateTime(2026, 9, 7));
+    expect(result.single.course.semesterId, 'local-semester-id');
   });
 }

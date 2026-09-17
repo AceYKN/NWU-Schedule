@@ -98,6 +98,29 @@ class WeekMask {
     return fromWeeks(weeks, rawText: source);
   }
 
+  /// Strict input for the manual-course form; rejects stray text and numbers.
+  static WeekMask parseManual(String text, {required int maxWeek}) {
+    final normalized = text
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll('，', ',')
+        .replaceAll('、', ',')
+        .replaceAll('～', '-')
+        .replaceAll('—', '-')
+        .replaceAll('至', '-')
+        .replaceAll('~', '-');
+    final hasValidShape = {'全周', '全部', '单周', '双周'}.contains(normalized) ||
+        RegExp(r'^\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*周?(?:单周|双周)?$')
+            .hasMatch(normalized);
+    if (!hasValidShape) {
+      throw FormatException('Invalid manual teaching weeks: $text');
+    }
+    final mask = parse(normalized, maxWeek: maxWeek);
+    if (mask.weeks.any((week) => week > maxWeek)) {
+      throw RangeError('Teaching week exceeds $maxWeek');
+    }
+    return mask;
+  }
+
   static bool _matchesParity(
     int week, {
     required bool isOdd,
@@ -111,4 +134,25 @@ class WeekMask {
     }
     return true;
   }
+}
+
+String formatWeekMask(WeekMask mask) {
+  final weeks = mask.weeks;
+  if (weeks.isEmpty) return '无教学周';
+  if (weeks.length == 1) return '${weeks.single}周';
+  final first = weeks.first;
+  final last = weeks.last;
+  final step = weeks[1] - weeks[0];
+  if ((step == 1 || step == 2) &&
+      weeks.length == (last - first) ~/ step + 1 &&
+      List.generate(weeks.length, (index) => first + index * step)
+          .every((week) => mask.contains(week))) {
+    final suffix = step == 1
+        ? ''
+        : first.isOdd
+            ? '单周'
+            : '双周';
+    return '$first-$last周$suffix';
+  }
+  return '${weeks.join(',')}周';
 }

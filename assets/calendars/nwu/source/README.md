@@ -12,7 +12,7 @@
 - `holidayPeriods`：闭区间假期。运行时应展开为每天的 `CalendarDateOverride(type: holiday)`。
 - `makeupDays`：调休映射。`date` 是实际上课日期，`useScheduleOf` 是应执行课表的模板日期。模板日期只提供教学周和星期信息，不应递归应用模板日期自身的放假 override。
 
-当前 `CalendarDefinition.fromJson()` 仍以 `dateOverrides` 为主，因此这个目录暂不替换 `assets/calendars/nwu/` 下现有运行时文件。下一步接入时建议增加 normalizer：
+当前 `CalendarDefinition.fromJson()` 已支持该目录并执行 normalizer；`source/index.json` 是运行时唯一校历目录：
 
 ```text
 holidayPeriods -> CalendarDateOverride(holiday)

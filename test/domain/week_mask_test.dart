@@ -32,4 +32,21 @@ void main() {
     expect(mask.contains(64), isTrue);
     expect(mask.contains(63), isFalse);
   });
+
+  test('manual weeks reject stray text and out-of-semester weeks', () {
+    expect(WeekMask.parseManual('1-7周单周', maxWeek: 20).weeks, [1, 3, 5, 7]);
+    expect(WeekMask.parseManual('1，3，5周', maxWeek: 20).weeks, [1, 3, 5]);
+    expect(() => WeekMask.parseManual('abc1周', maxWeek: 20),
+        throwsFormatException);
+    expect(() => WeekMask.parseManual('1-21周', maxWeek: 20), throwsRangeError);
+    expect(
+        () => WeekMask.parseManual('第1周', maxWeek: 20), throwsFormatException);
+  });
+
+  test('formats week masks without inventing missing weeks', () {
+    expect(formatWeekMask(WeekMask.fromWeeks([1, 2, 3, 4])), '1-4周');
+    expect(formatWeekMask(WeekMask.fromWeeks([1, 3, 5, 7])), '1-7周单周');
+    expect(formatWeekMask(WeekMask.fromWeeks([2, 4, 6, 8])), '2-8周双周');
+    expect(formatWeekMask(WeekMask.fromWeeks([1, 3, 6, 8])), '1,3,6,8周');
+  });
 }

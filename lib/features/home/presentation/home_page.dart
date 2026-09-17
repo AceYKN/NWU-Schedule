@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
 import '../../../core/utils/date_utils.dart';
@@ -9,41 +12,109 @@ import '../../../domain/schedule/schedule_engine.dart';
 import '../../../domain/schedule/schedule_now_state.dart';
 import '../../shared/presentation/course_card.dart';
 
-class HomePage extends ConsumerWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final engine = ref.watch(scheduleEngineProvider);
-    return FutureBuilder<ScheduleNowState>(
-      future: engine.getStateAt(DateTime.now().toUtc()),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return const _HomeError();
+  ConsumerState<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends ConsumerState<HomePage>
+    with WidgetsBindingObserver {
+  Timer? _clockTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final load = ref.watch(scheduleLoadProvider);
+    return load.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stackTrace) => const Center(
+        child: Text('暂时无法读取本地课表'),
+      ),
+      data: (value) {
+        if (value is ScheduleNoSemester) {
+          return const _NoSemesterContent();
         }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
+        if (value is ScheduleCalendarMissing) {
+          return Center(
+            child: Text('${value.semester.label}的校历尚未包含在当前版本中'),
+          );
         }
-        return _HomeContent(engine: engine, state: snapshot.data!);
+        final ready = value as ScheduleReady;
+        return _HomeContent(
+          engine: ready.engine,
+          state: ready.engine.getStateAt(DateTime.now().toUtc()),
+          onRefresh: () async => setState(() {}),
+        );
       },
     );
   }
 }
 
+class _NoSemesterContent extends StatelessWidget {
+  const _NoSemesterContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('还没有课表', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 12),
+            const Text('从西北大学教务系统导入后，\n这里会自动结合校历显示课程。',
+                textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: () => context.go('/settings'),
+              child: const Text('导入课表'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _HomeContent extends StatelessWidget {
-  const _HomeContent({required this.engine, required this.state});
+  const _HomeContent({
+    required this.engine,
+    required this.state,
+    required this.onRefresh,
+  });
 
   final ScheduleEngine engine;
   final ScheduleNowState state;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final resolved = engine.calendarEngine.resolve(state.now);
     return RefreshIndicator(
-      onRefresh: () async {
-        // The static prototype has no network refresh. Rebuilding the page is
-        // enough to recalculate the campus-time state.
-      },
+      onRefresh: onRefresh,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
         children: [
@@ -260,15 +331,6 @@ class _EmptyAgenda extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class _HomeError extends StatelessWidget {
-  const _HomeError();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('暂时无法读取本地课表'));
   }
 }
 

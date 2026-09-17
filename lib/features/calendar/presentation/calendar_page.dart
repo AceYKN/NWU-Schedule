@@ -5,6 +5,7 @@ import '../../../app/bootstrap.dart';
 import '../../../core/time/campus_clock.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../domain/calendar/calendar_engine.dart';
+import '../../../domain/calendar/calendar_definition.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
 import '../../../domain/schedule/schedule_engine.dart';
 import '../../shared/presentation/course_card.dart';
@@ -21,44 +22,33 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
 
   @override
   Widget build(BuildContext context) {
-    final engine = ref.watch(scheduleEngineProvider);
-    final firstDay = DateTime(month.year, month.month);
-    final totalDays = DateTime(month.year, month.month + 1, 0).day;
-    final days = List<DateTime>.generate(
-      totalDays,
-      (index) => DateTime(month.year, month.month, index + 1),
-    );
-    return FutureBuilder<Map<String, List<EffectiveCourseInstance>>>(
-      future: _loadMonth(engine, days),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return const Center(child: Text('暂时无法读取本地课表'));
+    final load = ref.watch(scheduleLoadProvider);
+    return load.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stackTrace) => const Center(child: Text('暂时无法读取本地课表')),
+      data: (value) {
+        if (value is! ScheduleReady) {
+          return const Center(child: Text('当前没有可展示的校历'));
         }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        final engine = value.engine;
+        final firstDay = DateTime(month.year, month.month);
+        final totalDays = DateTime(month.year, month.month + 1, 0).day;
+        final days = List<DateTime>.generate(
+          totalDays,
+          (index) => DateTime(month.year, month.month, index + 1),
+        );
         return _MonthContent(
           month: month,
           firstDay: firstDay,
           days: days,
-          coursesByDate: snapshot.data!,
+          coursesByDate: {
+            for (final day in days) dateKey(day): engine.getCoursesForDate(day),
+          },
           onMonthChanged: (value) => setState(() => month = value),
           engine: engine,
         );
       },
     );
-  }
-
-  Future<Map<String, List<EffectiveCourseInstance>>> _loadMonth(
-    ScheduleEngine engine,
-    List<DateTime> days,
-  ) async {
-    final entries = await Future.wait(
-      days.map((day) async {
-        return MapEntry(dateKey(day), await engine.getCoursesForDate(day));
-      }),
-    );
-    return Map.fromEntries(entries);
   }
 }
 
@@ -174,7 +164,9 @@ class _MonthCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final isToday = isSameDate(date, CampusClock.now());
     final label = resolved.label;
-    final holiday = resolved.isTeachingDay == false;
+    final holiday = resolved.override?.type == CalendarOverrideType.holiday;
+    final outsideSemester =
+        !resolved.isTeachingDay && !holiday && resolved.teachingWeek == null;
     return Card(
       color: isToday
           ? Theme.of(context).colorScheme.primaryContainer
@@ -183,9 +175,7 @@ class _MonthCell extends StatelessWidget {
               : null,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: courses.isEmpty
-            ? null
-            : () => showCourseDetails(context, courses.first),
+        onTap: () => _showDailyAgenda(context, date, courses),
         child: Padding(
           padding: const EdgeInsets.all(7),
           child: Column(
@@ -202,6 +192,8 @@ class _MonthCell extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall,
                 ),
+              if (outsideSemester)
+                Text('学期外', style: Theme.of(context).textTheme.labelSmall),
               if (courses.isNotEmpty)
                 Text(
                   '${courses.length} 节',
@@ -217,4 +209,47 @@ class _MonthCell extends StatelessWidget {
       ),
     );
   }
+}
+
+void _showDailyAgenda(
+  BuildContext context,
+  DateTime date,
+  List<EffectiveCourseInstance> courses,
+) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${date.month}月${date.day}日 ${weekdayName(date.weekday)}',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            if (courses.isEmpty)
+              const Text('当天没有课程')
+            else
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+                ),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final course in courses)
+                      CourseCard(instance: course, compact: true),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

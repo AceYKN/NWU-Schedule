@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/bootstrap.dart';
 import '../../../core/nwu/periods.dart';
+import '../../../core/utils/week_mask.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
 
 class CourseCard extends StatelessWidget {
@@ -101,63 +105,151 @@ void showCourseDetails(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
-    builder: (context) {
-      final weekText = instance.meetingRule?.weekMask.weeks;
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                instance.courseName,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const SizedBox(height: 18),
-              _DetailLine(label: '教师', value: instance.teacher ?? '未提供'),
-              _DetailLine(label: '地点', value: instance.location ?? '未提供'),
-              _DetailLine(
-                label: '时间',
-                value:
-                    '${formatMinutes(instance.startTime.hour * 60 + instance.startTime.minute)}–'
-                    '${formatMinutes(instance.endTime.hour * 60 + instance.endTime.minute)}',
-              ),
-              _DetailLine(
-                label: '周次',
-                value: weekText == null || weekText.isEmpty
-                    ? '单次课程'
-                    : '${weekText.first}-${weekText.last} 周',
-              ),
-              if (instance.course.code != null)
-                _DetailLine(label: '课程代码', value: instance.course.code!),
-              if (instance.course.note != null)
-                _DetailLine(label: '备注', value: instance.course.note!),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: () => _showComingSoon(context, '临时变更'),
-                    icon: const Icon(Icons.edit_calendar_outlined),
-                    label: const Text('临时变更'),
+    builder: (sheetContext) {
+      final weekMask = instance.meetingRule?.weekMask;
+      return Consumer(
+          builder: (sheetContext, ref, child) => SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        instance.courseName,
+                        style: Theme.of(sheetContext)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: 18),
+                      _DetailLine(
+                          label: '教师', value: instance.teacher ?? '未提供'),
+                      _DetailLine(
+                          label: '地点', value: instance.location ?? '未提供'),
+                      _DetailLine(
+                        label: '时间',
+                        value:
+                            '${formatMinutes(instance.startTime.hour * 60 + instance.startTime.minute)}–'
+                            '${formatMinutes(instance.endTime.hour * 60 + instance.endTime.minute)}',
+                      ),
+                      _DetailLine(
+                        label: '周次',
+                        value: instance.isException || weekMask == null
+                            ? '单次课程'
+                            : formatWeekMask(weekMask),
+                      ),
+                      if (instance.course.code != null)
+                        _DetailLine(
+                            label: '课程代码', value: instance.course.code!),
+                      if (instance.course.note != null)
+                        _DetailLine(label: '备注', value: instance.course.note!),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                _showComingSoon(sheetContext, '临时变更'),
+                            icon: const Icon(Icons.edit_calendar_outlined),
+                            label: const Text('临时变更'),
+                          ),
+                          if (!instance.isException) ...[
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.of(sheetContext).pop();
+                                context
+                                    .go('/course/${instance.course.id}/edit');
+                              },
+                              icon: const Icon(Icons.edit_outlined),
+                              label: const Text('编辑整门课程'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () => _hideCourse(context,
+                                  sheetContext, ref, instance.course.id),
+                              icon: const Icon(Icons.visibility_off_outlined),
+                              label: const Text('隐藏课程'),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _deleteCourse(context,
+                                  sheetContext, ref, instance.course.id),
+                              icon: const Icon(Icons.delete_outline),
+                              label: const Text('删除课程'),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () => _showComingSoon(context, '编辑整门课程'),
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('编辑整门课程'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
+                ),
+              ));
     },
   );
+}
+
+Future<void> _hideCourse(
+  BuildContext pageContext,
+  BuildContext sheetContext,
+  WidgetRef ref,
+  String courseId,
+) async {
+  try {
+    await ref
+        .read(scheduleDataRepositoryProvider)
+        .setCourseHidden(courseId, true);
+    if (!sheetContext.mounted || !pageContext.mounted) return;
+    final messenger = ScaffoldMessenger.of(pageContext);
+    Navigator.of(sheetContext).pop();
+    messenger.showSnackBar(const SnackBar(content: Text('课程已隐藏')));
+  } catch (error) {
+    if (sheetContext.mounted) {
+      ScaffoldMessenger.of(sheetContext).showSnackBar(
+        SnackBar(content: Text('隐藏失败：$error')),
+      );
+    }
+  }
+}
+
+Future<void> _deleteCourse(
+  BuildContext pageContext,
+  BuildContext sheetContext,
+  WidgetRef ref,
+  String courseId,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: sheetContext,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('删除这门课程？'),
+      content: const Text('手动课程会从本机移除；教务导入课程会保留删除记录，避免再次导入时自动恢复。'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('删除'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !sheetContext.mounted) return;
+  try {
+    await ref.read(scheduleDataRepositoryProvider).deleteCourse(courseId);
+    if (!sheetContext.mounted || !pageContext.mounted) return;
+    final messenger = ScaffoldMessenger.of(pageContext);
+    Navigator.of(sheetContext).pop();
+    messenger.showSnackBar(const SnackBar(content: Text('课程已删除')));
+  } catch (error) {
+    if (sheetContext.mounted) {
+      ScaffoldMessenger.of(sheetContext).showSnackBar(
+        SnackBar(content: Text('删除失败：$error')),
+      );
+    }
+  }
 }
 
 class _DetailLine extends StatelessWidget {

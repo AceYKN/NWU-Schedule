@@ -1,16 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
+import '../../../domain/semester/semester.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final engine = ref.watch(scheduleEngineProvider);
-    final definition = engine.calendarEngine.definition;
+    final load = ref.watch(scheduleLoadProvider);
+    final currentSemester = load.when(
+      data: (state) => switch (state) {
+        ScheduleReady(:final semester) => semester.label,
+        ScheduleCalendarMissing(:final semester) => '${semester.label} · 校历待更新',
+        ScheduleNoSemester() => '尚未导入学期',
+      },
+      loading: () => '正在读取本地数据',
+      error: (error, stackTrace) => '暂时无法读取本地数据',
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
       children: [
@@ -28,9 +38,24 @@ class SettingsPage extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.school_outlined),
                 title: const Text('当前学期'),
-                subtitle: Text(
-                  '${definition.academicYear} 第${definition.term}学期',
-                ),
+                subtitle: Text(currentSemester),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _selectSemester(context, ref),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.add_circle_outline),
+                title: const Text('新建本地学期'),
+                subtitle: const Text('根据已收录校历创建空课表'),
+                onTap: () => _createSemester(context, ref),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.library_books_outlined),
+                title: const Text('课程管理'),
+                subtitle: const Text('编辑、隐藏、删除或恢复课程'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.go('/courses/manage'),
               ),
               const Divider(height: 1),
               ListTile(
@@ -133,6 +158,95 @@ class SettingsPage extends ConsumerWidget {
       ],
     );
   }
+}
+
+Future<void> _createSemester(BuildContext context, WidgetRef ref) async {
+  try {
+    final calendarRepository = ref.read(bundledCalendarRepositoryProvider);
+    final repository = ref.read(scheduleDataRepositoryProvider);
+    final existing = await repository.loadSemesters();
+    final entries = (await calendarRepository.listCalendars())
+        .where((entry) => !existing.any((semester) => semester.id == entry.id))
+        .toList();
+    if (!context.mounted) return;
+    if (entries.isEmpty) {
+      _showMessage(context, '当前版本没有可新建的学期');
+      return;
+    }
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(title: Text('选择校历')),
+            ...entries.map((entry) => ListTile(
+                  title: Text(entry.label ?? entry.id),
+                  subtitle: Text(entry.id),
+                  onTap: () => Navigator.pop(sheetContext, entry.id),
+                )),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !context.mounted) return;
+    final definition = await calendarRepository.findById(selected);
+    if (definition == null) throw StateError('校历不存在：$selected');
+    final termLabel = switch (definition.term) {
+      1 => '第一学期',
+      2 => '第二学期',
+      _ => '夏季学期',
+    };
+    await repository.saveSemester(Semester(
+      id: definition.id,
+      academicYear: definition.academicYear,
+      term: SemesterTerm.values[definition.term - 1],
+      label: '${definition.academicYear} $termLabel',
+      calendarId: definition.id,
+      createdAt: DateTime.now(),
+    ));
+    await repository.setPreferredSemesterId(selected);
+    if (context.mounted) _showMessage(context, '学期已创建，可以手动添加课程');
+  } catch (error) {
+    if (context.mounted) _showMessage(context, '创建学期失败：$error');
+  }
+}
+
+Future<void> _selectSemester(BuildContext context, WidgetRef ref) async {
+  try {
+    final repository = ref.read(scheduleDataRepositoryProvider);
+    final semesters = await repository.loadSemesters();
+    if (!context.mounted) return;
+    if (semesters.isEmpty) {
+      _showMessage(context, '请先创建或导入学期');
+      return;
+    }
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(title: Text('切换学期')),
+            ...semesters.map((semester) => ListTile(
+                  title: Text(semester.label),
+                  subtitle: Text(semester.calendarId == null ? '缺少校历' : '本地课表'),
+                  onTap: () => Navigator.pop(sheetContext, semester.id),
+                )),
+          ],
+        ),
+      ),
+    );
+    if (selected != null) await repository.setPreferredSemesterId(selected);
+  } catch (error) {
+    if (context.mounted) _showMessage(context, '切换学期失败：$error');
+  }
+}
+
+void _showMessage(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
 class _SectionTitle extends StatelessWidget {

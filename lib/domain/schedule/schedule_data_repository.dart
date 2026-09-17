@@ -1,0 +1,44 @@
+import '../course/course.dart';
+import '../course/course_exception.dart';
+import '../course/meeting_rule.dart';
+import '../semester/semester.dart';
+
+class ScheduleDataSnapshot {
+  const ScheduleDataSnapshot({
+    required this.semester,
+    required this.courses,
+    required this.meetingRules,
+    required this.exceptions,
+  });
+
+  final Semester semester;
+  final List<Course> courses;
+  final List<MeetingRule> meetingRules;
+  final List<CourseException> exceptions;
+}
+
+abstract interface class ScheduleDataRepository {
+  Stream<void> watchChanges();
+
+  Future<List<Semester>> loadSemesters();
+
+  Future<ScheduleDataSnapshot> loadSemester(String semesterId);
+
+  Future<String?> getPreferredSemesterId();
+
+  Future<DateTime?> getPreferredSemesterSelectedAt();
+
+  Future<void> setPreferredSemesterId(String? semesterId);
+
+  Future<void> saveSemester(Semester semester);
+
+  Future<void> saveCourse(Course course, List<MeetingRule> rules);
+
+  Future<void> saveException(CourseException exception);
+
+  Future<void> setCourseHidden(String courseId, bool hidden);
+
+  Future<void> deleteCourse(String courseId);
+
+  Future<void> restoreImportedCourse(String courseId);
+}

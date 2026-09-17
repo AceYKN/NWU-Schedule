@@ -15,26 +15,36 @@ import 'schedule_now_state.dart';
 /// implementing their own weekday/week-mask/exception logic.
 class ScheduleEngine {
   ScheduleEngine({
+    required this.semesterId,
     required this.calendarEngine,
     required Iterable<Course> courses,
     required Iterable<MeetingRule> meetingRules,
     required Iterable<CourseException> exceptions,
     this.periodRepository = const NwuPeriodRepository(),
-  })  : courses = List.unmodifiable(courses),
+  })  : courses = List.unmodifiable(
+          courses.where((course) => course.semesterId == semesterId),
+        ),
         meetingRules = List.unmodifiable(meetingRules),
-        exceptions = List.unmodifiable(exceptions);
+        exceptions = List.unmodifiable(
+          exceptions.where((exception) => exception.semesterId == semesterId),
+        ) {
+    if (semesterId.trim().isEmpty) {
+      throw ArgumentError.value(semesterId, 'semesterId');
+    }
+  }
 
+  final String semesterId;
   final CalendarEngine calendarEngine;
   final List<Course> courses;
   final List<MeetingRule> meetingRules;
   final List<CourseException> exceptions;
   final NwuPeriodRepository periodRepository;
 
-  Future<List<EffectiveCourseInstance>> getCoursesForDate(DateTime date) async {
+  List<EffectiveCourseInstance> getCoursesForDate(DateTime date) {
     return _getCoursesForDate(date);
   }
 
-  Future<ScheduleNowState> getStateAt(DateTime instant) async {
+  ScheduleNowState getStateAt(DateTime instant) {
     final now = CampusClock.toCampusWallTime(instant);
     final todayCourses = _getCoursesForDate(now);
     final current = todayCourses
@@ -61,7 +71,7 @@ class ScheduleEngine {
       );
     }
 
-    final next = await getNextCourse(instant);
+    final next = getNextCourse(instant);
     if (todayCourses.isEmpty) {
       return ScheduleNoClassToday(
         now: now,
@@ -76,7 +86,7 @@ class ScheduleEngine {
     );
   }
 
-  Future<EffectiveCourseInstance?> getNextCourse(DateTime instant) async {
+  EffectiveCourseInstance? getNextCourse(DateTime instant) {
     final now = CampusClock.toCampusWallTime(instant);
     final startDate = dateOnly(now);
     final endDate = calendarEngine.definition.semesterEndDate;
@@ -89,7 +99,7 @@ class ScheduleEngine {
       final date = startDate.add(Duration(days: offset));
       final coursesForDate = _getCoursesForDate(date);
       for (final course in coursesForDate) {
-        if (course.endTime.isAfter(now)) {
+        if (course.startTime.isAfter(now)) {
           return course;
         }
       }
@@ -97,9 +107,9 @@ class ScheduleEngine {
     return null;
   }
 
-  Future<List<EffectiveCourseInstance>> getCoursesForWeek(
+  List<EffectiveCourseInstance> getCoursesForWeek(
     int teachingWeek,
-  ) async {
+  ) {
     final start = calendarEngine.definition.weekStart(teachingWeek);
     final result = <EffectiveCourseInstance>[];
     for (var day = 0; day < 7; day++) {
@@ -230,7 +240,7 @@ class ScheduleEngine {
       }
       course ??= Course(
         id: exception.id,
-        semesterId: calendarEngine.definition.id,
+        semesterId: semesterId,
         sourceType: CourseSourceType.manual,
         name: exception.addedCourseName ?? '临时课程',
       );

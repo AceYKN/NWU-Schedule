@@ -1,5 +1,6 @@
 # Flutter / Dart
 .dart_tool/
+.flutter-plugins-dependencies
 .packages
 .pub-cache/
 .pub/
@@ -19,6 +20,7 @@
 
 # Generated files
 *.g.dart
+!lib/data/database/app_database.g.dart
 *.freezed.dart
 
 # Local database and secrets

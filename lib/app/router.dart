@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'bootstrap.dart';
 import '../features/calendar/presentation/calendar_page.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/schedule/presentation/schedule_page.dart';
+import '../features/schedule/presentation/manual_course_page.dart';
 import '../features/settings/presentation/settings_page.dart';
+import '../features/settings/presentation/course_management_page.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -20,6 +24,15 @@ final appRouter = GoRouter(
           builder: (context, state) => const SchedulePage(),
         ),
         GoRoute(
+          path: '/course/new',
+          builder: (context, state) => const ManualCoursePage(),
+        ),
+        GoRoute(
+          path: '/course/:id/edit',
+          builder: (context, state) =>
+              ManualCoursePage(courseId: state.pathParameters['id']),
+        ),
+        GoRoute(
           path: '/calendar',
           builder: (context, state) => const CalendarPage(),
         ),
@@ -27,25 +40,54 @@ final appRouter = GoRouter(
           path: '/settings',
           builder: (context, state) => const SettingsPage(),
         ),
+        GoRoute(
+          path: '/courses/manage',
+          builder: (context, state) => const CourseManagementPage(),
+        ),
       ],
     ),
   ],
 );
 
-class AppShell extends StatelessWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({required this.child, super.key});
 
   final Widget child;
 
+  @override
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(scheduleLoadProvider);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   int _selectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
-    if (location.startsWith('/schedule')) {
+    if (location.startsWith('/schedule') || location.startsWith('/course/')) {
       return 1;
     }
     if (location.startsWith('/calendar')) {
       return 2;
     }
-    if (location.startsWith('/settings')) {
+    if (location.startsWith('/settings') || location.startsWith('/courses/')) {
       return 3;
     }
     return 0;
@@ -59,7 +101,7 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(child: child),
+      body: SafeArea(child: widget.child),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex(context),
         onDestinationSelected: (index) => _goToIndex(context, index),

@@ -1,4 +1,4 @@
-package com.example.nwu_schedule
+package io.github.aceykn.nwuschedule
 
 import io.flutter.embedding.android.FlutterActivity
 

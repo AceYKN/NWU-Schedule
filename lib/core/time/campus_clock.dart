@@ -26,4 +26,17 @@ class CampusClock {
       campus.microsecond,
     );
   }
+
+  static DateTime campusWallTimeToUtc(DateTime campusWallTime) {
+    return DateTime.utc(
+      campusWallTime.year,
+      campusWallTime.month,
+      campusWallTime.day,
+      campusWallTime.hour,
+      campusWallTime.minute,
+      campusWallTime.second,
+      campusWallTime.millisecond,
+      campusWallTime.microsecond,
+    ).subtract(offset);
+  }
 }

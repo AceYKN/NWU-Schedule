@@ -1,7 +1,8 @@
 import '../../core/utils/week_mask.dart';
+import '../../core/nwu/periods.dart';
 
 class MeetingRule {
-  const MeetingRule({
+  MeetingRule({
     required this.id,
     required this.courseId,
     this.sourceMeetingKey,
@@ -12,7 +13,21 @@ class MeetingRule {
     this.campus,
     this.room,
     required this.weekMask,
-  });
+  }) {
+    if (id.trim().isEmpty || courseId.trim().isEmpty) {
+      throw ArgumentError('MeetingRule id and courseId must be non-empty');
+    }
+    if (weekday < 1 || weekday > 7) {
+      throw ArgumentError.value(weekday, 'weekday');
+    }
+    if (startSection < 1 ||
+        endSection > NwuPeriodRepository.all.length ||
+        startSection > endSection) {
+      throw ArgumentError('Invalid meeting section range');
+    }
+  }
+
+  static const Object _unset = Object();
 
   final String id;
   final String courseId;
@@ -33,9 +48,9 @@ class MeetingRule {
     int? weekday,
     int? startSection,
     int? endSection,
-    String? teacher,
-    String? campus,
-    String? room,
+    Object? teacher = _unset,
+    Object? campus = _unset,
+    Object? room = _unset,
     WeekMask? weekMask,
   }) {
     return MeetingRule(
@@ -45,9 +60,9 @@ class MeetingRule {
       weekday: weekday ?? this.weekday,
       startSection: startSection ?? this.startSection,
       endSection: endSection ?? this.endSection,
-      teacher: teacher ?? this.teacher,
-      campus: campus ?? this.campus,
-      room: room ?? this.room,
+      teacher: identical(teacher, _unset) ? this.teacher : teacher as String?,
+      campus: identical(campus, _unset) ? this.campus : campus as String?,
+      room: identical(room, _unset) ? this.room : room as String?,
       weekMask: weekMask ?? this.weekMask,
     );
   }

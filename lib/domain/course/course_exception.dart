@@ -1,8 +1,11 @@
+import '../../core/nwu/periods.dart';
+
 enum CourseExceptionType { move, cancel, add }
 
 class CourseException {
-  const CourseException({
+  CourseException({
     required this.id,
+    required this.semesterId,
     this.courseId,
     this.sourceMeetingId,
     this.sourceDate,
@@ -15,9 +18,45 @@ class CourseException {
     this.roomOverride,
     this.addedCourseName,
     this.note,
-  });
+  }) {
+    if (id.trim().isEmpty || semesterId.trim().isEmpty) {
+      throw ArgumentError('Exception id and semesterId must be non-empty');
+    }
+    switch (type) {
+      case CourseExceptionType.move:
+        if (_blank(courseId) ||
+            _blank(sourceMeetingId) ||
+            sourceDate == null ||
+            targetDate == null ||
+            targetStartSection == null ||
+            targetEndSection == null) {
+          throw ArgumentError('MOVE requires source and target course details');
+        }
+      case CourseExceptionType.cancel:
+        if (_blank(courseId) || _blank(sourceMeetingId) || sourceDate == null) {
+          throw ArgumentError('CANCEL requires source course details');
+        }
+      case CourseExceptionType.add:
+        if (targetDate == null ||
+            targetStartSection == null ||
+            targetEndSection == null ||
+            (_blank(courseId) && _blank(addedCourseName))) {
+          throw ArgumentError('ADD requires a target and a course');
+        }
+    }
+    if ((targetStartSection == null) != (targetEndSection == null) ||
+        (targetStartSection != null &&
+            (targetStartSection! < 1 ||
+                targetEndSection! > NwuPeriodRepository.all.length ||
+                targetStartSection! > targetEndSection!))) {
+      throw ArgumentError('Invalid exception section range');
+    }
+  }
+
+  static bool _blank(String? value) => value == null || value.trim().isEmpty;
 
   final String id;
+  final String semesterId;
   final String? courseId;
   final String? sourceMeetingId;
   final DateTime? sourceDate;

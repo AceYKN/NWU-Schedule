@@ -18,7 +18,16 @@ class Course {
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? createdAt ?? DateTime.now();
+        updatedAt = updatedAt ?? createdAt ?? DateTime.now() {
+    if (id.trim().isEmpty || semesterId.trim().isEmpty || name.trim().isEmpty) {
+      throw ArgumentError('Course id, semesterId and name must be non-empty');
+    }
+    if (credits != null && (!credits!.isFinite || credits! < 0)) {
+      throw ArgumentError.value(credits, 'credits');
+    }
+  }
+
+  static const Object _unset = Object();
 
   final String id;
   final String semesterId;
@@ -40,12 +49,12 @@ class Course {
 
   Course copyWith({
     String? name,
-    String? code,
-    String? teachingClass,
-    double? credits,
-    String? assessment,
-    String? note,
-    int? colorOverride,
+    Object? code = _unset,
+    Object? teachingClass = _unset,
+    Object? credits = _unset,
+    Object? assessment = _unset,
+    Object? note = _unset,
+    Object? colorOverride = _unset,
     bool? hidden,
     bool? deleted,
     DateTime? updatedAt,
@@ -56,12 +65,18 @@ class Course {
       sourceType: sourceType,
       sourceCourseKey: sourceCourseKey,
       name: name ?? this.name,
-      code: code ?? this.code,
-      teachingClass: teachingClass ?? this.teachingClass,
-      credits: credits ?? this.credits,
-      assessment: assessment ?? this.assessment,
-      note: note ?? this.note,
-      colorOverride: colorOverride ?? this.colorOverride,
+      code: identical(code, _unset) ? this.code : code as String?,
+      teachingClass: identical(teachingClass, _unset)
+          ? this.teachingClass
+          : teachingClass as String?,
+      credits: identical(credits, _unset) ? this.credits : credits as double?,
+      assessment: identical(assessment, _unset)
+          ? this.assessment
+          : assessment as String?,
+      note: identical(note, _unset) ? this.note : note as String?,
+      colorOverride: identical(colorOverride, _unset)
+          ? this.colorOverride
+          : colorOverride as int?,
       hidden: hidden ?? this.hidden,
       deleted: deleted ?? this.deleted,
       createdAt: createdAt,
