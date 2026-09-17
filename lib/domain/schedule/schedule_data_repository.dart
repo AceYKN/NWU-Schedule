@@ -32,6 +32,10 @@ abstract interface class ScheduleDataRepository {
 
   Future<void> setPreferredSemesterId(String? semesterId);
 
+  Future<String?> getSetting(String key);
+
+  Future<void> setSetting(String key, String? value);
+
   Future<void> saveSemester(Semester semester);
 
   Future<void> saveCourse(Course course, List<MeetingRule> rules);

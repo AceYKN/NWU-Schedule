@@ -7,11 +7,13 @@ import '../core/utils/date_utils.dart';
 import '../data/database/app_database.dart' show AppDatabase;
 import '../data/repositories/drift_schedule_data_repository.dart';
 import '../domain/calendar/calendar_engine.dart';
+import '../domain/notification/notification_planner.dart';
 import '../domain/schedule/schedule_data_repository.dart';
 import '../domain/schedule/schedule_engine.dart';
 import '../domain/semester/semester.dart';
 import '../domain/semester/semester_selector.dart';
 import '../infrastructure/calendar/bundled_calendar_repository.dart';
+import '../infrastructure/notifications/notification_service.dart';
 
 sealed class ScheduleLoadState {
   const ScheduleLoadState();
@@ -42,6 +44,29 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 
 final scheduleDataRepositoryProvider = Provider<ScheduleDataRepository>((ref) {
   return DriftScheduleDataRepository(ref.watch(appDatabaseProvider));
+});
+
+const notificationDefaultLeadMinutes = 15;
+
+final notificationServiceProvider = Provider<NotificationService>(
+  (ref) => const NotificationService(),
+);
+
+final notificationEnabledProvider = FutureProvider<bool>((ref) async {
+  final value = await ref
+      .watch(scheduleDataRepositoryProvider)
+      .getSetting('notifications.enabled');
+  return value == 'true';
+});
+
+final notificationLeadMinutesProvider = FutureProvider<int>((ref) async {
+  final value = await ref
+      .watch(scheduleDataRepositoryProvider)
+      .getSetting('notifications.leadMinutes');
+  final parsed = int.tryParse(value ?? '');
+  return const [5, 10, 15, 20, 30, 60].contains(parsed)
+      ? parsed!
+      : notificationDefaultLeadMinutes;
 });
 
 final bundledCalendarRepositoryProvider = Provider<BundledCalendarRepository>(
@@ -93,3 +118,41 @@ final scheduleLoadProvider = StreamProvider<ScheduleLoadState>((ref) {
     );
   });
 });
+
+final notificationCoordinatorProvider = Provider<void>((ref) {
+  ref.listen(scheduleLoadProvider, (_, next) {
+    if (next.hasValue) {
+      unawaited(
+        rebuildNotificationsForCurrentSchedule(
+          repository: ref.read(scheduleDataRepositoryProvider),
+          service: ref.read(notificationServiceProvider),
+          state: ref.read(scheduleLoadProvider).asData?.value,
+        ),
+      );
+    }
+  });
+});
+
+Future<void> rebuildNotificationsForCurrentSchedule({
+  required ScheduleDataRepository repository,
+  required NotificationService service,
+  required ScheduleLoadState? state,
+}) async {
+  final enabled = await repository.getSetting('notifications.enabled');
+  if (enabled != 'true') return;
+  if (state is! ScheduleReady) {
+    await service.clear();
+    return;
+  }
+  final rawLead = await repository.getSetting('notifications.leadMinutes');
+  final parsedLead = int.tryParse(rawLead ?? '');
+  final leadMinutes = const [5, 10, 15, 20, 30, 60].contains(parsedLead)
+      ? parsedLead!
+      : notificationDefaultLeadMinutes;
+  final plan = const NotificationPlanner().build(
+    engine: state.engine,
+    now: DateTime.now().toUtc(),
+    leadMinutes: leadMinutes,
+  );
+  await service.rebuild(plan);
+}

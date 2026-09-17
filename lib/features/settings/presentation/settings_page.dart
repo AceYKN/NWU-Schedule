@@ -76,16 +76,22 @@ class SettingsPage extends ConsumerWidget {
           child: Column(
             children: [
               SwitchListTile.adaptive(
-                value: false,
-                onChanged: (_) => _showPrototypeMessage(context, '上课提醒'),
+                value: ref.watch(notificationEnabledProvider).asData?.value ??
+                    false,
+                onChanged: (enabled) =>
+                    _setNotificationEnabled(context, ref, enabled),
                 title: const Text('上课提醒'),
-                subtitle: const Text('默认提前 15 分钟，统一规划本地通知'),
+                subtitle: const Text('只使用本地通知，不上传课程数据'),
               ),
               const Divider(height: 1),
-              const ListTile(
-                leading: Icon(Icons.timer_outlined),
-                title: Text('提前时间'),
-                trailing: Text('15 分钟'),
+              ListTile(
+                leading: const Icon(Icons.timer_outlined),
+                title: const Text('提前时间'),
+                subtitle: const Text('统一应用于所有课程'),
+                trailing: Text(
+                  '${ref.watch(notificationLeadMinutesProvider).asData?.value ?? notificationDefaultLeadMinutes} 分钟',
+                ),
+                onTap: () => _selectNotificationLead(context, ref),
               ),
             ],
           ),
@@ -323,6 +329,78 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
     if (context.mounted) _showMessage(context, '本地数据已清除');
   } catch (error) {
     if (context.mounted) _showMessage(context, '清除数据失败：$error');
+  }
+}
+
+Future<void> _setNotificationEnabled(
+  BuildContext context,
+  WidgetRef ref,
+  bool enabled,
+) async {
+  try {
+    final repository = ref.read(scheduleDataRepositoryProvider);
+    final service = ref.read(notificationServiceProvider);
+    if (!enabled) {
+      await repository.setSetting('notifications.enabled', 'false');
+      await service.clear();
+      ref.invalidate(notificationEnabledProvider);
+      if (context.mounted) _showMessage(context, '上课提醒已关闭');
+      return;
+    }
+    final granted = await service.requestPermission();
+    if (!granted) {
+      if (context.mounted) _showMessage(context, '未获得通知权限，提醒未开启');
+      return;
+    }
+    await repository.setSetting('notifications.enabled', 'true');
+    ref.invalidate(notificationEnabledProvider);
+    await rebuildNotificationsForCurrentSchedule(
+      repository: repository,
+      service: service,
+      state: ref.read(scheduleLoadProvider).asData?.value,
+    );
+    if (context.mounted) _showMessage(context, '上课提醒已开启');
+  } catch (error) {
+    if (context.mounted) _showMessage(context, '设置提醒失败：$error');
+  }
+}
+
+Future<void> _selectNotificationLead(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final selected = await showModalBottomSheet<int>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          const ListTile(title: Text('选择提前时间')),
+          for (final minutes in const [5, 10, 15, 20, 30, 60])
+            ListTile(
+              title: Text('$minutes 分钟'),
+              onTap: () => Navigator.pop(sheetContext, minutes),
+            ),
+        ],
+      ),
+    ),
+  );
+  if (selected == null || !context.mounted) return;
+  try {
+    final repository = ref.read(scheduleDataRepositoryProvider);
+    await repository.setSetting('notifications.leadMinutes', '$selected');
+    ref.invalidate(notificationLeadMinutesProvider);
+    if (await repository.getSetting('notifications.enabled') == 'true') {
+      await rebuildNotificationsForCurrentSchedule(
+        repository: repository,
+        service: ref.read(notificationServiceProvider),
+        state: ref.read(scheduleLoadProvider).asData?.value,
+      );
+    }
+    if (context.mounted) _showMessage(context, '提醒时间已更新');
+  } catch (error) {
+    if (context.mounted) _showMessage(context, '更新提醒时间失败：$error');
   }
 }
 

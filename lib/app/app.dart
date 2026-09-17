@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'bootstrap.dart';
 import 'router.dart';
 import 'theme/schedule_theme.dart';
 
@@ -20,11 +21,21 @@ class NwuScheduleApp extends StatelessWidget {
   }
 }
 
-class NwuScheduleRoot extends StatelessWidget {
+class NwuScheduleRoot extends ConsumerWidget {
   const NwuScheduleRoot({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return const ProviderScope(child: NwuScheduleApp());
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(notificationCoordinatorProvider);
+    return const NwuScheduleApp();
   }
+}
+
+class NwuScheduleAppRoot extends StatelessWidget {
+  const NwuScheduleAppRoot({super.key});
+
+  @override
+  Widget build(BuildContext context) => const ProviderScope(
+        child: NwuScheduleRoot(),
+      );
 }

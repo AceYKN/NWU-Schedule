@@ -148,6 +148,28 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   }
 
   @override
+  Future<String?> getSetting(String key) async {
+    final row = await (database.select(database.appSettings)
+          ..where((table) => table.key.equals(key)))
+        .getSingleOrNull();
+    return row?.value;
+  }
+
+  @override
+  Future<void> setSetting(String key, String? value) async {
+    if (key.trim().isEmpty) throw ArgumentError.value(key, 'key');
+    if (value == null) {
+      await (database.delete(database.appSettings)
+            ..where((table) => table.key.equals(key)))
+          .go();
+      return;
+    }
+    await database.into(database.appSettings).insertOnConflictUpdate(
+          db.AppSettingsCompanion.insert(key: key, value: value),
+        );
+  }
+
+  @override
   Future<void> setPreferredSemesterId(String? semesterId) async {
     await database.transaction(() async {
       if (semesterId == null) {
