@@ -101,6 +101,22 @@ class _MonthContent extends StatelessWidget {
               icon: const Icon(Icons.today_outlined),
             ),
             IconButton(
+              tooltip: '选择日期',
+              onPressed: () async {
+                final pickerYear = month.year.clamp(2000, 2100).toInt();
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime(pickerYear, month.month),
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2100),
+                );
+                if (picked != null) {
+                  onMonthChanged(DateTime(picked.year, picked.month));
+                }
+              },
+              icon: const Icon(Icons.event_outlined),
+            ),
+            IconButton(
               tooltip: '下个月',
               onPressed: () => onMonthChanged(
                 DateTime(month.year, month.month + 1),

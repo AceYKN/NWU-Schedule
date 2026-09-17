@@ -119,127 +119,134 @@ void showCourseDetails(
       final weekMask = instance.meetingRule?.weekMask;
       return Consumer(
           builder: (sheetContext, ref, child) => SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        instance.courseName,
-                        style: Theme.of(sheetContext)
-                            .textTheme
-                            .headlineSmall
-                            ?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      const SizedBox(height: 18),
-                      _DetailLine(
-                          label: '教师', value: instance.teacher ?? '未提供'),
-                      _DetailLine(
-                        label: '校区',
-                        value: instance.campus ?? '未提供',
-                      ),
-                      _DetailLine(
-                        label: '教室',
-                        value: instance.room ?? '未提供',
-                      ),
-                      _DetailLine(
-                        label: '时间',
-                        value:
-                            '${formatMinutes(instance.startTime.hour * 60 + instance.startTime.minute)}–'
-                            '${formatMinutes(instance.endTime.hour * 60 + instance.endTime.minute)}',
-                      ),
-                      _DetailLine(
-                        label: '周次',
-                        value: instance.isException || weekMask == null
-                            ? '单次课程'
-                            : formatWeekMask(weekMask),
-                      ),
-                      if (instance.course.code != null)
-                        _DetailLine(
-                            label: '课程代码', value: instance.course.code!),
-                      if (instance.course.teachingClass != null)
-                        _DetailLine(
-                          label: '教学班',
-                          value: instance.course.teachingClass!,
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          instance.courseName,
+                          style: Theme.of(sheetContext)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
                         ),
-                      if (instance.course.credits != null)
+                        const SizedBox(height: 18),
                         _DetailLine(
-                          label: '学分',
-                          value: '${instance.course.credits}',
-                        ),
-                      if (instance.course.assessment != null)
+                            label: '教师', value: instance.teacher ?? '未提供'),
                         _DetailLine(
-                          label: '考核方式',
-                          value: instance.course.assessment!,
+                          label: '校区',
+                          value: instance.campus ?? '未提供',
                         ),
-                      if (instance.course.note != null)
-                        _DetailLine(label: '备注', value: instance.course.note!),
-                      const SizedBox(height: 14),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          if (instance.isException &&
-                              instance.exceptionId != null)
+                        _DetailLine(
+                          label: '教室',
+                          value: instance.room ?? '未提供',
+                        ),
+                        _DetailLine(
+                          label: '星期',
+                          value: weekdayName(instance.date.weekday),
+                        ),
+                        _DetailLine(
+                          label: '时间',
+                          value:
+                              '${formatMinutes(instance.startTime.hour * 60 + instance.startTime.minute)}–'
+                              '${formatMinutes(instance.endTime.hour * 60 + instance.endTime.minute)}',
+                        ),
+                        _DetailLine(
+                          label: '周次',
+                          value: instance.isException || weekMask == null
+                              ? '单次课程'
+                              : formatWeekMask(weekMask),
+                        ),
+                        if (instance.course.code != null)
+                          _DetailLine(
+                              label: '课程代码', value: instance.course.code!),
+                        if (instance.course.teachingClass != null)
+                          _DetailLine(
+                            label: '教学班',
+                            value: instance.course.teachingClass!,
+                          ),
+                        if (instance.course.credits != null)
+                          _DetailLine(
+                            label: '学分',
+                            value: '${instance.course.credits}',
+                          ),
+                        if (instance.course.assessment != null)
+                          _DetailLine(
+                            label: '考核方式',
+                            value: instance.course.assessment!,
+                          ),
+                        if (instance.course.note != null)
+                          _DetailLine(
+                              label: '备注', value: instance.course.note!),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (instance.isException &&
+                                instance.exceptionId != null)
+                              OutlinedButton.icon(
+                                onPressed: () => _deleteException(
+                                  context,
+                                  sheetContext,
+                                  ref,
+                                  instance.exceptionId!,
+                                ),
+                                icon: const Icon(Icons.undo_outlined),
+                                label: const Text('撤销临时变更'),
+                              ),
                             OutlinedButton.icon(
-                              onPressed: () => _deleteException(
+                              onPressed: () => _showCourseColorPicker(
                                 context,
                                 sheetContext,
                                 ref,
-                                instance.exceptionId!,
+                                instance,
                               ),
-                              icon: const Icon(Icons.undo_outlined),
-                              label: const Text('撤销临时变更'),
-                            ),
-                          OutlinedButton.icon(
-                            onPressed: () => _showCourseColorPicker(
-                              context,
-                              sheetContext,
-                              ref,
-                              instance,
-                            ),
-                            icon: const Icon(Icons.palette_outlined),
-                            label: const Text('修改颜色'),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: () => _showExceptionEditor(
-                              context,
-                              sheetContext,
-                              ref,
-                              instance,
-                            ),
-                            icon: const Icon(Icons.edit_calendar_outlined),
-                            label: const Text('临时变更'),
-                          ),
-                          if (!instance.isException) ...[
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                Navigator.of(sheetContext).pop();
-                                context
-                                    .go('/course/${instance.course.id}/edit');
-                              },
-                              icon: const Icon(Icons.edit_outlined),
-                              label: const Text('编辑整门课程'),
+                              icon: const Icon(Icons.palette_outlined),
+                              label: const Text('修改颜色'),
                             ),
                             OutlinedButton.icon(
-                              onPressed: () => _hideCourse(context,
-                                  sheetContext, ref, instance.course.id),
-                              icon: const Icon(Icons.visibility_off_outlined),
-                              label: const Text('隐藏课程'),
+                              onPressed: () => _showExceptionEditor(
+                                context,
+                                sheetContext,
+                                ref,
+                                instance,
+                              ),
+                              icon: const Icon(Icons.edit_calendar_outlined),
+                              label: const Text('临时变更'),
                             ),
-                            TextButton.icon(
-                              onPressed: () => _deleteCourse(context,
-                                  sheetContext, ref, instance.course.id),
-                              icon: const Icon(Icons.delete_outline),
-                              label: const Text('删除课程'),
-                            ),
+                            if (!instance.isException) ...[
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.of(sheetContext).pop();
+                                  context
+                                      .go('/course/${instance.course.id}/edit');
+                                },
+                                icon: const Icon(Icons.edit_outlined),
+                                label: const Text('编辑整门课程'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () => _hideCourse(context,
+                                    sheetContext, ref, instance.course.id),
+                                icon: const Icon(Icons.visibility_off_outlined),
+                                label: const Text('隐藏课程'),
+                              ),
+                              TextButton.icon(
+                                onPressed: () => _deleteCourse(context,
+                                    sheetContext, ref, instance.course.id),
+                                icon: const Icon(Icons.delete_outline),
+                                label: const Text('删除课程'),
+                              ),
+                            ],
                           ],
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ));
