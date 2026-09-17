@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/bootstrap.dart';
 import '../../../domain/course/course.dart';
 import '../../../domain/course/course_exception.dart';
+import '../../../domain/errors/app_error.dart';
 
 class CourseManagementPage extends ConsumerWidget {
   const CourseManagementPage({super.key});
@@ -54,7 +55,7 @@ class CourseManagementPage extends ConsumerWidget {
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败：$error')),
+          SnackBar(content: Text(nwuUserMessage(error, action: '操作失败'))),
         );
       }
     }
@@ -188,7 +189,7 @@ Future<void> _deleteException(
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('撤销失败：$error')),
+        SnackBar(content: Text(nwuUserMessage(error, action: '撤销失败'))),
       );
     }
   }

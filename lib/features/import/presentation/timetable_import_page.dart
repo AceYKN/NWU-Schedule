@@ -13,6 +13,7 @@ import '../../../domain/import/import_diff.dart';
 import '../../../domain/import/timetable_import.dart';
 import '../../../domain/import/timetable_importer.dart';
 import '../../../domain/import/three_way_merge.dart';
+import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/schedule_data_repository.dart';
 import '../../../infrastructure/backup/backup_file_service.dart';
 import '../../../infrastructure/import/nwu_zhengfang_v9_importer.dart';
@@ -67,7 +68,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
           },
           onPageFinished: (url) => _onPageFinished(url),
           onWebResourceError: (error) {
-            _setError('教务页面加载失败：${error.description}');
+            unawaited(_recordWebResourceError(error));
           },
         ),
       )
@@ -141,10 +142,13 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
         _resolution = ImportConflictResolution.empty;
       });
     } on TimetableImportFailure catch (error) {
-      _setFailure(error.message, await _enrichDiagnostic(error.diagnostic));
+      _setFailure(
+        importFailureUserMessage(error),
+        await _enrichDiagnostic(error.diagnostic),
+      );
     } on Object catch (error) {
       _setFailure(
-        '无法读取课表：${redactImportError(error)}',
+        nwuUserMessage(error, action: '无法读取课表'),
         await _enrichDiagnostic(ImportDiagnostic(
           adapterVersion: 'nwu-zhengfang-v9',
           parserStage: 'webview-read',
@@ -222,7 +226,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       }
     } on Object catch (error) {
       _setFailure(
-        '课表桥接数据无效：${redactImportError(error)}',
+        nwuUserMessage(error, action: '课表桥接数据无效'),
         await _enrichDiagnostic(ImportDiagnostic(
           adapterVersion: 'nwu-zhengfang-v9',
           parserStage: 'bridge-message',
@@ -251,7 +255,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     } on TimetableImportConflictException {
       _setError('发现本地与教务系统同时修改的课程，导入已取消，未写入部分数据');
     } on Object catch (error) {
-      _setError('确认导入失败：$error');
+      _setError(nwuUserMessage(error, action: '确认导入失败'));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -272,12 +276,29 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       );
       if (mounted) _showMessage(saved ? '诊断信息已导出' : '已取消导出');
     } on Object catch (error) {
-      if (mounted) _showMessage('诊断导出失败：$error');
+      if (mounted) _showMessage(nwuUserMessage(error, action: '诊断导出失败'));
     }
   }
 
   void _setError(String message) {
     if (mounted) setState(() => _error = message);
+  }
+
+  Future<void> _recordWebResourceError(WebResourceError error) async {
+    final failure = TimetableImportFailure(
+      '教务页面加载失败',
+      ImportDiagnostic(
+        adapterVersion: 'nwu-zhengfang-v9',
+        parserStage: 'web-resource',
+        currentUrlPath: _currentUrlPath,
+        httpStatus: error.errorCode,
+        error: redactImportError(error.description),
+      ),
+    );
+    _setFailure(
+      importFailureUserMessage(failure),
+      await _enrichDiagnostic(failure.diagnostic),
+    );
   }
 
   void _setFailure(String message, ImportDiagnostic diagnostic) {

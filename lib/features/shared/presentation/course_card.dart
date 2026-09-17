@@ -7,6 +7,7 @@ import '../../../core/nwu/periods.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/week_mask.dart';
 import '../../../domain/course/course_exception.dart';
+import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
 
 class CourseCard extends StatelessWidget {
@@ -235,7 +236,7 @@ Future<void> _hideCourse(
   } catch (error) {
     if (sheetContext.mounted) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
-        SnackBar(content: Text('隐藏失败：$error')),
+        SnackBar(content: Text(nwuUserMessage(error, action: '隐藏失败'))),
       );
     }
   }
@@ -274,7 +275,7 @@ Future<void> _deleteCourse(
   } catch (error) {
     if (sheetContext.mounted) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
-        SnackBar(content: Text('删除失败：$error')),
+        SnackBar(content: Text(nwuUserMessage(error, action: '删除失败'))),
       );
     }
   }
@@ -313,7 +314,9 @@ Future<void> _deleteException(
   } catch (error) {
     if (sheetContext.mounted) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
-        SnackBar(content: Text('撤销临时变更失败：$error')),
+        SnackBar(
+          content: Text(nwuUserMessage(error, action: '撤销临时变更失败')),
+        ),
       );
     }
   }
@@ -368,7 +371,9 @@ Future<void> _showExceptionEditor(
   } catch (error) {
     if (sheetContext.mounted) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
-        SnackBar(content: Text('保存临时变更失败：$error')),
+        SnackBar(
+          content: Text(nwuUserMessage(error, action: '保存临时变更失败')),
+        ),
       );
     }
   }
@@ -438,7 +443,7 @@ Future<void> _showCourseColorPicker(
   } catch (error) {
     if (sheetContext.mounted) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
-        SnackBar(content: Text('更新课程颜色失败：$error')),
+        SnackBar(content: Text(nwuUserMessage(error, action: '更新课程颜色失败'))),
       );
     }
   }

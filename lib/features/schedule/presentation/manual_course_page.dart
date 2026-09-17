@@ -7,6 +7,7 @@ import '../../../core/nwu/periods.dart';
 import '../../../core/utils/week_mask.dart';
 import '../../../domain/course/course.dart';
 import '../../../domain/course/meeting_rule.dart';
+import '../../../domain/errors/app_error.dart';
 
 class ManualCoursePage extends ConsumerStatefulWidget {
   const ManualCoursePage({this.courseId, super.key});
@@ -160,7 +161,7 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败：$error')),
+          SnackBar(content: Text(nwuUserMessage(error, action: '保存失败'))),
         );
       }
     } finally {

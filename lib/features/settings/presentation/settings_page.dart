@@ -5,6 +5,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
+import '../../../domain/errors/app_error.dart';
 import '../../../domain/backup/schedule_backup.dart';
 import '../../../domain/semester/semester.dart';
 import '../../../infrastructure/backup/backup_file_service.dart';
@@ -230,7 +231,9 @@ Future<void> _createSemester(BuildContext context, WidgetRef ref) async {
     await repository.setPreferredSemesterId(selected);
     if (context.mounted) _showMessage(context, '学期已创建，可以手动添加课程');
   } catch (error) {
-    if (context.mounted) _showMessage(context, '创建学期失败：$error');
+    if (context.mounted) {
+      _showMessage(context, nwuUserMessage(error, action: '创建学期失败'));
+    }
   }
 }
 
@@ -262,7 +265,9 @@ Future<void> _selectSemester(BuildContext context, WidgetRef ref) async {
     );
     if (selected != null) await repository.setPreferredSemesterId(selected);
   } catch (error) {
-    if (context.mounted) _showMessage(context, '切换学期失败：$error');
+    if (context.mounted) {
+      _showMessage(context, nwuUserMessage(error, action: '切换学期失败'));
+    }
   }
 }
 
@@ -280,7 +285,9 @@ Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
     if (!context.mounted) return;
     _showMessage(context, saved ? '备份已导出' : '已取消导出');
   } catch (error) {
-    if (context.mounted) _showMessage(context, '备份导出失败：$error');
+    if (context.mounted) {
+      _showMessage(context, nwuUserMessage(error, action: '备份导出失败'));
+    }
   }
 }
 
@@ -323,7 +330,9 @@ Future<void> _restoreBackup(BuildContext context, WidgetRef ref) async {
     ref.invalidate(scheduleLoadProvider);
     if (context.mounted) _showMessage(context, '备份已恢复');
   } catch (error) {
-    if (context.mounted) _showMessage(context, '备份恢复失败：$error');
+    if (context.mounted) {
+      _showMessage(context, nwuUserMessage(error, action: '备份恢复失败'));
+    }
   }
 }
 
@@ -358,7 +367,9 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
     ref.invalidate(scheduleLoadProvider);
     if (context.mounted) _showMessage(context, '本地数据已清除');
   } catch (error) {
-    if (context.mounted) _showMessage(context, '清除数据失败：$error');
+    if (context.mounted) {
+      _showMessage(context, nwuUserMessage(error, action: '清除数据失败'));
+    }
   }
 }
 
@@ -374,7 +385,9 @@ Future<void> _selectTheme(
     ref.invalidate(themeIdProvider);
     if (context.mounted) _showMessage(context, '主题已切换');
   } catch (error) {
-    if (context.mounted) _showMessage(context, '主题切换失败：$error');
+    if (context.mounted) {
+      _showMessage(context, nwuUserMessage(error, action: '主题切换失败'));
+    }
   }
 }
 
@@ -407,7 +420,9 @@ Future<void> _setNotificationEnabled(
     );
     if (context.mounted) _showMessage(context, '上课提醒已开启');
   } catch (error) {
-    if (context.mounted) _showMessage(context, '设置提醒失败：$error');
+    if (context.mounted) {
+      _showMessage(context, nwuUserMessage(error, action: '设置提醒失败'));
+    }
   }
 }
 
@@ -446,7 +461,9 @@ Future<void> _selectNotificationLead(
     }
     if (context.mounted) _showMessage(context, '提醒时间已更新');
   } catch (error) {
-    if (context.mounted) _showMessage(context, '更新提醒时间失败：$error');
+    if (context.mounted) {
+      _showMessage(context, nwuUserMessage(error, action: '更新提醒时间失败'));
+    }
   }
 }
 
