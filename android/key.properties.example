@@ -1,0 +1,6 @@
+# Copy this file to android/key.properties and replace every value.
+# Never commit key.properties or the keystore. Use forward slashes on Windows.
+storeFile=C:/secure/nwu-schedule-release.jks
+storePassword=replace-me
+keyAlias=nwu-schedule
+keyPassword=replace-me

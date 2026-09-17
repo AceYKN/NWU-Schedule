@@ -1,8 +1,38 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val releaseSigningProperties = Properties()
+val releaseSigningPropertiesFile = rootProject.file("key.properties")
+if (releaseSigningPropertiesFile.isFile) {
+    releaseSigningPropertiesFile.inputStream().use(releaseSigningProperties::load)
+}
+
+val releaseSigningEnvironmentKeys = mapOf(
+    "storeFile" to "NWU_RELEASE_STORE_FILE",
+    "storePassword" to "NWU_RELEASE_STORE_PASSWORD",
+    "keyAlias" to "NWU_RELEASE_KEY_ALIAS",
+    "keyPassword" to "NWU_RELEASE_KEY_PASSWORD",
+)
+
+fun releaseSigningValue(name: String): String? =
+    releaseSigningProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(releaseSigningEnvironmentKeys.getValue(name))
+            ?.takeIf { it.isNotBlank() }
+
+val releaseStoreFilePath = releaseSigningValue("storeFile")
+val releaseStoreFile = releaseStoreFilePath?.let(rootProject::file)
+val releaseStorePassword = releaseSigningValue("storePassword")
+val releaseKeyAlias = releaseSigningValue("keyAlias")
+val releaseKeyPassword = releaseSigningValue("keyPassword")
+val hasReleaseSigning = releaseStoreFile?.isFile == true &&
+    releaseStorePassword != null &&
+    releaseKeyAlias != null &&
+    releaseKeyPassword != null
 
 android {
     namespace = "io.github.aceykn.nwuschedule"
@@ -28,11 +58,35 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+}
+
+tasks.configureEach {
+    if (name == "assembleRelease" ||
+        name == "bundleRelease" ||
+        name == "validateSigningRelease") {
+        doFirst {
+            check(hasReleaseSigning) {
+                "Release signing is not configured. Provide android/key.properties " +
+                    "or NWU_RELEASE_* environment variables."
+            }
         }
     }
 }

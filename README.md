@@ -29,6 +29,13 @@ flutter build apk --debug
 flutter build apk --release
 ```
 
+Release 构建不会使用 debug keystore。正式发布前请把未提交的
+`android/key.properties.example` 复制为 `android/key.properties`，替换为
+Owner 管理的 release keystore；也可以提供 `NWU_RELEASE_STORE_FILE`、
+`NWU_RELEASE_STORE_PASSWORD`、`NWU_RELEASE_KEY_ALIAS` 和
+`NWU_RELEASE_KEY_PASSWORD` 环境变量。CI 的 main 构建只使用一次性的临时
+签名验证产物，不代表正式发布密钥。
+
 Android SDK、Flutter SDK 和项目都可以分别放在不同磁盘；应用运行数据只保存在本机。
 
 ## 目录约定

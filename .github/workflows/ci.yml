@@ -23,4 +23,22 @@ jobs:
       - run: flutter test
       - run: flutter build apk --debug
       - if: github.ref == 'refs/heads/main'
+        name: Create ephemeral release signing key
+        run: >-
+          keytool -genkeypair -v
+          -keystore "$RUNNER_TEMP/nwu-ci-release.jks"
+          -storepass ci-store-password
+          -keypass ci-store-password
+          -alias nwu-ci
+          -keyalg RSA
+          -keysize 2048
+          -validity 1
+          -dname "CN=NWU Schedule CI"
+          -noprompt
+      - if: github.ref == 'refs/heads/main'
         run: flutter build apk --release
+        env:
+          NWU_RELEASE_STORE_FILE: ${{ runner.temp }}/nwu-ci-release.jks
+          NWU_RELEASE_STORE_PASSWORD: ci-store-password
+          NWU_RELEASE_KEY_ALIAS: nwu-ci
+          NWU_RELEASE_KEY_PASSWORD: ci-store-password
