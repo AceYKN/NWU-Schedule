@@ -23,6 +23,12 @@ class SettingsPage extends ConsumerWidget {
       loading: () => '正在读取本地数据',
       error: (error, stackTrace) => '暂时无法读取本地数据',
     );
+    final selectedThemeId =
+        ref.watch(themeIdProvider).asData?.value ?? officialThemes.first.id;
+    final selectedTheme = officialThemes.firstWhere(
+      (theme) => theme.id == selectedThemeId,
+      orElse: () => officialThemes.first,
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
       children: [
@@ -101,10 +107,10 @@ class SettingsPage extends ConsumerWidget {
         Card(
           child: Column(
             children: [
-              const ListTile(
-                leading: Icon(Icons.palette_outlined),
+              ListTile(
+                leading: const Icon(Icons.palette_outlined),
                 title: Text('主题'),
-                subtitle: Text('跟随系统 · 官方主题预留'),
+                subtitle: Text('当前：${selectedTheme.name} · 跟随系统明暗'),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -112,7 +118,13 @@ class SettingsPage extends ConsumerWidget {
                   spacing: 8,
                   children: officialThemes
                       .map(
-                        (theme) => Chip(
+                        (theme) => ChoiceChip(
+                          selected: theme.id == selectedTheme.id,
+                          onSelected: (selected) {
+                            if (selected) {
+                              _selectTheme(context, ref, theme.id);
+                            }
+                          },
                           avatar: CircleAvatar(
                             backgroundColor: theme.seedColor,
                           ),
@@ -255,9 +267,15 @@ Future<void> _selectSemester(BuildContext context, WidgetRef ref) async {
 
 Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
   try {
-    final backup =
-        await ref.read(scheduleDataRepositoryProvider).createBackup();
-    final saved = await const BackupFileService().save(backup.encode());
+    final themeId =
+        ref.read(themeIdProvider).asData?.value ?? officialThemes.first.id;
+    final backup = await ref.read(scheduleDataRepositoryProvider).createBackup(
+      appearance: {'themeId': themeId},
+    );
+    final saved = await const BackupFileService().save(
+      backup.encode(),
+      suggestedName: 'nwu-schedule-backup.json',
+    );
     if (!context.mounted) return;
     _showMessage(context, saved ? '备份已导出' : '已取消导出');
   } catch (error) {
@@ -293,7 +311,14 @@ Future<void> _restoreBackup(BuildContext context, WidgetRef ref) async {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    await ref.read(scheduleDataRepositoryProvider).restoreBackup(backup);
+    final repository = ref.read(scheduleDataRepositoryProvider);
+    await repository.restoreBackup(backup);
+    final themeId = backup.appearance['themeId'];
+    if (themeId is String &&
+        officialThemes.any((theme) => theme.id == themeId)) {
+      await repository.setSetting('appearance.themeId', themeId);
+    }
+    ref.invalidate(themeIdProvider);
     ref.invalidate(scheduleLoadProvider);
     if (context.mounted) _showMessage(context, '备份已恢复');
   } catch (error) {
@@ -325,10 +350,27 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
   if (confirmed != true || !context.mounted) return;
   try {
     await ref.read(scheduleDataRepositoryProvider).clearAllData();
+    ref.invalidate(themeIdProvider);
     ref.invalidate(scheduleLoadProvider);
     if (context.mounted) _showMessage(context, '本地数据已清除');
   } catch (error) {
     if (context.mounted) _showMessage(context, '清除数据失败：$error');
+  }
+}
+
+Future<void> _selectTheme(
+  BuildContext context,
+  WidgetRef ref,
+  String themeId,
+) async {
+  try {
+    await ref
+        .read(scheduleDataRepositoryProvider)
+        .setSetting('appearance.themeId', themeId);
+    ref.invalidate(themeIdProvider);
+    if (context.mounted) _showMessage(context, '主题已切换');
+  } catch (error) {
+    if (context.mounted) _showMessage(context, '主题切换失败：$error');
   }
 }
 

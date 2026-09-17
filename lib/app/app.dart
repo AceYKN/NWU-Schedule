@@ -6,14 +6,14 @@ import 'bootstrap.dart';
 import 'router.dart';
 import 'theme/schedule_theme.dart';
 
-class NwuScheduleApp extends StatefulWidget {
+class NwuScheduleApp extends ConsumerStatefulWidget {
   const NwuScheduleApp({super.key});
 
   @override
-  State<NwuScheduleApp> createState() => _NwuScheduleAppState();
+  ConsumerState<NwuScheduleApp> createState() => _NwuScheduleAppState();
 }
 
-class _NwuScheduleAppState extends State<NwuScheduleApp> {
+class _NwuScheduleAppState extends ConsumerState<NwuScheduleApp> {
   static const _navigationChannel = MethodChannel('nwu_schedule/navigation');
 
   @override
@@ -35,7 +35,11 @@ class _NwuScheduleAppState extends State<NwuScheduleApp> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = officialThemes.first;
+    final selectedId = ref.watch(themeIdProvider).asData?.value;
+    final theme = officialThemes.firstWhere(
+      (item) => item.id == selectedId,
+      orElse: () => officialThemes.first,
+    );
     return MaterialApp.router(
       title: '西北大学课程表',
       debugShowCheckedModeBanner: false,

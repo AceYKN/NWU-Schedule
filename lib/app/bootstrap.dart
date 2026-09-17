@@ -16,6 +16,7 @@ import '../domain/widget/widget_snapshot.dart';
 import '../infrastructure/calendar/bundled_calendar_repository.dart';
 import '../infrastructure/notifications/notification_service.dart';
 import '../infrastructure/widget/widget_service.dart';
+import 'theme/schedule_theme.dart';
 
 sealed class ScheduleLoadState {
   const ScheduleLoadState();
@@ -73,6 +74,14 @@ final notificationLeadMinutesProvider = FutureProvider<int>((ref) async {
   return const [5, 10, 15, 20, 30, 60].contains(parsed)
       ? parsed!
       : notificationDefaultLeadMinutes;
+});
+
+final themeIdProvider = FutureProvider<String>((ref) async {
+  final value = await ref
+      .watch(scheduleDataRepositoryProvider)
+      .getSetting('appearance.themeId');
+  if (officialThemes.any((theme) => theme.id == value)) return value!;
+  return officialThemes.first.id;
 });
 
 final bundledCalendarRepositoryProvider = Provider<BundledCalendarRepository>(
