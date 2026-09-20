@@ -90,6 +90,10 @@ class ScheduleMonthStyle {
 
 class ScheduleThemeTokens extends ThemeExtension<ScheduleThemeTokens> {
   const ScheduleThemeTokens({
+    required this.pagePadding,
+    required this.cardPadding,
+    required this.sectionGap,
+    required this.gridGap,
     required this.courseAccentWidth,
     required this.compactCoursePadding,
     required this.gridCellHeight,
@@ -101,6 +105,10 @@ class ScheduleThemeTokens extends ThemeExtension<ScheduleThemeTokens> {
     required this.monthCellPadding,
   });
 
+  final double pagePadding;
+  final double cardPadding;
+  final double sectionGap;
+  final double gridGap;
   final double courseAccentWidth;
   final double compactCoursePadding;
   final double gridCellHeight;
@@ -113,6 +121,10 @@ class ScheduleThemeTokens extends ThemeExtension<ScheduleThemeTokens> {
 
   @override
   ScheduleThemeTokens copyWith({
+    double? pagePadding,
+    double? cardPadding,
+    double? sectionGap,
+    double? gridGap,
     double? courseAccentWidth,
     double? compactCoursePadding,
     double? gridCellHeight,
@@ -124,6 +136,10 @@ class ScheduleThemeTokens extends ThemeExtension<ScheduleThemeTokens> {
     double? monthCellPadding,
   }) {
     return ScheduleThemeTokens(
+      pagePadding: pagePadding ?? this.pagePadding,
+      cardPadding: cardPadding ?? this.cardPadding,
+      sectionGap: sectionGap ?? this.sectionGap,
+      gridGap: gridGap ?? this.gridGap,
       courseAccentWidth: courseAccentWidth ?? this.courseAccentWidth,
       compactCoursePadding: compactCoursePadding ?? this.compactCoursePadding,
       gridCellHeight: gridCellHeight ?? this.gridCellHeight,
@@ -143,6 +159,10 @@ class ScheduleThemeTokens extends ThemeExtension<ScheduleThemeTokens> {
   ) {
     if (other == null) return this;
     return ScheduleThemeTokens(
+      pagePadding: ui.lerpDouble(pagePadding, other.pagePadding, t)!,
+      cardPadding: ui.lerpDouble(cardPadding, other.cardPadding, t)!,
+      sectionGap: ui.lerpDouble(sectionGap, other.sectionGap, t)!,
+      gridGap: ui.lerpDouble(gridGap, other.gridGap, t)!,
       courseAccentWidth:
           ui.lerpDouble(courseAccentWidth, other.courseAccentWidth, t)!,
       compactCoursePadding: ui.lerpDouble(
@@ -285,6 +305,10 @@ class ScheduleThemeDefinition {
 
   ScheduleThemeTokens _tokens() {
     return ScheduleThemeTokens(
+      pagePadding: spacing.page,
+      cardPadding: spacing.card,
+      sectionGap: spacing.section,
+      gridGap: spacing.gridGap,
       courseAccentWidth: courseCardStyle.accentWidth,
       compactCoursePadding: courseCardStyle.compactPadding,
       gridCellHeight: weekGridStyle.cellHeight,
@@ -301,6 +325,10 @@ class ScheduleThemeDefinition {
 ScheduleThemeTokens scheduleThemeTokensOf(BuildContext context) {
   return Theme.of(context).extension<ScheduleThemeTokens>() ??
       const ScheduleThemeTokens(
+        pagePadding: 20,
+        cardPadding: 16,
+        sectionGap: 20,
+        gridGap: 8,
         courseAccentWidth: 5,
         compactCoursePadding: 12,
         gridCellHeight: 70,

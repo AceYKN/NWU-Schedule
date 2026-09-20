@@ -97,6 +97,7 @@ class _NoSemesterContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeTokens = scheduleThemeTokensOf(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -107,7 +108,7 @@ class _NoSemesterContent extends StatelessWidget {
             const SizedBox(height: 12),
             const Text('从西北大学教务系统导入后，\n这里会自动结合校历显示课程。',
                 textAlign: TextAlign.center),
-            const SizedBox(height: 20),
+            SizedBox(height: themeTokens.sectionGap),
             FilledButton(
               onPressed: () => context.go('/import'),
               child: const Text('导入课表'),
@@ -236,10 +237,16 @@ class _HomeContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolved = engine.resolveDate(state.now);
+    final themeTokens = scheduleThemeTokensOf(context);
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
+        padding: EdgeInsets.fromLTRB(
+          themeTokens.pagePadding,
+          18,
+          themeTokens.pagePadding,
+          32,
+        ),
         children: [
           _HomeHeader(resolved: resolved),
           if (calendarUpdated) ...[

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/theme/schedule_theme.dart';
 import '../../../core/nwu/periods.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/week_mask.dart';
@@ -107,8 +108,14 @@ class _CourseDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeTokens = scheduleThemeTokensOf(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
+      padding: EdgeInsets.fromLTRB(
+        themeTokens.pagePadding,
+        18,
+        themeTokens.pagePadding,
+        32,
+      ),
       children: [
         Row(
           children: [

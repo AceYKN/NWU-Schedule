@@ -58,7 +58,9 @@ class CourseCard extends StatelessWidget {
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.all(
-                      compact ? themeTokens.compactCoursePadding : 16,
+                      compact
+                          ? themeTokens.compactCoursePadding
+                          : themeTokens.cardPadding,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

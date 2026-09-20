@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/theme/schedule_theme.dart';
 import '../../../core/nwu/periods.dart';
 import '../../../core/time/campus_clock.dart';
 import '../../../core/utils/date_utils.dart';
@@ -140,11 +141,17 @@ class _WeekContentState extends State<_WeekContent> {
 
   @override
   Widget build(BuildContext context) {
+    final themeTokens = scheduleThemeTokensOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+          padding: EdgeInsets.fromLTRB(
+            themeTokens.pagePadding,
+            18,
+            themeTokens.pagePadding,
+            8,
+          ),
           child: _WeekToolbar(
             week: widget.week,
             maxWeek: widget.maxWeek,
@@ -178,7 +185,12 @@ class _WeekContentState extends State<_WeekContent> {
                   ? pageModel.days
                   : pageModel.days.take(5).toList(growable: false);
               return SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                padding: EdgeInsets.fromLTRB(
+                  themeTokens.pagePadding,
+                  0,
+                  themeTokens.pagePadding,
+                  32,
+                ),
                 child: Column(
                   children: [
                     _ScheduleGrid(
@@ -221,6 +233,7 @@ class _WeekToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeTokens = scheduleThemeTokensOf(context);
     final start = definition.weekStart(week);
     final end = start.add(const Duration(days: 6));
     return Column(
@@ -263,8 +276,8 @@ class _WeekToolbar extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: themeTokens.gridGap,
+          runSpacing: themeTokens.gridGap,
           alignment: WrapAlignment.end,
           children: [
             OutlinedButton.icon(

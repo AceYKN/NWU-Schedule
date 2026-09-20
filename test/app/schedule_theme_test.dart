@@ -26,6 +26,11 @@ void main() {
       expect(dark.useMaterial3, isTrue);
       expect(light.extension<ScheduleThemeTokens>(), isNotNull);
       expect(dark.extension<ScheduleThemeTokens>(), isNotNull);
+      final lightTokens = light.extension<ScheduleThemeTokens>()!;
+      expect(lightTokens.pagePadding, theme.spacing.page);
+      expect(lightTokens.cardPadding, theme.spacing.card);
+      expect(lightTokens.sectionGap, theme.spacing.section);
+      expect(lightTokens.gridGap, theme.spacing.gridGap);
     }
   });
 }

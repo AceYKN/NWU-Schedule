@@ -98,7 +98,12 @@ class _MonthContent extends StatelessWidget {
     final themeTokens = scheduleThemeTokensOf(context);
     final leading = firstDay.weekday - 1;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
+      padding: EdgeInsets.fromLTRB(
+        themeTokens.pagePadding,
+        18,
+        themeTokens.pagePadding,
+        32,
+      ),
       children: [
         Row(
           children: [
