@@ -21,9 +21,9 @@
 | 通知权限、重建、旧 Alarm 清理 | `bootstrap_test.dart`、`notification_planner_test.dart`、`MainActivity.kt` | PASS（自动化/静态） |
 | 隐私边界、无统计/广告依赖、merged manifest | privacy/manifest validators 与 CI | PASS（自动化） |
 | UI、Golden、无障碍 | `test/widget`、`test/golden`、`accessibility_test.dart` | PASS（自动化） |
-| Android 构建 | [GitHub Actions Run #198](https://github.com/AceYKN/NWU-Schedule/actions/runs/35535760839)：debug/release APK 与 merged manifest 校验 | PASS |
+| Android 构建 | [GitHub Actions Run #200](https://github.com/AceYKN/NWU-Schedule/actions/runs/35536524528)：debug/release APK 与 merged manifest 校验 | PASS |
 
-最近一次本地全量检查：校历校验、隐私校验、DOM fixture、`flutter analyze`、174 项 `flutter test` 均通过；本次诊断脱敏回归和 Widget 空地点设备复核也已通过。[GitHub Actions Run #197](https://github.com/AceYKN/NWU-Schedule/actions/runs/35535348266) 以 `main` 提交 `2b68171` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
+最近一次本地全量检查：校历校验、隐私校验、DOM fixture、`flutter analyze`、174 项 `flutter test` 均通过；本次诊断脱敏回归和 Widget 尺寸回调设备复核也已通过。[GitHub Actions Run #200](https://github.com/AceYKN/NWU-Schedule/actions/runs/35536524528) 以 `main` 提交 `8b3e3bc` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
 
 ## 设备上已核对但不等同于真实集成通过
 
