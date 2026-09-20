@@ -7,9 +7,19 @@ void main() {
     expect(WeekMask.parse('3-21周', maxWeek: 21).weeks.first, 3);
     expect(WeekMask.parse('3-21周', maxWeek: 21).weeks.last, 21);
     expect(WeekMask.parse('21周', maxWeek: 21).weeks, [21]);
+    for (final separator in ['~', '～', '至', '—']) {
+      expect(
+        WeekMask.parse('1${separator}16周').weeks,
+        List<int>.generate(16, (i) => i + 1),
+      );
+    }
     expect(WeekMask.parse('1,3,5,7周').weeks, [1, 3, 5, 7]);
+    expect(WeekMask.parse('1，3，5，7周').weeks, [1, 3, 5, 7]);
+    expect(WeekMask.parse('1、3、5、7周').weeks, [1, 3, 5, 7]);
     expect(WeekMask.parse('单周', maxWeek: 8).weeks, [1, 3, 5, 7]);
     expect(WeekMask.parse('双周', maxWeek: 8).weeks, [2, 4, 6, 8]);
+    expect(WeekMask.parse('1-16周单周').weeks, [1, 3, 5, 7, 9, 11, 13, 15]);
+    expect(WeekMask.parse('2-16周双周').weeks, [2, 4, 6, 8, 10, 12, 14, 16]);
     expect(WeekMask.parse('1-8,10,12-16周').weeks, [
       1,
       2,
