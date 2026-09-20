@@ -9,6 +9,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../app/bootstrap.dart';
 import '../../../core/nwu/constants.dart';
+import '../../../core/utils/date_utils.dart';
+import '../../../core/utils/week_mask.dart';
 import '../../../domain/import/import_diff.dart';
 import '../../../domain/import/timetable_import.dart';
 import '../../../domain/import/timetable_importer.dart';
@@ -674,10 +676,37 @@ class TimetableImportPreviewCard extends StatelessWidget {
             ],
             const SizedBox(height: 8),
             ...timetable.courses.take(3).map(
-                  (course) => Text(
-                    '${course.name} · ${course.meetings.length} 个安排',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  (course) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${course.name} · ${course.meetings.length} 个安排',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        for (final meeting in course.meetings.take(2))
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, top: 2),
+                            child: Text(
+                              _previewMeetingLabel(meeting),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        if (course.meetings.length > 2)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, top: 2),
+                            child: Text(
+                              '还有 ${course.meetings.length - 2} 个安排…',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
             if (timetable.courses.length > 3)
@@ -709,6 +738,20 @@ class TimetableImportPreviewCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _previewMeetingLabel(ImportedMeeting meeting) {
+  final location = [
+    if (meeting.campus != null) meeting.campus!,
+    if (meeting.room != null) meeting.room!,
+  ].join(' · ');
+  return [
+    weekdayName(meeting.weekday),
+    '第 ${meeting.startSection}-${meeting.endSection} 节',
+    formatWeekMask(meeting.weekMask),
+    if (location.isNotEmpty) location,
+    if (meeting.teacher != null) meeting.teacher!,
+  ].join(' · ');
 }
 
 class _ConflictEntry {

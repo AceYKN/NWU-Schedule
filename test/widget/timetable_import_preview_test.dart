@@ -38,6 +38,14 @@ void main() {
 
     expect(find.text('读取完成 · 2026-2027学年第一学期'), findsOneWidget);
     expect(find.text('2 门课程 · 2 个上课安排'), findsOneWidget);
+    expect(
+      find.textContaining('星期一 · 第 3-4 节 · 1-16周 · 长安校区 · 3508 · 苏峙之'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('星期二 · 第 5-6 节 · 2-8周双周 · 太白校区 · 1310 · 李老师'),
+      findsOneWidget,
+    );
     expect(find.textContaining('新增 2'), findsOneWidget);
     expect(find.text('建立新课表'), findsOneWidget);
 
