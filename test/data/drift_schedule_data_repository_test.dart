@@ -404,6 +404,50 @@ void main() {
         (await database.select(database.importSnapshots).get()), hasLength(3));
   });
 
+  test('allows importing a semester whose calendar is not bundled yet',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    const semesterId = 'nwu-2027-2028-1';
+    final timetable = RemoteTimetable(
+      semester: const RemoteSemester(
+        remoteTermKey: '2027-2028-1',
+        academicYear: '2027-2028',
+        term: 1,
+        label: '2027-2028 第一学期',
+        totalWeeks: 20,
+      ),
+      totalWeeks: 20,
+      courses: [
+        ImportedCourse(
+          sourceCourseKey: 'future-course',
+          name: '未来学期课程',
+          meetings: [
+            ImportedMeeting(
+              sourceMeetingKey: 'future-rule',
+              weekday: 1,
+              startSection: 1,
+              endSection: 2,
+              teacher: '教师 A',
+              campus: '长安校区',
+              room: '3406',
+              weekMask: WeekMask.all(20),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    await repository.commitImportedTimetable(timetable);
+
+    final loaded = await repository.loadSemester(semesterId);
+    expect(loaded.semester.label, '2027-2028 第一学期');
+    expect(loaded.semester.calendarId, semesterId);
+    expect(loaded.courses.single.name, '未来学期课程');
+    expect(loaded.meetingRules.single.room, '3406');
+  });
+
   test('merges independent local and remote meeting properties', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);

@@ -19,6 +19,43 @@ import 'package:nwu_schedule/features/schedule/presentation/schedule_page.dart';
 import 'package:nwu_schedule/infrastructure/calendar/bundled_calendar_repository.dart';
 
 void main() {
+  testWidgets('explains when an imported semester has no bundled calendar',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final semester = Semester(
+      id: 'nwu-2027-2028-1',
+      academicYear: '2027-2028',
+      term: SemesterTerm.first,
+      label: '2027-2028 第一学期',
+      calendarId: 'nwu-2027-2028-1',
+      createdAt: DateTime(2026, 9, 21),
+    );
+    await repository.saveSemester(semester);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          bundledCalendarRepositoryProvider.overrideWithValue(
+            _MissingCalendarRepository(),
+          ),
+        ],
+        child: const MaterialApp(home: HomePage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('课表已保存'), findsOneWidget);
+    expect(find.textContaining('2027-2028 第一学期校历'), findsOneWidget);
+    expect(find.textContaining('课程数据已安全保存'), findsOneWidget);
+    expect(find.text('查看设置'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('renders the real Home, Week, Month, and Detail pages',
       (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
@@ -150,4 +187,9 @@ class _FixedCalendarRepository extends BundledCalendarRepository {
   Future<CalendarDefinition?> findById(String id) async {
     return id == calendar.id ? calendar : null;
   }
+}
+
+class _MissingCalendarRepository extends BundledCalendarRepository {
+  @override
+  Future<CalendarDefinition?> findById(String id) async => null;
 }
