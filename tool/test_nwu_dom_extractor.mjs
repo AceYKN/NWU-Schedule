@@ -153,6 +153,32 @@ assert.ok(network);
 assert.equal(network.meetings[0].room, '3508');
 assert.equal(network.meetings[0].weekText, '2,4,6,8周');
 
+const commaSectionFixture = genericFixture.replace(
+  '<td>5-6节</td>',
+  '<td>1,2,3,4节</td>',
+);
+const commaSection = runExtraction(commaSectionFixture);
+const commaSectionCourse = commaSection.payload.courses.find(
+  (course) => course.name === '计算机网络',
+);
+assert.ok(commaSectionCourse);
+assert.equal(commaSectionCourse.meetings[0].startSection, 1);
+assert.equal(commaSectionCourse.meetings[0].endSection, 4);
+
+const sameCodeDifferentClassFixture = genericFixture.replace(
+  /(<td>星期二<\/td>[\s\S]*?<td>)软件2401(<\/td>\s*<td>CS301)/,
+  '$1软件2402$2',
+);
+const sameCodeDifferentClass = runExtraction(sameCodeDifferentClassFixture);
+const sameCodeCourses = sameCodeDifferentClass.payload.courses.filter(
+  (course) => course.code === 'CS301',
+);
+assert.equal(sameCodeCourses.length, 2);
+assert.deepEqual(
+  sameCodeCourses.map((course) => course.teachingClass).sort(),
+  ['软件2401', '软件2402'],
+);
+
 const rowSpanZeroFixture = `
 <!doctype html>
 <html lang="zh-CN">
