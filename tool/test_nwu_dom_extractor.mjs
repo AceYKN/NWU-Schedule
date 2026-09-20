@@ -432,6 +432,41 @@ assert.equal(
   false,
 );
 
+const sameTeachingClassDifferentMeetingsFixture = `
+<html><body>
+  <div>2026-2027年第1学期某同学的课表</div>
+  <table id="kblist_table">
+    <tr><td>星期</td><td>节次</td><td>课表信息</td></tr>
+    <tr><td id="xq_rowspan_1">星期一</td></tr>
+    <tr>
+      <td id="jc_1-1-2">1-2</td>
+      <td>组合课程★周数：1-16周校区:长安校区上课地点：101教师：教师甲教学班：组合课程-A教学班组成：软件工程202401</td>
+    </tr>
+    <tr>
+      <td id="jc_1-3-4">3-4</td>
+      <td>组合课程★周数：1-16周校区:长安校区上课地点：102教师：教师甲教学班：组合课程-A教学班组成：软件工程202401</td>
+    </tr>
+  </table>
+</body></html>`;
+const sameTeachingClassDifferentMeetings = runExtraction(
+  sameTeachingClassDifferentMeetingsFixture,
+);
+assert.equal(
+  sameTeachingClassDifferentMeetings.payload.issues.length,
+  0,
+);
+assert.equal(sameTeachingClassDifferentMeetings.payload.courses.length, 1);
+assert.equal(
+  sameTeachingClassDifferentMeetings.payload.courses[0].meetings.length,
+  2,
+);
+assert.deepEqual(
+  sameTeachingClassDifferentMeetings.payload.courses[0].meetings.map(
+    (meeting) => [meeting.startSection, meeting.endSection, meeting.room],
+  ),
+  [[1, 2, '101'], [3, 4, '102']],
+);
+
 const realList = runExtraction(realListFixture);
 assert.equal(realList.payload.totalWeeks, 18);
 assert.equal(realList.payload.courses.length, 6);

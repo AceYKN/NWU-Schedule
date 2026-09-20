@@ -59,15 +59,20 @@ class NwuDomExtractor {
     endSection,
     identityHint = '',
   ) => {
+    const normalizedIdentityHint = normalize(identityHint);
+    // A verified NWU list row exposes the teaching-class identity. Use it as
+    // the course-level anchor so one teaching class with several meeting
+    // rules remains one Course. Generic tables use a structural/time fallback
+    // when they do not expose such an anchor.
+    const identity = normalizedIdentityHint
+      ? 'identity|' + normalizedIdentityHint
+      : 'shape|' + [weekday, startSection, endSection].join('|');
     const value = [
-      'nwu-v2',
+      'nwu-v3',
       normalize(name),
-      identityHint,
-      weekday,
-      startSection,
-      endSection,
+      identity,
     ].join('|');
-    return 'nwu-v2|course|' + hashIdentity(value);
+    return 'nwu-v3|course|' + hashIdentity(value);
   };
 
   const issue = (path, message, severity = 'warning', details = null) => {
@@ -458,7 +463,7 @@ class NwuDomExtractor {
         meeting.endSection,
         normalize(meeting.weekText),
       ].join('|')).sort();
-      const fingerprint = 'nwu-v2|course|' + hashIdentity([
+      const fingerprint = 'nwu-v3|course|' + hashIdentity([
         normalize(course.name),
         normalize(course.identityHint || ''),
         ...shapes,
@@ -743,6 +748,10 @@ class NwuDomExtractor {
       headerIndex(headers, ['校区', '校区名称']);
     const roomIndex =
       headerIndex(headers, ['教室', '上课地点', '地点']);
+    const teachingClassIndex =
+      headerIndex(headers, ['教学班', '教学班名称', '教学班号']);
+    const courseCodeIndex =
+      headerIndex(headers, ['课程代码', '课程编号', '课程号']);
     for (let rowIndex = headerEnd + 1; rowIndex < grid.length; rowIndex++) {
       const rowPath = 'tables[' + tableIndex + '].rows[' + rowIndex + ']';
       const cells = grid[rowIndex] || [];
@@ -820,6 +829,10 @@ class NwuDomExtractor {
         break;
       }
       const identityHint = spanStart == null ? 'row-' + rowIndex : 'span-' + spanStart;
+      const columnIdentityHint = [
+        teachingClassIndex >= 0 ? cellAt(teachingClassIndex) : '',
+        courseCodeIndex >= 0 ? cellAt(courseCodeIndex) : '',
+      ].filter((value) => value).join('|');
       const identityDay = spanStart == null
         ? weekday
         : dayNumber((grid[spanStart] || [])[dayIndex] || '') || weekday;
@@ -833,7 +846,7 @@ class NwuDomExtractor {
           identityDay,
           identityRange.startSection,
           identityRange.endSection,
-          identityHint,
+          columnIdentityHint || identityHint,
         ),
         name: name,
         weekday: weekday,
