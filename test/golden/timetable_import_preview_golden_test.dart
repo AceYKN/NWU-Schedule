@@ -22,9 +22,11 @@ void main() {
         'timetable_import_preview_golden_test.dart',
       ),
       // This preview is text-dense. Linux and Windows system fonts differ by
-      // about 1.34% of pixels while preserving layout, colors, and controls.
-      // Keep the tolerance below a meaningful visual regression threshold.
-      precisionTolerance: 0.015,
+      // about 1.75% of pixels after the schedule-detail rows are included,
+      // while preserving layout, colors, and controls. Keep this tolerance
+      // local to the text-heavy preview and below a meaningful regression
+      // threshold.
+      precisionTolerance: 0.02,
     );
     final fixture = jsonDecode(
       File('test/fixtures/zhengfang/timetable_response.json')
