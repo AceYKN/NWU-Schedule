@@ -66,6 +66,25 @@ void main() {
     expect((json['instances'] as List), hasLength(4));
   });
 
+  test('publishes an empty snapshot when there is no class', () {
+    final engine = ScheduleEngine(
+      semesterId: 'semester-1',
+      calendarEngine: CalendarEngine(definition),
+      courses: const [],
+      meetingRules: const [],
+      exceptions: const [],
+    );
+    final snapshot = const WidgetSnapshotBuilder().build(
+      engine: engine,
+      now: DateTime.utc(2026, 9, 6),
+    );
+
+    expect(snapshot.next, isNull);
+    expect(snapshot.today, isEmpty);
+    expect(snapshot.tomorrow, isEmpty);
+    expect(snapshot.instances, isEmpty);
+  });
+
   test('does not duplicate engine decisions in the native payload', () {
     final engine = ScheduleEngine(
       semesterId: 'semester-1',
@@ -84,6 +103,24 @@ void main() {
     expect(first.startSection, 3);
     expect(first.endSection, 4);
     expect(first.teacher, '教师 A');
+  });
+
+  test('keeps the current class in today and advances next past it', () {
+    final engine = ScheduleEngine(
+      semesterId: 'semester-1',
+      calendarEngine: CalendarEngine(definition),
+      courses: [course],
+      meetingRules: [rule],
+      exceptions: const [],
+    );
+    final snapshot = const WidgetSnapshotBuilder().build(
+      engine: engine,
+      now: DateTime.utc(2026, 9, 7, 2, 20),
+    );
+
+    expect(snapshot.today, hasLength(1));
+    expect(snapshot.today.single.date, DateTime(2026, 9, 7));
+    expect(snapshot.next?.date, DateTime(2026, 9, 14));
   });
 
   test('projects MOVE into the rolling widget instances', () {

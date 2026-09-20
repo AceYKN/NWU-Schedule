@@ -5,6 +5,7 @@ import 'package:nwu_schedule/app/bootstrap.dart';
 import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
 import 'package:nwu_schedule/infrastructure/notifications/notification_service.dart';
+import 'package:nwu_schedule/infrastructure/widget/widget_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -34,5 +35,27 @@ void main() {
     );
 
     expect(calls, ['clearNotifications']);
+  });
+
+  test('clears the native widget snapshot when no schedule is available',
+      () async {
+    const channel = MethodChannel('nwu_schedule/widget');
+    final calls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      return null;
+    });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    await rebuildWidgetForCurrentSchedule(
+      service: const WidgetService(),
+      state: null,
+    );
+
+    expect(calls, ['clearSnapshot']);
   });
 }
