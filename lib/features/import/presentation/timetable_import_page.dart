@@ -559,6 +559,28 @@ class _ImportPreview extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text('${timetable.courses.length} 门课程 · $meetingCount 个上课安排'),
+            if (timetable.issues.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                '发现 ${timetable.issues.length} 条可能异常的数据，已保留可识别的课程。',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              for (final issue in timetable.issues.take(3))
+                Text(
+                  '· ${issue.message}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              if (timetable.issues.length > 3)
+                Text(
+                  '还有 ${timetable.issues.length - 3} 条异常…',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+            ],
             if (diff != null) ...[
               const SizedBox(height: 4),
               if (diff!.isNewSemester)
@@ -893,8 +915,14 @@ const _payloadExtractionScript = r'''(() => {
     return { startSection: Math.min(start, end), endSection: Math.max(start, end) };
   };
   const courses = [];
+  const issues = [];
   let maxWeek = 20;
-  for (const table of Array.from(document.querySelectorAll('table'))) {
+  const warn = (path, message) => issues.push({
+    path: path,
+    message: message,
+    severity: 'warning',
+  });
+  for (const [tableIndex, table] of Array.from(document.querySelectorAll('table')).entries()) {
     const rows = Array.from(table.querySelectorAll('tr'));
     if (!rows.length) continue;
     const headers = Array.from(rows[0].querySelectorAll('th,td')).map(text);
@@ -910,12 +938,28 @@ const _payloadExtractionScript = r'''(() => {
     const creditIndex = headerIndex(headers, ['学分']);
     const assessmentIndex = headerIndex(headers, ['考核方式', '考试性质']);
     for (let rowIndex = 1; rowIndex < rows.length; rowIndex++) {
+      const rowPath = 'tables[' + tableIndex + '].rows[' + rowIndex + ']';
       const cells = Array.from(rows[rowIndex].querySelectorAll('td,th')).map(text);
       const name = normalize(cells[nameIndex]);
       const weekday = dayNumber(cells[dayIndex]);
       const range = sectionRange(cells[sectionIndex]);
       const weekText = normalize(cells[weekIndex]);
-      if (!name || !weekday || !range || !weekText) continue;
+      if (!name) {
+        warn(rowPath + '.courseName', '课程名为空，已跳过该行');
+        continue;
+      }
+      if (!weekday) {
+        warn(rowPath + '.weekday', '星期无法识别，已跳过该行');
+        continue;
+      }
+      if (!range) {
+        warn(rowPath + '.sections', '节次无法识别，已跳过该行');
+        continue;
+      }
+      if (!weekText) {
+        warn(rowPath + '.weeks', '周次为空，已跳过该行');
+        continue;
+      }
       for (const match of weekText.matchAll(/\d+/g)) maxWeek = Math.max(maxWeek, Number(match[0]));
       const code = codeIndex >= 0 ? normalize(cells[codeIndex]) || null : null;
       const teachingClass = classIndex >= 0 ? normalize(cells[classIndex]) || null : null;
@@ -943,7 +987,10 @@ const _payloadExtractionScript = r'''(() => {
         room || '',
         weekText,
       ].join('|');
-      if (course.meetings.some((item) => item.sourceMeetingKey === key + '|meeting|' + meetingKey)) continue;
+      if (course.meetings.some((item) => item.sourceMeetingKey === key + '|meeting|' + meetingKey)) {
+        warn(rowPath, '重复的上课安排已忽略');
+        continue;
+      }
       course.meetings.push({
         sourceMeetingKey: key + '|meeting|' + meetingKey,
         weekday: weekday,
@@ -969,6 +1016,7 @@ const _payloadExtractionScript = r'''(() => {
     },
     totalWeeks: totalWeeks,
     courses: courses,
+    issues: issues,
   });
 })()''';
 

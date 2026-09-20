@@ -99,16 +99,20 @@ class RemoteTimetable {
     required this.semester,
     required this.totalWeeks,
     required this.courses,
+    this.issues = const [],
   });
 
   final RemoteSemester semester;
   final int totalWeeks;
   final List<ImportedCourse> courses;
+  final List<ImportIssue> issues;
 
   Map<String, Object?> toJson() => {
         'semester': semester.toJson(),
         'totalWeeks': totalWeeks,
         'courses': courses.map((item) => item.toJson()).toList(),
+        if (issues.isNotEmpty)
+          'issues': issues.map((item) => item.toJson()).toList(),
       };
 }
 
@@ -124,6 +128,36 @@ class ImportIssue {
   final String path;
   final String message;
   final ImportIssueSeverity severity;
+
+  Map<String, Object?> toJson() => {
+        'path': path,
+        'message': message,
+        'severity': severity.name,
+      };
+
+  static ImportIssue? fromJson(Object? value) {
+    if (value is! Map) return null;
+    final path = value['path'];
+    final message = value['message'];
+    final severity = value['severity'];
+    if (path is! String ||
+        path.trim().isEmpty ||
+        message is! String ||
+        message.trim().isEmpty) {
+      return null;
+    }
+    final parsedSeverity = switch (severity) {
+      'error' => ImportIssueSeverity.error,
+      'warning' => ImportIssueSeverity.warning,
+      _ => null,
+    };
+    if (parsedSeverity == null) return null;
+    return ImportIssue(
+      path: path,
+      message: message,
+      severity: parsedSeverity,
+    );
+  }
 
   @override
   String toString() => '$path: $message';
@@ -186,7 +220,16 @@ class TimetableImportParser {
       semester: semester,
       totalWeeks: totalWeeks,
       courses: List.unmodifiable(courses),
+      issues: _parseIssues(json['issues']),
     );
+  }
+
+  List<ImportIssue> _parseIssues(Object? value) {
+    if (value is! List) return const [];
+    return List.unmodifiable([
+      for (final item in value)
+        if (ImportIssue.fromJson(item) case final issue?) issue,
+    ]);
   }
 
   RemoteSemester parseSemester(Map<String, dynamic> json) {
@@ -374,7 +417,7 @@ class TimetableImportParser {
 }
 
 ImportValidationReport validateTimetable(RemoteTimetable timetable) {
-  final issues = <ImportIssue>[];
+  final issues = <ImportIssue>[...timetable.issues];
   final semester = timetable.semester;
   if (!RegExp(r'^\d{4}-\d{4}$').hasMatch(semester.academicYear)) {
     issues.add(const ImportIssue(
