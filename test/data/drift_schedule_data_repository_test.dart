@@ -422,6 +422,143 @@ void main() {
     expect(loaded.meetingRules.single.room, '3508');
   });
 
+  test('preserves CANCEL and MOVE exceptions across meeting reconciliation',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+
+    RemoteTimetable timetable({
+      required String meetingKey,
+      required int startSection,
+      required int endSection,
+      required String teacher,
+      required String room,
+      String weekText = '1-16周',
+    }) {
+      return RemoteTimetable(
+        semester: const RemoteSemester(
+          remoteTermKey: '2026-2027-1',
+          academicYear: '2026-2027',
+          term: 1,
+          label: '2026-2027 第一学期',
+        ),
+        totalWeeks: 16,
+        courses: [
+          ImportedCourse(
+            sourceCourseKey: 'course-identity-regression',
+            name: '软件测试',
+            code: 'CS301',
+            teachingClass: '软件工程2401',
+            credits: 2,
+            assessment: '考查',
+            meetings: [
+              ImportedMeeting(
+                sourceMeetingKey: meetingKey,
+                weekday: 1,
+                startSection: startSection,
+                endSection: endSection,
+                teacher: teacher,
+                campus: '长安校区',
+                room: room,
+                weekMask: WeekMask.parse(weekText, maxWeek: 16),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    await repository.commitImportedTimetable(
+      timetable(
+        meetingKey: 'remote-rule-v1',
+        startSection: 3,
+        endSection: 4,
+        teacher: '教师 A',
+        room: '3406',
+      ),
+    );
+    var loaded = await repository.loadSemester('nwu-2026-2027-1');
+    final course = loaded.courses.single;
+    final originalRule = loaded.meetingRules.single;
+    await repository.saveException(
+      domain.CourseException(
+        id: 'cancel-after-reimport',
+        semesterId: course.semesterId,
+        courseId: course.id,
+        sourceMeetingId: originalRule.id,
+        sourceDate: DateTime(2026, 9, 7),
+        type: domain.CourseExceptionType.cancel,
+      ),
+    );
+    await repository.saveException(
+      domain.CourseException(
+        id: 'move-after-reimport',
+        semesterId: course.semesterId,
+        courseId: course.id,
+        sourceMeetingId: originalRule.id,
+        sourceDate: DateTime(2026, 9, 14),
+        type: domain.CourseExceptionType.move,
+        targetDate: DateTime(2026, 9, 15),
+        targetStartSection: 7,
+        targetEndSection: 8,
+      ),
+    );
+
+    await repository.commitImportedTimetable(
+      timetable(
+        meetingKey: 'remote-rule-v2',
+        startSection: 5,
+        endSection: 6,
+        teacher: '教师 B',
+        room: '3508',
+        // Keep the effective weeks unchanged while changing the remote text;
+        // this exercises reconciliation independently from the WeekMask value.
+        weekText: '1-8周,9-16周',
+      ),
+    );
+
+    loaded = await repository.loadSemester('nwu-2026-2027-1');
+    expect(loaded.meetingRules.single.id, originalRule.id);
+    expect(loaded.meetingRules.single.sourceMeetingKey, 'remote-rule-v2');
+    expect(loaded.meetingRules.single.startSection, 5);
+    expect(loaded.meetingRules.single.endSection, 6);
+    expect(loaded.meetingRules.single.teacher, '教师 B');
+    expect(loaded.meetingRules.single.room, '3508');
+    expect(
+      loaded.exceptions.map((exception) => exception.sourceMeetingId),
+      everyElement(originalRule.id),
+    );
+
+    final calendar = CalendarDefinition(
+      id: 'nwu-2026-2027-1',
+      school: 'NWU',
+      academicYear: '2026-2027',
+      term: 1,
+      semesterStartDate: DateTime(2026, 9, 1),
+      week1StartDate: DateTime(2026, 9, 7),
+      semesterEndDate: DateTime(2026, 10, 4),
+      totalWeeks: 4,
+      revision: 1,
+      dateOverrides: const [],
+    );
+    final snapshot = ScheduleEngine(
+      semesterId: course.semesterId,
+      calendarEngine: CalendarEngine(calendar),
+      courses: loaded.courses,
+      meetingRules: loaded.meetingRules,
+      exceptions: loaded.exceptions,
+    );
+
+    expect(snapshot.getCoursesForDate(DateTime(2026, 9, 7)), isEmpty);
+    expect(snapshot.getCoursesForDate(DateTime(2026, 9, 14)), isEmpty);
+    final moved = snapshot.getCoursesForDate(DateTime(2026, 9, 15));
+    expect(moved, hasLength(1));
+    expect(moved.single.isException, isTrue);
+    expect(moved.single.startSection, 7);
+    expect(moved.single.endSection, 8);
+  });
+
   test('removes stale tombstones when a deleted course key rotates', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
