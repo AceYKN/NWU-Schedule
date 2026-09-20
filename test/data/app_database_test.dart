@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nwu_schedule/core/utils/week_mask.dart';
 import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
 
@@ -107,6 +108,47 @@ void main() {
     expect(snapshot.courses.single.name, '软件测试');
     expect(snapshot.meetingRules.single.weekMask.weeks, [1, 3]);
     await database.close();
+  });
+
+  test('round-trips the 64th teaching-week bit through SQLite', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final created = DateTime(2026, 9, 1);
+    await database.into(database.semesters).insert(
+          SemestersCompanion.insert(
+            id: 'semester-64',
+            academicYear: '2026-2027',
+            term: 1,
+            label: '第 64 周测试',
+            createdAt: created,
+          ),
+        );
+    await database.into(database.courses).insert(
+          CoursesCompanion.insert(
+            id: 'course-64',
+            semesterId: 'semester-64',
+            sourceType: 'manual',
+            name: '第 64 周课程',
+            createdAt: created,
+            updatedAt: created,
+          ),
+        );
+    final mask = WeekMask.fromWeeks([64]);
+    await database.into(database.meetingRules).insert(
+          MeetingRulesCompanion.insert(
+            id: 'rule-64',
+            courseId: 'course-64',
+            weekday: DateTime.monday,
+            startSection: 1,
+            endSection: 2,
+            weekMask: mask.value,
+            rawWeekText: '64 周',
+          ),
+        );
+
+    final snapshot =
+        await DriftScheduleDataRepository(database).loadSemester('semester-64');
+    expect(snapshot.meetingRules.single.weekMask.weeks, [64]);
   });
 
   test('foreign keys prevent orphan course rows', () async {
