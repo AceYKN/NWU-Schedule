@@ -3,7 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nwu_schedule/core/utils/week_mask.dart';
 import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
+import 'package:nwu_schedule/domain/calendar/calendar_definition.dart';
+import 'package:nwu_schedule/domain/calendar/calendar_engine.dart';
+import 'package:nwu_schedule/domain/course/course_exception.dart' as domain;
 import 'package:nwu_schedule/domain/import/timetable_import.dart';
+import 'package:nwu_schedule/domain/schedule/schedule_engine.dart';
+import 'package:nwu_schedule/domain/semester/semester.dart' as domain;
 
 void main() {
   test('exports and restores the local dataset transactionally', () async {
@@ -65,6 +70,72 @@ void main() {
     expect(
       await database.select(database.deletedSourceItems).get(),
       hasLength(1),
+    );
+  });
+
+  test('restores an ADD exception with date-only schedule semantics', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final calendar = CalendarDefinition(
+      id: 'nwu-2026-2027-1',
+      school: 'NWU',
+      academicYear: '2026-2027',
+      term: 1,
+      semesterStartDate: DateTime(2026, 9, 7),
+      week1StartDate: DateTime(2026, 9, 7),
+      semesterEndDate: DateTime(2026, 10, 4),
+      totalWeeks: 4,
+      revision: 1,
+      dateOverrides: const [],
+    );
+    final semester = domain.Semester(
+      id: 'nwu-2026-2027-1',
+      academicYear: '2026-2027',
+      term: domain.SemesterTerm.first,
+      label: '2026-2027 第一学期',
+      calendarId: calendar.id,
+      calendarRevision: calendar.revision,
+      createdAt: DateTime(2026, 9, 1),
+    );
+    final targetDate = DateTime(2026, 9, 8);
+    await repository.saveSemester(semester);
+    await repository.saveException(
+      domain.CourseException(
+        id: 'add-exception-1',
+        semesterId: semester.id,
+        type: domain.CourseExceptionType.add,
+        targetDate: targetDate,
+        targetStartSection: 1,
+        targetEndSection: 2,
+        addedCourseName: '临时加课',
+        roomOverride: '3406',
+      ),
+    );
+
+    final backup = await repository.createBackup();
+    await repository.clearAllData();
+    await repository.restoreBackup(backup);
+
+    final restored = await repository.loadSemester(semester.id);
+    final engine = ScheduleEngine(
+      semesterId: semester.id,
+      calendarEngine: CalendarEngine(calendar),
+      courses: restored.courses,
+      meetingRules: restored.meetingRules,
+      exceptions: restored.exceptions,
+    );
+
+    expect(restored.exceptions.single.targetDate, targetDate);
+    expect(
+      engine.getCoursesForDate(targetDate).map((item) => item.courseName),
+      contains('临时加课'),
+    );
+    expect(
+      engine.getCoursesForDate(
+        targetDate.subtract(const Duration(days: 1)),
+      ),
+      isEmpty,
     );
   });
 }

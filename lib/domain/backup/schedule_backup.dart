@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../../core/time/campus_clock.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/utils/week_mask.dart';
 import '../course/course.dart';
 import '../course/course_exception.dart';
@@ -255,9 +257,13 @@ class ScheduleBackup {
         'semesterId': exception.semesterId,
         'courseId': exception.courseId,
         'sourceMeetingId': exception.sourceMeetingId,
-        'sourceDate': exception.sourceDate?.toUtc().toIso8601String(),
+        'sourceDate': exception.sourceDate == null
+            ? null
+            : dateKey(exception.sourceDate!),
         'type': exception.type.name,
-        'targetDate': exception.targetDate?.toUtc().toIso8601String(),
+        'targetDate': exception.targetDate == null
+            ? null
+            : dateKey(exception.targetDate!),
         'targetStartSection': exception.targetStartSection,
         'targetEndSection': exception.targetEndSection,
         'teacherOverride': exception.teacherOverride,
@@ -332,13 +338,13 @@ class ScheduleBackup {
       semesterId: _requiredString(json, 'semesterId'),
       courseId: _optionalString(json['courseId']),
       sourceMeetingId: _optionalString(json['sourceMeetingId']),
-      sourceDate: _optionalDate(json['sourceDate']),
+      sourceDate: _optionalDomainDate(json['sourceDate']),
       type: _enumValue<CourseExceptionType>(
         json['type'],
         CourseExceptionType.values,
         'type',
       ),
-      targetDate: _optionalDate(json['targetDate']),
+      targetDate: _optionalDomainDate(json['targetDate']),
       targetStartSection: _optionalInt(json['targetStartSection']),
       targetEndSection: _optionalInt(json['targetEndSection']),
       teacherOverride: _optionalString(json['teacherOverride']),
@@ -540,6 +546,25 @@ class ScheduleBackup {
       throw BackupValidationException('日期必须是字符串');
     }
     return DateTime.tryParse(value);
+  }
+
+  static DateTime? _optionalDomainDate(Object? value) {
+    if (value == null) return null;
+    if (value is! String) {
+      throw const BackupValidationException('日期必须是字符串');
+    }
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
+      try {
+        return parseDateOnly(value);
+      } on FormatException {
+        throw BackupValidationException('日期无效：$value');
+      }
+    }
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) {
+      throw BackupValidationException('日期无效：$value');
+    }
+    return dateOnly(CampusClock.toCampusWallTime(parsed));
   }
 
   static T _enumValue<T>(Object? value, List<T> values, String key) {
