@@ -931,4 +931,87 @@ void main() {
     );
     expect(engine.getCoursesForDate(DateTime(2026, 9, 7)), isEmpty);
   });
+
+  test('does not merge a meeting when its structural shape has no overlap',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+
+    RemoteTimetable timetable({
+      required String meetingKey,
+      required int weekday,
+      required int startSection,
+      required int endSection,
+      required WeekMask weekMask,
+    }) =>
+        RemoteTimetable(
+          semester: const RemoteSemester(
+            remoteTermKey: '2026-2027-1',
+            academicYear: '2026-2027',
+            term: 1,
+            label: '2026-2027 第一学期',
+          ),
+          totalWeeks: 20,
+          courses: [
+            ImportedCourse(
+              sourceCourseKey: 'course-structural-identity',
+              name: '软件测试',
+              code: 'CS301',
+              teachingClass: '软件工程2401',
+              credits: 2,
+              assessment: '考查',
+              meetings: [
+                ImportedMeeting(
+                  sourceMeetingKey: meetingKey,
+                  weekday: weekday,
+                  startSection: startSection,
+                  endSection: endSection,
+                  teacher: '同一教师',
+                  campus: '长安校区',
+                  room: '同一教室',
+                  weekMask: weekMask,
+                ),
+              ],
+            ),
+          ],
+        );
+
+    await repository.commitImportedTimetable(
+      timetable(
+        meetingKey: 'old-meeting',
+        weekday: 1,
+        startSection: 1,
+        endSection: 2,
+        weekMask: WeekMask.fromWeeks([1, 2, 3, 4]),
+      ),
+    );
+    final first = await repository.loadSemester('nwu-2026-2027-1');
+    final oldRule = first.meetingRules.single;
+    await repository.saveException(
+      domain.CourseException(
+        id: 'cancel-structural-identity',
+        semesterId: first.semester.id,
+        courseId: first.courses.single.id,
+        sourceMeetingId: oldRule.id,
+        sourceDate: DateTime(2026, 9, 7),
+        type: domain.CourseExceptionType.cancel,
+      ),
+    );
+
+    await repository.commitImportedTimetable(
+      timetable(
+        meetingKey: 'new-meeting',
+        weekday: 5,
+        startSection: 7,
+        endSection: 8,
+        weekMask: WeekMask.fromWeeks([17, 18, 19, 20]),
+      ),
+    );
+
+    final second = await repository.loadSemester('nwu-2026-2027-1');
+    expect(second.meetingRules.single.id, isNot(oldRule.id));
+    expect(second.meetingRules.single.weekday, 5);
+    expect(second.exceptions, isEmpty);
+  });
 }

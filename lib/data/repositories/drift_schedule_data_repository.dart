@@ -1021,6 +1021,17 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
       final sameTeacher = _sameMeetingText(candidate.teacher, meeting.teacher);
       final sameCampus = _sameMeetingText(candidate.campus, meeting.campus);
       final sameRoom = _sameMeetingText(candidate.room, meeting.room);
+      final structuralAnchors = [
+        sameWeekday,
+        sameSections,
+        sameWeeks,
+      ].where((value) => value).length;
+      // Teacher, campus, and room are mutable display properties. They may
+      // help rank a candidate, but must never be the only evidence that two
+      // rows represent the same recurring meeting. If the time/week shape
+      // has no overlap, prefer add/remove over silently moving an exception
+      // to an unrelated rule.
+      if (structuralAnchors == 0) continue;
       final anchors = [
         sameWeekday,
         sameSections,
