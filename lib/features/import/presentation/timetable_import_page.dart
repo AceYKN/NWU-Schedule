@@ -540,7 +540,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
               if (timetable != null)
                 Align(
                   alignment: Alignment.bottomCenter,
-                  child: _ImportPreview(
+                  child: TimetableImportPreviewCard(
                     timetable: timetable,
                     diff: _resolvedDiff,
                     hasConflictItems: _diff?.hasConflicts == true ||
@@ -569,8 +569,9 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   }
 }
 
-class _ImportPreview extends StatelessWidget {
-  const _ImportPreview({
+class TimetableImportPreviewCard extends StatelessWidget {
+  const TimetableImportPreviewCard({
+    super.key,
     required this.timetable,
     required this.diff,
     required this.saving,
