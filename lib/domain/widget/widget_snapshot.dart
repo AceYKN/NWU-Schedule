@@ -89,7 +89,7 @@ class WidgetSnapshotBuilder {
     final today = dateOnly(campusNow);
     final tomorrow = today.add(const Duration(days: 1));
     final instances = <WidgetCourseItem>[];
-    final semesterEnd = engine.calendarEngine.definition.semesterEndDate;
+    final semesterEnd = engine.calendarDefinition.semesterEndDate;
     for (var date = today;
         !date.isAfter(semesterEnd);
         date = date.add(const Duration(days: 1))) {

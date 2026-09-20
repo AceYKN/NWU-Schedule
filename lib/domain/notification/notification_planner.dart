@@ -49,7 +49,7 @@ class NotificationPlanner {
     final firstDate = dateOnly(campusNow);
     final lastDate = dateOnly(
       until == null
-          ? engine.calendarEngine.definition.semesterEndDate
+          ? engine.calendarDefinition.semesterEndDate
           : CampusClock.toCampusWallTime(until),
     );
     if (lastDate.isBefore(firstDate)) return const [];
