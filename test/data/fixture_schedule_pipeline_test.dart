@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nwu_schedule/data/database/app_database.dart' as db;
@@ -14,13 +11,14 @@ import 'package:nwu_schedule/domain/schedule/schedule_engine.dart';
 import 'package:nwu_schedule/domain/widget/widget_snapshot.dart';
 import 'package:nwu_schedule/infrastructure/import/nwu_zhengfang_v9_importer.dart';
 
+import '../support/zhengfang_fixture.dart';
+
 void main() {
   test(
       'runs the sanitized fixture through import, DB, engine, notification, and widget',
       () async {
     final importer = NwuZhengfangV9Importer(
-      readPayload: () async =>
-          _readJson('test/fixtures/zhengfang/timetable_response.json'),
+      readPayload: () async => readZhengfangTimetableFixture(),
     );
     final semester = (await importer.getSemesters()).single;
     final imported = await importer.importSemester(semester);
@@ -36,8 +34,7 @@ void main() {
     expect(loaded.meetingRules, hasLength(2));
     expect(await repository.loadLatestImport(imported.semester.id), isNotNull);
 
-    final changedJson =
-        jsonDecode(jsonEncode(imported.toJson())) as Map<String, dynamic>;
+    final changedJson = cloneJsonObject(imported.toJson());
     final changedCourses = changedJson['courses'] as List<dynamic>;
     final firstCourse = changedCourses.first as Map<String, dynamic>;
     final firstMeeting = (firstCourse['meetings'] as List<dynamic>).single
@@ -109,7 +106,7 @@ void main() {
           semesterId: loaded.semester.id,
           calendarEngine: CalendarEngine(
             CalendarDefinition.fromJson(
-              _readJson('assets/calendars/nwu/source/2026-2027-1.json'),
+              readJsonFixture('assets/calendars/nwu/source/2026-2027-1.json'),
             ),
           ),
           courses: loaded.courses,
@@ -222,8 +219,4 @@ void main() {
       isNot(contains('临时实验课')),
     );
   });
-}
-
-Map<String, dynamic> _readJson(String path) {
-  return jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
 }
