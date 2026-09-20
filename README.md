@@ -31,7 +31,7 @@ flutter build apk --debug
 flutter build apk --release
 ```
 
-`flutter test` 已包含三套主题的 Golden UI 回归。由于不同系统的字体栅格化存在小幅差异，常规 Golden comparator 对 1% 以内的跨平台字体像素差异放行；文字更密集的真实导入预览单独放宽到 1.5%，布局、颜色和明显内容变化仍会失败。
+`flutter test` 已包含三套主题的 Golden UI 回归，覆盖 Home 的 NOW/NEXT/DONE/NO CLASS、真实 Week/Month/课程详情页面以及导入 Diff 预览。由于不同系统的字体栅格化存在小幅差异，常规 Golden comparator 对 1% 以内的跨平台字体像素差异放行；文字更密集的真实页面和导入预览单独放宽到 1.5%，布局、颜色和明显内容变化仍会失败。
 
 Release 构建不会使用 debug keystore。正式发布前请把未提交的
 `android/key.properties.example` 复制为 `android/key.properties`，替换为

@@ -17,7 +17,11 @@ import '../../shared/presentation/course_card.dart';
 import '../../shared/presentation/course_color_resolver.dart';
 
 class SchedulePage extends ConsumerStatefulWidget {
-  const SchedulePage({super.key});
+  const SchedulePage({super.key, this.now});
+
+  /// Optional fixed instant for deterministic UI tests. Production callers
+  /// leave this null and use the device clock.
+  final DateTime? now;
 
   @override
   ConsumerState<SchedulePage> createState() => _SchedulePageState();
@@ -39,10 +43,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           return const Center(child: Text('当前没有可展示的课表'));
         }
         final engine = value.engine;
+        final now = widget.now ?? DateTime.now().toUtc();
         final preferences =
             ref.watch(scheduleDisplayPreferencesProvider).asData?.value ??
                 const ScheduleDisplayPreferences.defaults();
-        final currentWeek = engine.teachingWeekAt(DateTime.now().toUtc()) ?? 1;
+        final currentWeek = engine.teachingWeekAt(now) ?? 1;
         final maxWeek = engine.totalWeeks;
         final week = (selectedWeek ?? currentWeek).clamp(1, maxWeek);
         return Scaffold(
@@ -52,6 +57,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             maxWeek: maxWeek,
             engine: engine,
             preferences: preferences,
+            now: now,
             onWeekChanged: (value) => setState(() => selectedWeek = value),
             onAddCourse: () => context.go('/course/new'),
             onAddException: () => showStandaloneAddException(
@@ -82,6 +88,7 @@ class _WeekContent extends StatefulWidget {
     required this.maxWeek,
     required this.engine,
     required this.preferences,
+    required this.now,
     required this.onWeekChanged,
     required this.onAddCourse,
     required this.onAddException,
@@ -92,6 +99,7 @@ class _WeekContent extends StatefulWidget {
   final int maxWeek;
   final ScheduleEngine engine;
   final ScheduleDisplayPreferences preferences;
+  final DateTime now;
   final ValueChanged<int> onWeekChanged;
   final VoidCallback onAddCourse;
   final VoidCallback onAddException;
@@ -137,6 +145,7 @@ class _WeekContentState extends State<_WeekContent> {
     final viewModel = widget.engine.getWeekViewModel(
       widget.week,
       includeInactive: widget.preferences.showInactiveCourses,
+      now: widget.now,
     );
     final hiddenWeekendEntries = viewModel.activeEntries
         .where((entry) => entry.weekday >= DateTime.saturday)
@@ -213,6 +222,7 @@ class _WeekContentState extends State<_WeekContent> {
               final pageModel = widget.engine.getWeekViewModel(
                 pageWeek,
                 includeInactive: widget.preferences.showInactiveCourses,
+                now: widget.now,
               );
               final showWeekend = widget.preferences.showWeekend ||
                   (pageWeek == widget.week && _showWeekendTemporarily);
@@ -227,7 +237,7 @@ class _WeekContentState extends State<_WeekContent> {
                       visibleDays: visibleDays,
                       viewModel: pageModel,
                       preferences: widget.preferences,
-                      now: CampusClock.now(),
+                      now: CampusClock.toCampusWallTime(widget.now),
                     ),
                     if (pageModel.activeEntries.isEmpty) ...[
                       const SizedBox(height: 24),

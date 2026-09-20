@@ -16,7 +16,11 @@ import '../../../domain/semester/semester.dart';
 import '../../shared/presentation/course_card.dart';
 
 class HomePage extends ConsumerStatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.now});
+
+  /// Optional fixed instant for deterministic UI tests. Production callers
+  /// leave this null and use the device clock.
+  final DateTime? now;
 
   @override
   ConsumerState<HomePage> createState() => _HomePageState();
@@ -73,9 +77,10 @@ class _HomePageState extends ConsumerState<HomePage>
           return _MissingCalendarContent(semester: value.semester);
         }
         final ready = value as ScheduleReady;
+        final now = widget.now ?? DateTime.now().toUtc();
         return _HomeContent(
           engine: ready.engine,
-          state: ready.engine.getStateAt(DateTime.now().toUtc()),
+          state: ready.engine.getStateAt(now),
           calendarUpdated: ready.calendarUpdated,
           onDismissCalendarUpdate: ready.calendarUpdated
               ? () => _dismissCalendarUpdate(ref, ready)

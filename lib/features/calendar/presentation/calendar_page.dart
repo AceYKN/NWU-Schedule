@@ -13,14 +13,28 @@ import '../../../domain/schedule/schedule_engine.dart';
 import '../../shared/presentation/course_card.dart';
 
 class CalendarPage extends ConsumerStatefulWidget {
-  const CalendarPage({super.key});
+  const CalendarPage({super.key, this.now, this.initialMonth});
+
+  /// Optional fixed instant and month for deterministic UI tests. Production
+  /// callers leave both null and use the campus clock.
+  final DateTime? now;
+  final DateTime? initialMonth;
 
   @override
   ConsumerState<CalendarPage> createState() => _CalendarPageState();
 }
 
 class _CalendarPageState extends ConsumerState<CalendarPage> {
-  DateTime month = DateTime(CampusClock.now().year, CampusClock.now().month);
+  late DateTime month;
+
+  @override
+  void initState() {
+    super.initState();
+    final campusNow = CampusClock.toCampusWallTime(
+      widget.now ?? DateTime.now().toUtc(),
+    );
+    month = widget.initialMonth ?? DateTime(campusNow.year, campusNow.month);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +49,9 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
           return const Center(child: Text('当前没有可展示的校历'));
         }
         final engine = value.engine;
+        final campusNow = CampusClock.toCampusWallTime(
+          widget.now ?? DateTime.now().toUtc(),
+        );
         final firstDay = DateTime(month.year, month.month);
         final totalDays = DateTime(month.year, month.month + 1, 0).day;
         final days = List<DateTime>.generate(
@@ -50,6 +67,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
           },
           onMonthChanged: (value) => setState(() => month = value),
           engine: engine,
+          now: campusNow,
         );
       },
     );
@@ -64,6 +82,7 @@ class _MonthContent extends StatelessWidget {
     required this.coursesByDate,
     required this.onMonthChanged,
     required this.engine,
+    required this.now,
   });
 
   final DateTime month;
@@ -72,6 +91,7 @@ class _MonthContent extends StatelessWidget {
   final Map<String, List<EffectiveCourseInstance>> coursesByDate;
   final ValueChanged<DateTime> onMonthChanged;
   final ScheduleEngine engine;
+  final DateTime now;
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +119,7 @@ class _MonthContent extends StatelessWidget {
             IconButton(
               tooltip: '回到本月',
               onPressed: () => onMonthChanged(
-                DateTime(CampusClock.now().year, CampusClock.now().month),
+                DateTime(now.year, now.month),
               ),
               icon: const Icon(Icons.today_outlined),
             ),
@@ -162,6 +182,7 @@ class _MonthContent extends StatelessWidget {
               date: day,
               courses: courses,
               resolved: engine.resolveDate(day),
+              now: now,
             );
           },
         ),
@@ -175,16 +196,18 @@ class _MonthCell extends StatelessWidget {
     required this.date,
     required this.courses,
     required this.resolved,
+    required this.now,
   });
 
   final DateTime date;
   final List<EffectiveCourseInstance> courses;
   final ResolvedCalendarDate resolved;
+  final DateTime now;
 
   @override
   Widget build(BuildContext context) {
     final themeTokens = scheduleThemeTokensOf(context);
-    final isToday = isSameDate(date, CampusClock.now());
+    final isToday = isSameDate(date, now);
     final label = resolved.label;
     final holiday = resolved.override?.type == CalendarOverrideType.holiday;
     final outsideSemester =

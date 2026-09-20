@@ -146,6 +146,7 @@ class ScheduleEngine {
   WeekScheduleViewModel getWeekViewModel(
     int teachingWeek, {
     bool includeInactive = false,
+    DateTime? now,
   }) {
     if (teachingWeek < 1 ||
         teachingWeek > calendarEngine.definition.totalWeeks) {
@@ -159,7 +160,8 @@ class ScheduleEngine {
     final weekStart = calendarEngine.definition.weekStart(teachingWeek);
     final days = <WeekDayColumn>[];
     final entries = <ScheduleGridEntry>[];
-    final now = CampusClock.now();
+    final campusNow =
+        now == null ? CampusClock.now() : CampusClock.toCampusWallTime(now);
     for (var offset = 0; offset < 7; offset++) {
       final date = weekStart.add(Duration(days: offset));
       final resolved = calendarEngine.resolve(date);
@@ -173,7 +175,7 @@ class ScheduleEngine {
             CalendarOverrideType.useScheduleOf => '调',
             null => null,
           },
-          isToday: isSameDate(date, now),
+          isToday: isSameDate(date, campusNow),
         ),
       );
       for (final instance in _getCoursesForDate(date)) {
