@@ -864,3 +864,907 @@ When finished, report:
 8. any remaining release blockers.
 
 Do not report “done” merely because unit tests pass. The task requires both deterministic fixture regression and the narrowly-scoped authorized real-device integration check.
+
+
+---
+
+# 20. CONCRETE IMPLEMENTATION PLAYBOOK — follow this order
+
+The sections above define requirements. This section defines the **default implementation strategy**. Do not spend a full iteration rediscovering the architecture unless real code or real DOM evidence disproves this plan.
+
+## 20.1 Work loop: test-first, narrow commit, full regression
+
+For every phase:
+
+1. add/adjust the smallest test that demonstrates the required behavior;
+2. run that targeted test and confirm it fails for the expected reason;
+3. implement the smallest production change;
+4. rerun the targeted test;
+5. run the adjacent test group;
+6. commit;
+7. after 2–3 narrow commits, run the complete suite.
+
+Recommended commands during development:
+
+```bash
+flutter test test/domain/import_diff_test.dart
+flutter test test/data/drift_schedule_data_repository_test.dart
+flutter test test/domain/schedule_engine_test.dart
+flutter test test/domain/notification_planner_test.dart
+flutter test test/domain/widget_snapshot_test.dart
+flutter test test/widget/timetable_import_preview_test.dart
+flutter test test/golden/timetable_import_preview_golden_test.dart
+flutter test test/golden/actual_schedule_pages_golden_test.dart
+node tool/test_nwu_dom_extractor.mjs
+```
+
+Then periodically:
+
+```bash
+dart format --output=none --set-exit-if-changed .
+flutter analyze
+flutter test
+```
+
+If a phase introduces broad unrelated failures, stop and fix/revert that phase before continuing. Do not stack identity, backup, UI, and Android-native changes into one unresolved working tree.
+
+---
+
+## 20.2 Add one reusable fixture test harness before adding many tests
+
+Create a small test helper, preferably:
+
+`test/support/zhengfang_fixture.dart`
+
+It should provide helpers similar to:
+
+```dart
+Map<String, dynamic> loadNormalizedTimetableFixture();
+RemoteTimetable loadRemoteTimetableFixture();
+RemoteTimetable mutateRemoteTimetable(
+  RemoteTimetable base, {
+  // named transformations used by tests
+});
+Future<ScheduleDataSnapshot> importFixtureInto(
+  DriftScheduleDataRepository repository, {
+  RemoteTimetable? timetable,
+});
+ScheduleEngine buildEngineFromSnapshot(
+  ScheduleDataSnapshot snapshot,
+  CalendarDefinition calendar,
+);
+```
+
+Do not create a huge fake framework. The goal is to stop every test from manually recreating the same semester/courses/rules.
+
+Use `test/fixtures/zhengfang/timetable_response.json` as the Dart-side normalized fixture.
+
+For the HTML side, keep `tool/test_nwu_dom_extractor.mjs` as the JavaScript/DOM boundary. Add a canonical semantic assertion so:
+
+`nwu_kblist_fixture.html -> extractionScript -> normalized payload`
+
+matches the expected semantic content in `timetable_response.json` for fields that belong to the product contract.
+
+Do not compare volatile diagnostic ordering or raw HTML.
+
+The testing architecture should therefore be:
+
+```text
+HTML fixture --Node/jsdom--> extracted normalized JSON
+                               |
+                               v
+                    timetable_response.json
+                               |
+                               v
+Dart Parser -> ImportDiff -> Drift -> ScheduleEngine -> UI/notification/widget
+```
+
+This makes a DOM parser change visible before it contaminates downstream tests.
+
+---
+
+## 20.3 Course identity implementation: exact code strategy
+
+### A. First inspect real DOM identity
+
+Before replacing the current key algorithm, perform the authorized read-only DOM inspection on the personal timetable page.
+
+Add a **temporary local-only** inspection snippet/tool if needed. It may inspect the course information cell and its nearest ancestors for:
+
+- `data-*` attributes;
+- `id`;
+- `href`;
+- `onclick`;
+- hidden inputs;
+- stable opaque JS parameters.
+
+Do not commit the captured authenticated output.
+
+The final committed fixture may contain invented opaque IDs with the same **shape**, for example:
+
+```html
+<td data-offering-id="fixture-offering-a">...</td>
+```
+
+only if the real page actually exposes an equivalent structural attribute.
+
+### B. Prefer a remote opaque identity
+
+If a stable offering/course ID exists, update `lib/infrastructure/import/nwu_dom_extractor.dart` so the final key is versioned and semester-scoped.
+
+Recommended format:
+
+```text
+nwu-zf-v2|<academicYear>|<term>|course|<opaqueOfferingId>
+```
+
+If a stable meeting ID exists:
+
+```text
+nwu-zf-v2|<academicYear>|<term>|course|<opaqueOfferingId>|meeting|<opaqueMeetingId>
+```
+
+If the course has an opaque ID but a meeting does not, use:
+
+```text
+<courseKey>|meeting|<weekday>|<startSection>|<endSection>|<normalizedWeekMask>
+```
+
+The meeting key is allowed to rotate when recurrence changes because repository reconciliation already has a structural rematcher. The **course key** is the critical stable anchor.
+
+Do not put teacher, room, campus, code, teaching class, credits, or assessment in the stable course key.
+
+### C. If there is NO stable remote course ID
+
+Do not replace the current key with `course name only`.
+
+The sanitized fixture already demonstrates why this is unsafe: multiple rows may have the same visible course name while representing distinct offerings/meeting groups.
+
+Implement this conservative fallback:
+
+1. parse each course row into an intermediate raw meeting record;
+2. compute a normalized course name;
+3. only auto-group multiple rows into one course when the page structure provides a non-obsolete structural grouping signal;
+4. if two or more same-name groups cannot be distinguished safely, keep them separate rather than merging them;
+5. let ImportDiff show add/remove when identity is genuinely ambiguous.
+
+A wrong split is inconvenient; a wrong merge corrupts a user's schedule and local exceptions. Prefer false-negative matching over false-positive merging.
+
+If this fallback prevents reliable grouping of a real multi-meeting course, record that as a release blocker in the completion report instead of inventing a hidden dependency on teaching class/course code.
+
+---
+
+## 20.4 Replace metadata matching in ImportDiffEngine
+
+Current `ImportDiffEngine` contains:
+
+- `_uniqueLocalMetadataMatch`
+- `_uniquePreviousMetadataMatch`
+- `_sameCourseMetadata`
+
+which match using course code + teaching class.
+
+Delete/replace these after the new identity strategy is protected by tests.
+
+Recommended new pure helper:
+
+`lib/domain/import/import_identity.dart`
+
+Suggested API:
+
+```dart
+enum CourseIdentityMatchKind { exactKey, structural, ambiguous, none }
+
+class CourseIdentityMatch<T> {
+  const CourseIdentityMatch(this.kind, this.value);
+  final CourseIdentityMatchKind kind;
+  final T? value;
+}
+
+class ImportCourseMatcher {
+  const ImportCourseMatcher();
+
+  CourseIdentityMatch<Course> matchLocal({
+    required ImportedCourse remote,
+    required Iterable<Course> candidates,
+    required Map<String, List<MeetingRule>> localRules,
+  });
+
+  CourseIdentityMatch<ImportedCourse> matchPrevious({
+    required ImportedCourse remote,
+    required Iterable<ImportedCourse> candidates,
+  });
+}
+```
+
+The helper must be Flutter-independent and easy to unit test.
+
+### Matching order
+
+Use this order:
+
+1. exact `sourceCourseKey`;
+2. unique stable remote identity alias if a version migration is explicitly supported;
+3. unique structural match;
+4. ambiguous/none -> do not auto-reuse local course ID.
+
+### Structural hard gate
+
+A structural candidate should normally require normalized course-name equality first.
+
+Normalize with:
+
+- trim;
+- collapse repeated whitespace;
+- normalize common full-width/half-width whitespace/punctuation only where safe;
+- do not remove meaningful Chinese/English alphanumeric content.
+
+Do **not** use fuzzy edit-distance matching for course names.
+
+### Structural meeting score
+
+Reuse the philosophy already implemented by `_bestMeetingMatch`: mutable display fields may be tie-breakers but not sole evidence.
+
+For a pair of meeting rules, a reasonable score is:
+
+- same weekday: +8
+- exact same start/end sections: +6
+- one boundary matches / ranges overlap: +2
+- exact week mask: +5
+- overlapping week masks: +1
+- same teacher: +1
+- same campus: +1
+- same room: +1
+
+Teacher/campus/room must not rescue a candidate with zero schedule-structure overlap.
+
+For course-level matching:
+
+- compute the best unique meeting pairing between remote and candidate;
+- prefer candidates with more structurally matched meetings;
+- then compare total score;
+- require a unique winner;
+- ties are ambiguous -> no automatic merge.
+
+Most courses contain very few meeting rules, so a simple deterministic greedy or small maximum-score pairing is acceptable. Keep it readable and tested; do not add an optimization library.
+
+### Important: ambiguity behavior
+
+Do not choose “the first” candidate.
+
+If two same-name courses score equally:
+
+```dart
+return const CourseIdentityMatch(CourseIdentityMatchKind.ambiguous, null);
+```
+
+Then ImportDiff should leave them as visible add/remove operations instead of silently corrupting identity.
+
+---
+
+## 20.5 Preserve database IDs when source keys rotate
+
+When `ImportDiffEngine` identifies a unique structural match:
+
+- `change.localCourse` must point to the existing course;
+- `sourceCourseKey` on the database course may adopt the new remote key;
+- the existing database `Course.id` must remain unchanged;
+- local note/color/hidden/deleted state must remain attached to that `Course.id`.
+
+This is already close to current behavior in `_courseFromRemote`; preserve it.
+
+Do not derive a new DB `Course.id` when a matched existing course is available.
+
+For a genuinely new course only, continue generating an imported ID from semester + source key.
+
+Add a regression assertion:
+
+```dart
+expect(after.courses.single.id, before.courses.single.id);
+expect(after.courses.single.sourceCourseKey, newRemoteKey);
+```
+
+---
+
+## 20.6 Keep and harden meeting-rule reconciliation
+
+Current `DriftScheduleDataRepository._rulesFromRemote` already performs:
+
+1. exact `sourceMeetingKey` match;
+2. fallback `_bestMeetingMatch`;
+3. existing ID reuse;
+4. exception ID remap;
+5. exception cleanup for removed rules.
+
+Do not replace this with “delete every rule and generate new IDs”.
+
+Refactor only if necessary.
+
+Specific tests to add around this existing logic:
+
+- teacher-only change keeps `MeetingRule.id`;
+- room-only change keeps `MeetingRule.id`;
+- week-mask change with same weekday/sections keeps ID;
+- section shift with weekday/week overlap keeps ID when uniquely identifiable;
+- two equally-scored candidate rules return no best match;
+- removed meeting deletes only exceptions that reference that removed rule;
+- remapped meeting updates `CourseException.sourceMeetingId`;
+- standalone ADD exception is not deleted because it has no source meeting.
+
+If you extract `_bestMeetingMatch`, put the pure logic in the domain/import layer and keep the SQL remap operations in the repository.
+
+---
+
+## 20.7 Remove the four obsolete metadata fields without breaking schema v2
+
+Make these concrete edits.
+
+### `lib/domain/course/course.dart`
+
+Remove:
+
+- constructor args `code`, `teachingClass`, `credits`, `assessment`;
+- fields;
+- credits validation;
+- corresponding `copyWith` parameters/branches.
+
+Do not change note/color/hidden/deleted behavior.
+
+### `lib/domain/import/timetable_import.dart`
+
+Remove the same four fields from `ImportedCourse`, `toJson`, parser construction and validation.
+
+Parser must tolerate legacy JSON keys by simply ignoring unknown keys.
+
+### `lib/domain/import/import_diff.dart`
+
+After identity matcher is in place:
+
+- delete `_uniqueLocalMetadataMatch`;
+- delete `_uniquePreviousMetadataMatch`;
+- delete `_sameCourseMetadata`;
+- `_fields()` should compare only active product fields:
+  - `name`
+  - `meetings`
+- keep three-way merge behavior for those fields.
+
+### `lib/features/import/presentation/timetable_import_page.dart`
+
+Change `_fieldLabel` to only expose active conflict fields. Remove labels for:
+
+- code;
+- teachingClass;
+- credits;
+- assessment.
+
+### `lib/features/schedule/presentation/course_detail_page.dart`
+
+Remove all rendering of obsolete metadata.
+
+### `lib/data/repositories/drift_schedule_data_repository.dart`
+
+**Keep physical DB columns for schema-v2 compatibility**, but disconnect them from domain.
+
+On DB -> domain load:
+
+```dart
+domain.Course(
+  id: row.id,
+  ...
+  name: row.name,
+  note: row.note,
+  ...
+)
+```
+
+Do not pass row.code etc.
+
+On domain -> DB writes, explicitly clear old values for newly saved/updated courses:
+
+```dart
+code: const Value(null),
+teachingClass: const Value(null),
+credits: const Value(null),
+assessment: const Value(null),
+```
+
+Do the same in:
+
+- `saveCourse`;
+- `_upsertCourse`;
+- backup restore insert.
+
+This prevents stale old metadata from silently surviving active edits.
+
+### `lib/domain/backup/schedule_backup.dart`
+
+New backup serialization must omit the four keys.
+
+Legacy decoding must simply not read them.
+
+That means `_courseFromJson` constructs `Course` from the remaining fields and silently ignores old extra JSON keys.
+
+Keep `schemaVersion = 1` if the format remains backward compatible. Do not bump the backup schema merely because optional obsolete keys disappeared.
+
+Add tests:
+
+- old JSON with all four keys decodes;
+- re-encoding that backup omits all four keys;
+- resulting Course/domain behavior is identical otherwise.
+
+---
+
+## 20.8 DOM extractor: remove product metadata but KEEP labels as delimiters where required
+
+Do not make the parser worse while removing fields.
+
+Current verified-list parser uses labels such as `教学班`, `考核方式`, `学分`, `课程代码` not only to store values, but also to determine where teacher/room/etc. text ends.
+
+Therefore:
+
+- it is acceptable to recognize those strings as **structural delimiters**;
+- it is not acceptable to emit/store/diff/display them as product data;
+- it is not acceptable to use their extracted values as identity.
+
+Concrete change:
+
+1. simplify `parseListCourseInfo` output to:
+   - identity signal;
+   - name;
+   - weekday;
+   - start/end section;
+   - week text;
+   - teacher;
+   - campus;
+   - room.
+2. keep obsolete label markers only in the delimiter list needed to stop text slicing.
+3. remove:
+   - `courseCodeText`;
+   - `teachingClassText`;
+   - parsed `credits`;
+   - `assessmentText`;
+   - related warning issues;
+   - emission in `addMeeting`.
+4. generic grid parser should stop reading optional code/class/credit/assessment columns.
+5. update fixture expectations accordingly.
+
+Also increment `NwuZhengfangV9Importer.adapterVersion` when normalized payload/identity semantics change, e.g. from v4 to the next version. Do not reuse an adapter version for a materially different identity contract.
+
+---
+
+## 20.9 Exact fixture mutation strategy for repeat-import tests
+
+Do not create many almost-identical fixture files.
+
+Load one base `RemoteTimetable` and produce variants in test code.
+
+Recommended helper operations:
+
+```dart
+withTeacher(courseKey, meetingKey, '新教师')
+withRoom(courseKey, meetingKey, '新教室')
+withCampus(courseKey, meetingKey, '太白校区')
+withWeekMask(courseKey, meetingKey, WeekMask.fromWeeks([...]))
+moveMeeting(courseKey, meetingKey, weekday: 3, start: 5, end: 6)
+removeMeeting(courseKey, meetingKey)
+addMeeting(courseKey, ...)
+removeCourse(courseKey)
+addCourse(...)
+rotateCourseKey(oldKey, newKey)
+rotateMeetingKey(oldKey, newKey)
+```
+
+Each transformation should return a new immutable `RemoteTimetable` / `ImportedCourse` structure rather than mutate shared state between tests.
+
+For every transformation:
+
+1. import base;
+2. capture local course/rule IDs;
+3. preview transformed remote;
+4. assert exact diff kind/fields;
+5. commit;
+6. reload DB;
+7. assert which IDs were preserved/remapped;
+8. build ScheduleEngine and assert effective schedule.
+
+This is more valuable than testing ImportDiff alone.
+
+---
+
+## 20.10 Build one fixture-backed integration test covering the full schedule pipeline
+
+Add a test such as:
+
+`test/integration/fixture_schedule_pipeline_test.dart`
+
+Use in-memory Drift DB.
+
+Scenario:
+
+1. load `timetable_response.json`;
+2. parse to `RemoteTimetable`;
+3. commit import;
+4. load semester snapshot;
+5. load bundled/test CalendarDefinition;
+6. build `ScheduleEngine`;
+7. assert representative Monday/Tuesday/Thursday occurrences;
+8. assert Home state at deterministic instants;
+9. create MOVE;
+10. rebuild engine;
+11. assert source removed and target added;
+12. run `NotificationPlanner`;
+13. run `WidgetSnapshotBuilder`;
+14. assert both reflect the same moved occurrence;
+15. replace MOVE with CANCEL and repeat;
+16. add ADD and repeat;
+17. backup;
+18. clear;
+19. restore;
+20. assert effective schedule equals pre-clear state.
+
+Do not test Flutter pixels in this test. It is the domain/data integration spine.
+
+---
+
+## 20.11 UI tests should consume the same repository state
+
+For `actual_schedule_pages_golden_test.dart` and widget tests, add a helper that seeds the test repository from the normalized fixture rather than hand-building unrelated courses everywhere.
+
+Keep small isolated manual models only where a UI state cannot be naturally produced from the fixture.
+
+For each important effective state, use deterministic `now`:
+
+- before first class -> NEXT;
+- during class -> NOW;
+- after final class -> finished;
+- empty day -> no class;
+- moved occurrence;
+- cancelled occurrence;
+- added occurrence.
+
+The UI test should not recalculate expected weekdays/weeks itself. Assert on rendered output resulting from provider/ScheduleEngine state.
+
+---
+
+## 20.12 Notification implementation/testing strategy
+
+Do not add scheduling logic to Android native code.
+
+Expected architecture remains:
+
+```text
+ScheduleEngine
+   -> NotificationPlanner
+      -> planned local notifications
+         -> platform scheduling service
+```
+
+Expand `test/domain/notification_planner_test.dart` using the fixture-backed engine.
+
+For each lead time `[5, 10, 15, 20, 30, 60]`:
+
+```dart
+expect(item.fireAtUtc, item.classStartUtc.subtract(Duration(minutes: lead)));
+```
+
+For MOVE:
+
+- no source-date payload;
+- one target-date payload;
+- fire time derived from target section time.
+
+For CANCEL:
+
+- no plan item for the cancelled occurrence.
+
+For ADD:
+
+- a plan item exists even if the date is otherwise a holiday, matching ScheduleEngine semantics.
+
+At coordinator/service level verify refresh is replacement-oriented:
+
+1. compute new complete plan;
+2. cancel/replace stale scheduled entries;
+3. schedule desired entries;
+4. repeated refresh with identical input does not create duplicates.
+
+On device, test permission denied/granted separately from planner correctness.
+
+---
+
+## 20.13 Widget implementation/testing strategy
+
+Expected architecture remains:
+
+```text
+ScheduleEngine
+   -> WidgetSnapshotBuilder
+      -> serialized snapshot
+         -> Kotlin RemoteViews renderer
+```
+
+Kotlin must not parse week masks or implement calendar overrides.
+
+Extend `widget_snapshot_test.dart` with fixture-backed:
+
+- NOW;
+- NEXT;
+- MOVE;
+- CANCEL;
+- ADD;
+- tomorrow;
+- empty day.
+
+For multi-widget Android testing, preserve the recent PendingIntent namespace fix. Verify request codes/intents remain widget-instance-specific.
+
+When changing Kotlin:
+
+- test one Small + one Medium + one Large widget simultaneously;
+- clicking each should open the app correctly;
+- refreshing one must not hijack another's PendingIntent.
+
+---
+
+## 20.14 MOVE / CANCEL / ADD implementation rules
+
+Do not mutate the base imported MeetingRule to implement a one-day change.
+
+- MOVE = suppress source occurrence + synthesize target occurrence.
+- CANCEL = suppress source occurrence.
+- ADD = synthesize target occurrence.
+- base MeetingRule remains the recurrence template.
+
+Continue using `CourseException`.
+
+When an imported meeting rule is reconciled after a new remote import:
+
+- preserve exception references if the meeting is uniquely matched;
+- remap `sourceMeetingId` to retained rule ID if needed;
+- only delete an exception when its referenced meeting truly disappeared and no safe mapping exists.
+
+Add an invariant test:
+
+> changing teacher/room/week text on an imported recurring meeting must not silently delete the user's MOVE/CANCEL attached to that logical meeting.
+
+---
+
+## 20.15 Manual multi-meeting implementation strategy
+
+Do not create duplicate Course rows for Monday + Wednesday.
+
+One `Course` owns N `MeetingRule` rows.
+
+Continue using `MeetingDraft` as presentation state.
+
+Save algorithm:
+
+1. validate course name;
+2. require at least one valid meeting;
+3. validate each draft independently;
+4. convert each start/end week + pattern to `WeekMask`;
+5. preserve `sourceMeetingKey` when editing an imported existing meeting;
+6. call one atomic `saveCourse(course, rules, removeExceptionIds: ...)`.
+
+For irregular imported masks:
+
+- opening edit must not normalize/lose the mask;
+- display it as irregular/readable;
+- only when the user explicitly changes start/end/pattern should a new regular mask replace it.
+
+Add widget tests for two meeting cards and save/reopen.
+
+---
+
+## 20.16 Calendar selection strategy
+
+Do not let each screen infer teaching week independently.
+
+All date-based pages must receive/use `ScheduleEngine`.
+
+For imported semester:
+
+1. derive semester id from academicYear + term;
+2. resolve bundled CalendarDefinition by `calendarId`;
+3. if found, update/persist revision;
+4. create ScheduleEngine;
+5. if missing, return `ScheduleCalendarMissing` and do not fake dates from device weekdays.
+
+Test the exact imported fixture semester against the intended bundled calendar ID.
+
+For calendar revision update:
+
+- keep course/rules/exceptions untouched;
+- rebuild engine;
+- refresh notification plan;
+- refresh widget snapshot;
+- display one non-blocking update notice.
+
+---
+
+## 20.17 Backup compatibility implementation details
+
+Before restore, decode + validate the entire backup **before** clearing existing tables.
+
+Current transaction behavior must remain atomic.
+
+Add a test that deliberately introduces an invalid reference late in the backup and assert:
+
+```dart
+expect(restore, throwsA(...));
+expect(await repository.loadSemester(existingId), stillExists);
+```
+
+For obsolete course metadata:
+
+- decoder ignores it;
+- writer omits it;
+- no schema bump required.
+
+For imported snapshots from older adapters:
+
+- keep them readable if current parser accepts the normalized JSON;
+- if a legacy snapshot contains ignored metadata keys, parser ignores them;
+- do not rewrite historical snapshot JSON in place during ordinary app startup.
+
+---
+
+## 20.18 Real-device NWU test procedure
+
+Use the user's separately supplied authorized test credentials only at runtime.
+
+Execution procedure:
+
+1. install/debug the current app build on the connected Android device;
+2. start from a cleared app import session;
+3. open Import;
+4. authenticate;
+5. navigate only to **选课 → 个人课表查询**;
+6. confirm URL/context allowlist;
+7. trigger timetable read;
+8. before save, manually compare several visible rows against Preview:
+   - a normal all-week course;
+   - an odd/even course if present;
+   - a course with multiple meetings if present;
+   - teacher;
+   - room;
+   - weekday;
+   - sections;
+   - week range;
+9. save;
+10. inspect Home/Week/Month/Course Detail;
+11. close/leave import;
+12. re-enter import and verify authentication state was cleared;
+13. do not navigate elsewhere.
+
+For DOM identity inspection, do it during step 6–7 only and collect the minimum structural evidence needed.
+
+If a real-page incompatibility appears:
+
+- reproduce its structure with synthetic values in `nwu_kblist_fixture.html`;
+- make the fixture fail first;
+- fix parser;
+- rerun deterministic tests;
+- then rerun the narrow real-device path.
+
+Do not “fix on the live page” without a regression fixture.
+
+---
+
+## 20.19 Concrete stop conditions / rollback rules
+
+Stop the current phase and do not continue stacking changes if any of these happen:
+
+- same-name courses are merged unexpectedly;
+- a repeated no-op import produces duplicate Course rows;
+- a teacher/room-only remote update changes Course.id;
+- a meeting-only update loses MOVE/CANCEL exceptions;
+- old backup cannot be restored;
+- malformed verified `#kblist_table` begins silently importing partial data;
+- WebView navigation restrictions need to be loosened to make extraction work;
+- full CI becomes red for unrelated modules.
+
+Rollback the smallest offending commit, add a reproducing test, then reimplement.
+
+If no safe course identity can be obtained from the real DOM and synthetic fallback cannot distinguish repeated same-name offerings, **do not use obsolete metadata as a hidden dependency**. Preserve data conservatively and report the identity limitation as a blocker.
+
+---
+
+## 20.20 File-by-file expected touch list
+
+The implementation will likely touch these files. Use this as a checklist, not as permission to rewrite them all.
+
+### Identity/import
+
+- `lib/infrastructure/import/nwu_dom_extractor.dart`
+- `lib/infrastructure/import/nwu_zhengfang_v9_importer.dart`
+- `lib/domain/import/timetable_import.dart`
+- `lib/domain/import/import_diff.dart`
+- new `lib/domain/import/import_identity.dart` if the matcher is extracted
+- `lib/data/repositories/drift_schedule_data_repository.dart`
+
+### Domain/product metadata removal
+
+- `lib/domain/course/course.dart`
+- `lib/features/schedule/presentation/course_detail_page.dart`
+- `lib/features/import/presentation/timetable_import_page.dart`
+- any remaining UI found by repository search.
+
+### Persistence/backup
+
+- `lib/domain/backup/schedule_backup.dart`
+- repository mappings above
+- DB schema file only if needed for generated API compatibility; do not physically drop v2 columns in this task.
+
+### Regression tests
+
+- `tool/test_nwu_dom_extractor.mjs`
+- `test/domain/import_diff_test.dart`
+- `test/data/drift_schedule_data_repository_test.dart`
+- `test/domain/schedule_engine_test.dart`
+- `test/domain/notification_planner_test.dart`
+- `test/domain/widget_snapshot_test.dart`
+- `test/widget/timetable_import_preview_test.dart`
+- `test/golden/timetable_import_preview_golden_test.dart`
+- `test/golden/actual_schedule_pages_golden_test.dart`
+- new `test/support/zhengfang_fixture.dart`
+- new `test/integration/fixture_schedule_pipeline_test.dart` if useful.
+
+### Documentation
+
+- `SPEC.md`
+- `docs/manual-integration.md`
+- README only where the behavior summary changed.
+
+---
+
+## 20.21 Search commands before declaring obsolete metadata removed
+
+Run repository-wide searches and inspect every hit:
+
+```bash
+git grep -n "teachingClass"
+git grep -n "credits"
+git grep -n "assessment"
+git grep -n "课程代码"
+git grep -n "教学班"
+git grep -n "学分"
+git grep -n "考核方式"
+```
+
+Expected remaining matches are allowed only when they are:
+
+- legacy DB column definitions/generated Drift code;
+- test input proving old-backup compatibility;
+- DOM delimiter recognition that does not emit/store/use the value;
+- historical documentation explicitly marked legacy, if intentionally retained.
+
+Any active domain/UI/import-diff match must be justified or removed.
+
+---
+
+## 20.22 Definition of “implemented”, not just “described”
+
+For each checklist item, Codex must leave behind at least one of:
+
+- production code change;
+- automated regression test;
+- documented real-device verification result.
+
+A comment/TODO stating what should happen is not completion.
+
+The final report must include a table:
+
+```text
+Requirement | Implementation file/function | Test | Result
+```
+
+Examples:
+
+```text
+course key rotation | ImportCourseMatcher + ImportDiffEngine.build | import_diff_test | PASS
+MOVE notification   | ScheduleEngine -> NotificationPlanner         | fixture pipeline | PASS
+legacy backup       | ScheduleBackup._courseFromJson                | backup test      | PASS
+real NWU DOM        | NwuDomExtractor verified-list adapter         | device + fixture | PASS
+```
+
+If an item cannot be verified, mark it BLOCKED with the exact reason rather than silently omitting it.
