@@ -1768,3 +1768,407 @@ real NWU DOM        | NwuDomExtractor verified-list adapter         | device + f
 ```
 
 If an item cannot be verified, mark it BLOCKED with the exact reason rather than silently omitting it.
+
+
+---
+
+# 21. PHASED EXECUTION PLAN — exact order of work
+
+This section is the default execution sequence. Follow it unless real repository state proves one phase must be reordered.
+
+## Phase 0 — Synchronize and freeze scope
+
+### Input
+Current local branch/worktree.
+
+### Actions
+1. `git status`.
+2. Preserve any uncommitted user/agent work; do not discard it.
+3. `git fetch origin`.
+4. Rebase or merge onto current `origin/main` according to the active branch strategy.
+5. Read:
+   - `CODEX_TASK.md`
+   - `SPEC.md`
+   - `docs/manual-integration.md`
+6. Record current HEAD.
+7. Run the full baseline suite.
+8. If baseline is already red, fix only baseline failures before feature/refactor work.
+
+### Output
+A clean known baseline and a short local note of failing/passing commands.
+
+### Gate
+Do not start Phase 1 until failures are understood.
+
+---
+
+## Phase 1 — Protect current behavior with fixture tests
+
+### Goal
+Create enough deterministic coverage that identity/refactor work cannot silently break the importer.
+
+### Files
+- `tool/test_nwu_dom_extractor.mjs`
+- `test/fixtures/zhengfang/*`
+- new `test/support/zhengfang_fixture.dart`
+- `test/domain/timetable_import_test.dart`
+- `test/domain/import_diff_test.dart`
+- `test/data/drift_schedule_data_repository_test.dart`
+
+### Actions
+1. Load current sanitized DOM fixture.
+2. Execute extractor.
+3. Assert normalized semantic result:
+   - semester;
+   - totalWeeks;
+   - course count;
+   - course names;
+   - meeting count;
+   - weekday/section/week masks;
+   - teacher/campus/room.
+4. Add no-op repeated-import test.
+5. Add DB ID preservation assertions.
+6. Add two same-name-course cases.
+7. Add malformed verified-list fail-closed cases.
+
+### Implementation rule
+Do not modify identity algorithm yet except to expose pure functions needed for testing.
+
+### Gate
+Phase passes only if a future identity bug would be caught by tests.
+
+---
+
+## Phase 2 — Inspect real NWU DOM identity, read-only
+
+### Goal
+Answer one question: **Does the real personal-timetable DOM expose a stable opaque course/offering ID or meeting ID?**
+
+### Actions
+1. Run the app on the authorized device/emulator.
+2. Login with the separately supplied authorized test credentials.
+3. Navigate only:
+   `教务系统 → 选课 → 个人课表查询`.
+4. Inspect only the timetable nodes and nearest structural ancestors.
+5. Check:
+   - element IDs;
+   - data attributes;
+   - hidden values;
+   - links;
+   - onclick arguments;
+   - stable JS parameters.
+6. Compare at least two rows from the same logical course and two rows from different courses.
+7. Determine whether a candidate identifier:
+   - stays the same for meetings belonging to the same course;
+   - differs for distinct same-name offerings;
+   - appears independent of display metadata.
+8. Do not commit live values. Convert any needed shape into synthetic fixture attributes.
+
+### Decision
+- If stable opaque course ID exists → use Strategy A.
+- If only stable meeting IDs exist → use Strategy B.
+- If neither exists → use Strategy C.
+
+### Strategy A
+Course key = remote opaque course/offering ID.
+Meeting key = remote meeting ID if present, otherwise structural meeting signature.
+
+### Strategy B
+Group remote meetings conservatively using page structure; derive course identity from stable group evidence. Meeting identity uses remote meeting ID.
+
+### Strategy C
+Use conservative structural fallback. Never use obsolete fields secretly. Ambiguous same-name courses remain separate/add-remove.
+
+### Gate
+Write the chosen strategy into a code comment/doc and add a sanitized fixture reproducing the structural evidence before Phase 3.
+
+---
+
+## Phase 3 — Implement the new identity layer
+
+### Goal
+Make identity independent of course code / teaching class / credits / assessment.
+
+### Files
+- new `lib/domain/import/import_identity.dart`
+- `lib/infrastructure/import/nwu_dom_extractor.dart`
+- `lib/domain/import/import_diff.dart`
+- `lib/data/repositories/drift_schedule_data_repository.dart`
+- identity tests.
+
+### Actions
+1. Introduce pure normalization helpers.
+2. Introduce `ImportCourseMatcher`.
+3. Implement exact-key matching first.
+4. Implement structural fallback with unique-winner requirement.
+5. Replace metadata matcher calls.
+6. Preserve existing `Course.id` when a match is found.
+7. Update `sourceCourseKey` to the new remote key if key rotation occurs.
+8. Preserve local note/color/hidden/deleted.
+9. Preserve/remap MeetingRule IDs using existing reconciliation.
+10. Preserve/remap CourseException references.
+
+### Required tests
+- exact-key no-op;
+- teacher-only change;
+- room-only change;
+- campus-only change;
+- week-mask change;
+- section change;
+- meeting add/remove;
+- sourceCourseKey rotation;
+- same-name ambiguity;
+- tombstone restoration;
+- MOVE/CANCEL survives remote update.
+
+### Gate
+No identity test may use code/teachingClass/credits/assessment.
+
+---
+
+## Phase 4 — Remove obsolete metadata from active product model
+
+### Goal
+Delete those fields from active behavior without breaking old DB/backups.
+
+### Files
+- `course.dart`
+- `timetable_import.dart`
+- `import_diff.dart`
+- repository mappings;
+- backup;
+- import/course-detail UI;
+- tests/docs.
+
+### Actions
+1. Remove fields from domain constructors/classes.
+2. Fix compile errors systematically.
+3. In DB reads, ignore legacy columns.
+4. In DB writes, clear legacy columns to null.
+5. In backup writer, omit legacy keys.
+6. In backup reader, tolerate but ignore legacy keys.
+7. In extractor, retain obsolete text labels only as delimiters if needed.
+8. In diff, compare only active fields.
+9. Remove conflict labels/UI.
+10. Update docs.
+
+### Search verification
+Run every grep in section 20.21.
+
+### Gate
+Remaining hits must be only approved compatibility/delimiter/generated-code cases.
+
+---
+
+## Phase 5 — Build the full fixture-backed pipeline test
+
+### Goal
+Prove the imported timetable behaves correctly after persistence, local exceptions, notifications, widgets, and backup.
+
+### File
+- new `test/integration/fixture_schedule_pipeline_test.dart`
+
+### Exact scenario
+1. Import base fixture.
+2. Load DB snapshot.
+3. Assert expected courses/rules.
+4. Build ScheduleEngine.
+5. Assert representative dates.
+6. Assert NOW/NEXT.
+7. Add MOVE.
+8. Assert engine + notification + widget.
+9. Remove MOVE.
+10. Add CANCEL.
+11. Assert engine + notification + widget.
+12. Remove CANCEL.
+13. Add ADD.
+14. Assert engine + notification + widget.
+15. Backup.
+16. Clear.
+17. Assert empty DB / notification/widget clear at coordinator tests.
+18. Restore.
+19. Rebuild engine.
+20. Assert schedule equivalence.
+
+### Gate
+This one test should catch cross-module semantic drift.
+
+---
+
+## Phase 6 — UI regression
+
+### Goal
+Ensure real product pages correctly render the same effective schedule.
+
+### Actions
+Use fixture-seeded repository state for:
+- Home;
+- Week;
+- Month;
+- Course Detail;
+- import preview;
+- manual edit;
+- exception sheets.
+
+Add or update golden tests only after domain/data behavior is green.
+
+### Required states
+- NOW;
+- NEXT;
+- no class;
+- finished;
+- MOVE;
+- CANCEL;
+- ADD;
+- multiple meetings;
+- odd/even;
+- irregular weeks;
+- long text;
+- narrow screen;
+- larger text scale.
+
+### Gate
+Do not “fix” a domain bug by special-casing UI output.
+
+---
+
+## Phase 7 — Notification/device validation
+
+### Actions
+1. Run planner unit tests.
+2. Run coordinator tests.
+3. Install on device.
+4. Test permission denied.
+5. Test permission granted.
+6. Use a controlled near-future local test occurrence if current debug tooling permits without changing server data.
+7. Verify one notification fires.
+8. Refresh/reimport and ensure no duplicates.
+9. Verify MOVE/CANCEL/ADD rebuild behavior.
+
+### Rule
+Use local fixture/manual data for timing-sensitive notification tests when possible. Real NWU account is not required for every notification run.
+
+---
+
+## Phase 8 — Widget/device validation
+
+### Actions
+1. Add Small widget.
+2. Add Medium widget.
+3. Add Large widget.
+4. Keep all three simultaneously.
+5. Verify NOW/NEXT state.
+6. Apply local MOVE.
+7. Verify refresh.
+8. Apply CANCEL.
+9. Verify disappearance.
+10. Apply ADD.
+11. Verify appearance.
+12. Restart app.
+13. Verify widgets still render from current snapshot.
+14. Clear data.
+15. Verify widget empty state.
+
+### Gate
+No PendingIntent collision or cross-widget hijacking.
+
+---
+
+## Phase 9 — Real NWU import final verification
+
+Do this **after** deterministic tests pass, not before.
+
+### Exact flow
+1. clear import session only;
+2. launch import;
+3. authenticate;
+4. navigate only to personal timetable;
+5. read;
+6. compare Preview to visible timetable;
+7. save;
+8. verify Home;
+9. verify Week;
+10. verify Month;
+11. verify Course Detail;
+12. exit;
+13. re-enter Import;
+14. verify login is required again.
+
+### Repeat-import test
+Without changing server data:
+1. import the same real timetable again;
+2. expected diff is no-op or only known benign adapter/version effects;
+3. it must not duplicate courses.
+
+For remote-change scenarios such as room/week changes, use mutated sanitized fixtures unless the server naturally contains such a case. Do not alter university data to manufacture a test.
+
+---
+
+## Phase 10 — Final cleanup and report
+
+### Actions
+1. Remove temporary debug code.
+2. Remove any local captured authenticated DOM.
+3. Search repository for credentials/sensitive strings.
+4. Run formatter.
+5. Run analyze.
+6. Run full tests.
+7. Run privacy/manifest tools.
+8. Push.
+9. Confirm GitHub Actions.
+10. Produce completion matrix.
+
+### Completion matrix format
+
+```text
+Phase | Change | Key file/function | Automated test | Device test | Status
+```
+
+Every P0 item must be PASS or BLOCKED with a precise reason.
+
+---
+
+# 22. Decision rules so the Agent does not guess
+
+Use these rules when implementation choices are unclear:
+
+1. **Data correctness > automatic matching.**
+   If identity is ambiguous, do not merge.
+2. **Stable local IDs > regenerating rows.**
+   Preserve Course.id and MeetingRule.id whenever a logical match is unique.
+3. **ScheduleEngine is authoritative.**
+   UI, notifications and widgets consume it; they do not recreate recurrence logic.
+4. **Remote timetable is read-only input.**
+   The app never mutates Zhengfang.
+5. **Local user changes survive refresh where semantically possible.**
+   note/color/hidden/exceptions must not disappear because teacher/room changed remotely.
+6. **Parser fails closed for a known verified table that is malformed.**
+   Partial silent imports are worse than explicit errors.
+7. **Legacy storage compatibility > immediate physical schema cleanup.**
+   Ignore obsolete columns before dropping them.
+8. **Fixtures are the regression source of truth; real account is the compatibility smoke test.**
+9. **Do not use real-account data to manufacture edge cases.**
+   Mutate sanitized fixtures locally.
+10. **One issue = one narrow commit when practical.**
+    Avoid giant refactors.
+
+---
+
+# 23. Minimum concrete deliverables expected from this task
+
+At minimum, the final branch should contain:
+
+1. an identity implementation independent of the four obsolete metadata fields;
+2. unit tests for the identity matcher;
+3. sanitized DOM extractor tests for the chosen real-page identity structure;
+4. a reusable timetable fixture helper;
+5. a fixture-backed Drift import/reimport test;
+6. a fixture-backed full ScheduleEngine pipeline integration test;
+7. MOVE/CANCEL/ADD propagation tests into notifications and widgets;
+8. legacy-backup compatibility test;
+9. updated UI/golden coverage where behavior changed;
+10. updated SPEC/manual integration documentation;
+11. a recorded real-device read-only personal-timetable smoke-test result;
+12. a green CI result.
+
+If one of these is omitted, the completion report must say exactly why.
