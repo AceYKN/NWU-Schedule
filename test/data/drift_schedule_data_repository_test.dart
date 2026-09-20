@@ -346,6 +346,64 @@ void main() {
         (await database.select(database.importSnapshots).get()), hasLength(3));
   });
 
+  test('merges independent local and remote meeting properties', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    RemoteTimetable timetable({
+      required String teacher,
+      required String room,
+    }) =>
+        RemoteTimetable(
+          semester: const RemoteSemester(
+            remoteTermKey: '2026-2027-1',
+            academicYear: '2026-2027',
+            term: 1,
+            label: '2026-2027 第一学期',
+          ),
+          totalWeeks: 20,
+          courses: [
+            ImportedCourse(
+              sourceCourseKey: 'course-merge',
+              name: '软件测试',
+              meetings: [
+                ImportedMeeting(
+                  sourceMeetingKey: 'meeting-merge',
+                  weekday: 1,
+                  startSection: 3,
+                  endSection: 4,
+                  teacher: teacher,
+                  campus: '长安校区',
+                  room: room,
+                  weekMask: WeekMask.all(16),
+                ),
+              ],
+            ),
+          ],
+        );
+
+    await repository.commitImportedTimetable(
+      timetable(teacher: '教师 A', room: '3406'),
+    );
+    var loaded = await repository.loadSemester('nwu-2026-2027-1');
+    await repository.saveCourse(
+      loaded.courses.single,
+      [loaded.meetingRules.single.copyWith(room: '3508')],
+    );
+
+    final preview = await repository.previewImportedTimetable(
+      timetable(teacher: '教师 B', room: '3406'),
+    );
+    expect(preview.hasConflicts, isFalse);
+    await repository.commitImportedTimetable(
+      timetable(teacher: '教师 B', room: '3406'),
+    );
+
+    loaded = await repository.loadSemester('nwu-2026-2027-1');
+    expect(loaded.meetingRules.single.teacher, '教师 B');
+    expect(loaded.meetingRules.single.room, '3508');
+  });
+
   test('preserves the course when the remote source key rotates', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
@@ -678,7 +736,9 @@ void main() {
     await repository.commitImportedTimetable(
       incoming,
       resolution: ImportConflictResolution.copy({
-        'c1': {'meetings': MergeDecision.remote},
+        'c1': {
+          meetingImportField('r1', 'room'): MergeDecision.remote,
+        },
       }),
     );
     expect(

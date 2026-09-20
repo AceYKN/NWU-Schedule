@@ -6,6 +6,11 @@ import '../schedule/schedule_data_repository.dart';
 import 'timetable_import.dart';
 import 'three_way_merge.dart';
 
+/// Stable key used by the diff UI and repository when a single imported
+/// meeting property needs an independent three-way merge decision.
+String meetingImportField(String sourceMeetingKey, String property) =>
+    'meeting:$sourceMeetingKey:$property';
+
 enum ImportChangeKind {
   unchanged,
   added,
@@ -400,27 +405,247 @@ class ImportDiffEngine {
     required ImportedCourse? previous,
     required ImportedCourse remote,
   }) {
-    final localValues = <String, Object?>{
-      'name': localCourse.name,
-      'meetings': localRules.map(_meetingToJson).toList(),
-    };
-    final remoteValues = <String, Object?>{
-      'name': remote.name,
-      'meetings': remote.meetings.map((item) => item.toJson()).toList(),
-    };
-    final previousValues = <String, Object?>{
-      'name': previous?.name,
-      'meetings': previous?.meetings.map((item) => item.toJson()).toList(),
-    };
-    return [
-      for (final field in remoteValues.keys)
-        _mergeField(
-          field: field,
-          previousValue: previousValues[field],
-          localValue: localValues[field],
-          remoteValue: remoteValues[field],
-        ),
+    final fields = <ImportFieldChange>[
+      _mergeField(
+        field: 'name',
+        previousValue: previous?.name,
+        localValue: localCourse.name,
+        remoteValue: remote.name,
+      ),
     ];
+
+    final unmatchedLocal = [...localRules];
+    final unmatchedPrevious = [...?previous?.meetings];
+
+    for (final remoteMeeting in remote.meetings) {
+      final localMeeting = _takeLocalMeeting(
+        remoteMeeting,
+        unmatchedLocal,
+      );
+      final previousMeeting = _takePreviousMeeting(
+        remoteMeeting,
+        unmatchedPrevious,
+      );
+
+      // A meeting that is only being added/removed is represented by the
+      // topology field below. There is no meaningful per-property conflict
+      // until both sides identify the same logical meeting.
+      if (localMeeting == null || previousMeeting == null) continue;
+      for (final property in _meetingProperties) {
+        fields.add(
+          _mergeField(
+            field: meetingImportField(remoteMeeting.sourceMeetingKey, property),
+            previousValue: _meetingProperty(previousMeeting, property),
+            localValue: _meetingProperty(localMeeting, property),
+            remoteValue: _meetingProperty(remoteMeeting, property),
+          ),
+        );
+      }
+    }
+
+    final localTopology = _meetingTopology(localRules);
+    final remoteTopology = _meetingTopology(remote.meetings);
+    if (!_same(localTopology, remoteTopology)) {
+      fields.add(
+        _mergeField(
+          field: 'meetings',
+          previousValue:
+              previous == null ? null : _meetingTopology(previous.meetings),
+          localValue: localTopology,
+          remoteValue: remoteTopology,
+        ),
+      );
+    }
+    return fields;
+  }
+
+  static const _meetingProperties = [
+    'weekday',
+    'startSection',
+    'endSection',
+    'weekMask',
+    'teacher',
+    'campus',
+    'room',
+  ];
+
+  MeetingRule? _takeLocalMeeting(
+    ImportedMeeting remote,
+    List<MeetingRule> candidates,
+  ) {
+    final exact = candidates
+        .where((candidate) =>
+            candidate.sourceMeetingKey == remote.sourceMeetingKey)
+        .toList();
+    final matched = switch (exact.length) {
+      0 => _uniqueMeetingMatch<MeetingRule>(remote, candidates),
+      1 => exact.single,
+      _ => null,
+    };
+    if (matched == null) return null;
+    candidates.remove(matched);
+    return matched;
+  }
+
+  ImportedMeeting? _takePreviousMeeting(
+    ImportedMeeting remote,
+    List<ImportedMeeting> candidates,
+  ) {
+    final exact = candidates
+        .where((candidate) =>
+            candidate.sourceMeetingKey == remote.sourceMeetingKey)
+        .toList();
+    final matched = switch (exact.length) {
+      0 => _uniqueMeetingMatch<ImportedMeeting>(remote, candidates),
+      1 => exact.single,
+      _ => null,
+    };
+    if (matched == null) return null;
+    candidates.remove(matched);
+    return matched;
+  }
+
+  T? _uniqueMeetingMatch<T extends Object>(
+    ImportedMeeting remote,
+    Iterable<T> candidates,
+  ) {
+    final scored = <({T candidate, int score})>[];
+    for (final candidate in candidates) {
+      final score = _meetingMatchScore(remote, candidate);
+      if (score != null) scored.add((candidate: candidate, score: score));
+    }
+    scored.sort((left, right) => right.score.compareTo(left.score));
+    if (scored.isEmpty ||
+        (scored.length > 1 && scored[0].score == scored[1].score)) {
+      return null;
+    }
+    return scored.first.candidate;
+  }
+
+  static int? _meetingMatchScore(
+    ImportedMeeting remote,
+    Object candidate,
+  ) {
+    final weekday = switch (candidate) {
+      MeetingRule value => value.weekday,
+      ImportedMeeting value => value.weekday,
+      _ => null,
+    };
+    final startSection = switch (candidate) {
+      MeetingRule value => value.startSection,
+      ImportedMeeting value => value.startSection,
+      _ => null,
+    };
+    final endSection = switch (candidate) {
+      MeetingRule value => value.endSection,
+      ImportedMeeting value => value.endSection,
+      _ => null,
+    };
+    final weekMask = switch (candidate) {
+      MeetingRule value => value.weekMask,
+      ImportedMeeting value => value.weekMask,
+      _ => null,
+    };
+    final teacher = switch (candidate) {
+      MeetingRule value => value.teacher,
+      ImportedMeeting value => value.teacher,
+      _ => null,
+    };
+    final campus = switch (candidate) {
+      MeetingRule value => value.campus,
+      ImportedMeeting value => value.campus,
+      _ => null,
+    };
+    final room = switch (candidate) {
+      MeetingRule value => value.room,
+      ImportedMeeting value => value.room,
+      _ => null,
+    };
+    if (weekday == null ||
+        startSection == null ||
+        endSection == null ||
+        weekMask == null) {
+      return null;
+    }
+    final sameWeekday = weekday == remote.weekday;
+    final sameSections =
+        startSection == remote.startSection && endSection == remote.endSection;
+    final sameWeeks = weekMask.value == remote.weekMask.value;
+    final structuralAnchors =
+        [sameWeekday, sameSections, sameWeeks].where((value) => value).length;
+    if (structuralAnchors == 0) return null;
+    final sameTeacher = _sameMeetingText(teacher, remote.teacher);
+    final sameCampus = _sameMeetingText(campus, remote.campus);
+    final sameRoom = _sameMeetingText(room, remote.room);
+    final anchors = [
+      sameWeekday,
+      sameSections,
+      sameWeeks,
+      sameTeacher,
+      sameCampus,
+      sameRoom,
+    ].where((value) => value).length;
+    if (anchors < 2) return null;
+    var score = 0;
+    if (sameWeekday) score += 8;
+    if (sameSections) {
+      score += 6;
+    } else if (startSection == remote.startSection ||
+        endSection == remote.endSection) {
+      score += 2;
+    }
+    if (sameWeeks) {
+      score += 5;
+    } else if ((weekMask.value & remote.weekMask.value) != 0) {
+      score += 1;
+    }
+    if (sameTeacher) score += 3;
+    if (sameCampus) score += 2;
+    if (sameRoom) score += 3;
+    return score;
+  }
+
+  static bool _sameMeetingText(String? left, String? right) =>
+      (left ?? '').trim() == (right ?? '').trim();
+
+  static Object? _meetingProperty(Object meeting, String property) {
+    return switch (meeting) {
+      MeetingRule value => switch (property) {
+          'weekday' => value.weekday,
+          'startSection' => value.startSection,
+          'endSection' => value.endSection,
+          'weekMask' => value.weekMask.value,
+          'teacher' => value.teacher,
+          'campus' => value.campus,
+          'room' => value.room,
+          _ => null,
+        },
+      ImportedMeeting value => switch (property) {
+          'weekday' => value.weekday,
+          'startSection' => value.startSection,
+          'endSection' => value.endSection,
+          'weekMask' => value.weekMask.value,
+          'teacher' => value.teacher,
+          'campus' => value.campus,
+          'room' => value.room,
+          _ => null,
+        },
+      _ => null,
+    };
+  }
+
+  static List<Object?> _meetingTopology(Iterable<Object> meetings) {
+    final result = [
+      for (final meeting in meetings)
+        [
+          _meetingProperty(meeting, 'weekday'),
+          _meetingProperty(meeting, 'startSection'),
+          _meetingProperty(meeting, 'endSection'),
+          _meetingProperty(meeting, 'weekMask'),
+        ],
+    ];
+    result.sort((left, right) => jsonEncode(left).compareTo(jsonEncode(right)));
+    return result;
   }
 
   ImportFieldChange _mergeField({
@@ -441,18 +666,6 @@ class ImportDiffEngine {
       remoteValue: remoteValue,
     );
   }
-
-  static Map<String, Object?> _meetingToJson(MeetingRule rule) => {
-        'sourceMeetingKey': rule.sourceMeetingKey,
-        'weekday': rule.weekday,
-        'startSection': rule.startSection,
-        'endSection': rule.endSection,
-        'teacher': rule.teacher,
-        'campus': rule.campus,
-        'room': rule.room,
-        'weekMask': rule.weekMask.value,
-        'rawWeekText': rule.weekMask.rawText,
-      };
 
   static bool _same(Object? left, Object? right) =>
       _sameImportValue(left, right);

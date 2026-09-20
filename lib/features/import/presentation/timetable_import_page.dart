@@ -900,8 +900,25 @@ class _ConflictResolutionSheetState extends State<_ConflictResolutionSheet> {
 String _fieldLabel(String field) => switch (field) {
       'name' => '课程名',
       'meetings' => '上课安排',
+      _ when field.startsWith('meeting:') =>
+        '上课安排 · ${_meetingPropertyLabel(field)}',
       _ => field,
     };
+
+String _meetingPropertyLabel(String field) {
+  final separator = field.lastIndexOf(':');
+  final property = separator < 0 ? field : field.substring(separator + 1);
+  return switch (property) {
+    'weekday' => '星期',
+    'startSection' => '开始节次',
+    'endSection' => '结束节次',
+    'weekMask' => '周次',
+    'teacher' => '教师',
+    'campus' => '校区',
+    'room' => '教室',
+    _ => property,
+  };
+}
 
 String _displayValue(Object? value, String field) {
   if (value == null) return '未填写';

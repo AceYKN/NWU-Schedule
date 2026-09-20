@@ -915,19 +915,10 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     required List<domain.MeetingRule> existing,
     required List<ImportFieldChange> fields,
   }) {
-    ImportFieldChange? meetingsField;
-    for (final field in fields) {
-      if (field.field == 'meetings') {
-        meetingsField = field;
-        break;
-      }
-    }
-    if (meetingsField?.decision == MergeDecision.local) {
-      return _ReconciledRules(
-        rules: existing,
-        idRemap: const {},
-      );
-    }
+    final meetingsField = fields.where((field) => field.field == 'meetings');
+    final keepLocalTopology = meetingsField.any(
+      (field) => field.decision == MergeDecision.local,
+    );
 
     final unmatched = [...existing];
     final usedIds = <String>{};
@@ -944,6 +935,11 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
       matched ??= _bestMeetingMatch(meeting, unmatched);
       if (matched != null) unmatched.remove(matched);
 
+      // When the user explicitly kept the local meeting topology, remote-only
+      // additions are part of the rejected remote topology. Matched meetings
+      // still receive independent property-level merge decisions below.
+      if (matched == null && keepLocalTopology) continue;
+
       var id = matched?.id ?? '$courseId:${meeting.sourceMeetingKey}';
       if (!usedIds.add(id)) {
         var suffix = 2;
@@ -954,20 +950,63 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         } while (!usedIds.add(id));
         if (matched != null) idRemap[matched.id] = id;
       }
+      Object? value(String property, Object? remoteValue, Object? localValue) {
+        final field = fields.where(
+          (item) =>
+              item.field ==
+              meetingImportField(
+                meeting.sourceMeetingKey,
+                property,
+              ),
+        );
+        final decision =
+            field.isEmpty ? MergeDecision.remote : field.first.decision;
+        return decision == MergeDecision.local && matched != null
+            ? localValue
+            : remoteValue;
+      }
+
+      final weekMaskValue = value(
+        'weekMask',
+        meeting.weekMask.value,
+        matched?.weekMask.value,
+      ) as int;
+      final useLocalWeekMask = fields.any(
+        (field) =>
+            field.field ==
+                meetingImportField(meeting.sourceMeetingKey, 'weekMask') &&
+            field.decision == MergeDecision.local &&
+            matched != null,
+      );
       rules.add(
         domain.MeetingRule(
           id: id,
           courseId: courseId,
           sourceMeetingKey: meeting.sourceMeetingKey,
-          weekday: meeting.weekday,
-          startSection: meeting.startSection,
-          endSection: meeting.endSection,
-          teacher: meeting.teacher,
-          campus: meeting.campus,
-          room: meeting.room,
-          weekMask: meeting.weekMask,
+          weekday: value('weekday', meeting.weekday, matched?.weekday) as int,
+          startSection:
+              value('startSection', meeting.startSection, matched?.startSection)
+                  as int,
+          endSection:
+              value('endSection', meeting.endSection, matched?.endSection)
+                  as int,
+          teacher:
+              value('teacher', meeting.teacher, matched?.teacher) as String?,
+          campus: value('campus', meeting.campus, matched?.campus) as String?,
+          room: value('room', meeting.room, matched?.room) as String?,
+          weekMask: WeekMask(
+            weekMaskValue,
+            rawText: useLocalWeekMask
+                ? matched!.weekMask.rawText
+                : meeting.weekMask.rawText,
+          ),
         ),
       );
+    }
+    if (keepLocalTopology) {
+      for (final rule in unmatched) {
+        if (usedIds.add(rule.id)) rules.add(rule);
+      }
     }
     return _ReconciledRules(
       rules: List.unmodifiable(rules),

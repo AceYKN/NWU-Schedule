@@ -89,7 +89,9 @@ void main() {
     expect(diff.hasConflicts, isFalse);
     expect(
         diff.changes.single.fields
-            .firstWhere((field) => field.field == 'meetings')
+            .firstWhere(
+              (field) => field.field == meetingImportField('meeting-1', 'room'),
+            )
             .decision,
         MergeDecision.remote);
   });
@@ -115,9 +117,99 @@ void main() {
     expect(diff.hasConflicts, isFalse);
     expect(
         diff.changes.single.fields
-            .firstWhere((field) => field.field == 'meetings')
+            .firstWhere(
+              (field) => field.field == meetingImportField('meeting-1', 'room'),
+            )
             .decision,
         MergeDecision.local);
+  });
+
+  test('merges independent meeting properties without a false conflict', () {
+    final remote = timetable([
+      ImportedCourse(
+        sourceCourseKey: 'course-1',
+        name: '软件测试',
+        meetings: [
+          ImportedMeeting(
+            sourceMeetingKey: 'meeting-1',
+            weekday: 1,
+            startSection: 3,
+            endSection: 4,
+            teacher: '教师 B',
+            campus: '长安校区',
+            room: '3406',
+            weekMask: WeekMask.all(16),
+          ),
+        ],
+      ),
+    ]);
+    final localCourse = local();
+    final localSnapshot = ScheduleDataSnapshot(
+      semester: localCourse.semester,
+      courses: localCourse.courses,
+      meetingRules: [
+        localCourse.meetingRules.single.copyWith(room: '3508'),
+      ],
+      exceptions: const [],
+    );
+    final diff = const ImportDiffEngine().build(
+      incoming: remote,
+      local: localSnapshot,
+      previousImport: timetable([course()]),
+    );
+
+    expect(diff.hasConflicts, isFalse);
+    expect(
+      diff.changes.single.fields
+          .firstWhere(
+            (field) => field.field == meetingImportField('meeting-1', 'room'),
+          )
+          .decision,
+      MergeDecision.local,
+    );
+    expect(
+      diff.changes.single.fields
+          .firstWhere(
+            (field) =>
+                field.field == meetingImportField('meeting-1', 'teacher'),
+          )
+          .decision,
+      MergeDecision.remote,
+    );
+  });
+
+  test('uses a separate topology decision for added or removed meetings', () {
+    final base = local();
+    final secondRule = MeetingRule(
+      id: 'local-meeting-2',
+      courseId: base.courses.single.id,
+      sourceMeetingKey: 'meeting-2',
+      weekday: 3,
+      startSection: 5,
+      endSection: 6,
+      teacher: '教师 C',
+      campus: '长安校区',
+      room: '1310',
+      weekMask: WeekMask.all(16),
+    );
+    final localWithExtraMeeting = ScheduleDataSnapshot(
+      semester: base.semester,
+      courses: base.courses,
+      meetingRules: [...base.meetingRules, secondRule],
+      exceptions: const [],
+    );
+    final removedRemote = const ImportDiffEngine().build(
+      incoming: timetable([course()]),
+      local: localWithExtraMeeting,
+      previousImport: timetable([course()]),
+    );
+
+    expect(
+      removedRemote.changes.single.fields
+          .firstWhere((field) => field.field == 'meetings')
+          .decision,
+      MergeDecision.local,
+    );
   });
 
   test('legacy academic metadata changes do not enter the import diff', () {
@@ -128,9 +220,18 @@ void main() {
     );
 
     expect(diff.changes.single.kind, ImportChangeKind.unchanged);
+    expect(diff.changes.single.fields.first.field, 'name');
     expect(
       diff.changes.single.fields.map((field) => field.field),
-      ['name', 'meetings'],
+      containsAll(<String>[
+        meetingImportField('meeting-1', 'weekday'),
+        meetingImportField('meeting-1', 'startSection'),
+        meetingImportField('meeting-1', 'endSection'),
+        meetingImportField('meeting-1', 'weekMask'),
+        meetingImportField('meeting-1', 'teacher'),
+        meetingImportField('meeting-1', 'campus'),
+        meetingImportField('meeting-1', 'room'),
+      ]),
     );
   });
 
@@ -223,14 +324,18 @@ void main() {
     );
     final resolved = diff.resolve(
       ImportConflictResolution.copy({
-        'course-1': {'meetings': MergeDecision.remote},
+        'course-1': {
+          meetingImportField('meeting-1', 'room'): MergeDecision.remote,
+        },
       }),
     );
     expect(resolved.hasConflicts, isFalse);
     expect(resolved.changes.single.kind, ImportChangeKind.modified);
     expect(
       resolved.changes.single.fields
-          .firstWhere((field) => field.field == 'meetings')
+          .firstWhere(
+            (field) => field.field == meetingImportField('meeting-1', 'room'),
+          )
           .decision,
       MergeDecision.remote,
     );
