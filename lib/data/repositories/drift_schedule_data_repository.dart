@@ -594,6 +594,12 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   }
 
   @override
+  Future<ImportDiff> previewImportedTimetable(RemoteTimetable timetable) async {
+    final context = await _loadImportDiffContext(timetable);
+    return context.diff;
+  }
+
+  @override
   Future<void> commitImportedTimetable(
     RemoteTimetable timetable, {
     String adapterVersion = 'nwu-zhengfang-v1',
@@ -603,28 +609,11 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     if (!report.isValid) {
       throw TimetableImportValidationException(report);
     }
+    final context = await _loadImportDiffContext(timetable);
     final semesterId = timetable.semester.id;
-    final semesters = await loadSemesters();
-    domain.Semester? existingSemester;
-    for (final semester in semesters) {
-      if (semester.id == semesterId) {
-        existingSemester = semester;
-        break;
-      }
-    }
-    final local =
-        existingSemester == null ? null : await loadSemester(semesterId);
-    final previous = await loadLatestImport(semesterId);
-    final tombstones = await (database.select(database.deletedSourceItems)
-          ..where((table) => table.semesterId.equals(semesterId)))
-        .get();
-    final rawDiff = const ImportDiffEngine().build(
-      incoming: timetable,
-      local: local,
-      previousImport: previous,
-      deletedSourceCourseKeys:
-          tombstones.map((row) => row.sourceCourseKey).toSet(),
-    );
+    final existingSemester = context.existingSemester;
+    final local = context.local;
+    final rawDiff = context.diff;
     final diff = rawDiff.resolve(resolution);
     if (diff.hasConflicts) {
       throw TimetableImportConflictException(diff);
@@ -705,6 +694,40 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             ),
           );
     });
+  }
+
+  Future<_ImportDiffContext> _loadImportDiffContext(
+    RemoteTimetable timetable,
+  ) async {
+    final semesterId = timetable.semester.id;
+    final semesters = await loadSemesters();
+    domain.Semester? existingSemester;
+    for (final semester in semesters) {
+      if (semester.id == semesterId) {
+        existingSemester = semester;
+        break;
+      }
+    }
+    final local =
+        existingSemester == null ? null : await loadSemester(semesterId);
+    final previous = await loadLatestImport(semesterId);
+    final tombstones = await (database.select(database.deletedSourceItems)
+          ..where((table) => table.semesterId.equals(semesterId)))
+        .get();
+    final deletedSourceCourseKeys = {
+      for (final tombstone in tombstones) tombstone.sourceCourseKey,
+    };
+    final diff = const ImportDiffEngine().build(
+      incoming: timetable,
+      local: local,
+      previousImport: previous,
+      deletedSourceCourseKeys: deletedSourceCourseKeys,
+    );
+    return _ImportDiffContext(
+      existingSemester: existingSemester,
+      local: local,
+      diff: diff,
+    );
   }
 
   Future<void> _upsertSemester(domain.Semester semester) async {
@@ -866,4 +889,16 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         sha256.convert(utf8.encode('$semesterId:$sourceKey')).toString();
     return 'imported-${digest.substring(0, 24)}';
   }
+}
+
+class _ImportDiffContext {
+  const _ImportDiffContext({
+    required this.existingSemester,
+    required this.local,
+    required this.diff,
+  });
+
+  final domain.Semester? existingSemester;
+  final ScheduleDataSnapshot? local;
+  final ImportDiff diff;
 }

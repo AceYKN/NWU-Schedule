@@ -55,6 +55,8 @@ abstract interface class ScheduleDataRepository {
 
   Future<RemoteTimetable?> loadLatestImport(String semesterId);
 
+  Future<ImportDiff> previewImportedTimetable(RemoteTimetable timetable);
+
   Future<void> commitImportedTimetable(
     RemoteTimetable timetable, {
     String adapterVersion = 'nwu-zhengfang-v1',

@@ -14,7 +14,6 @@ import '../../../domain/import/timetable_import.dart';
 import '../../../domain/import/timetable_importer.dart';
 import '../../../domain/import/three_way_merge.dart';
 import '../../../domain/errors/app_error.dart';
-import '../../../domain/schedule/schedule_data_repository.dart';
 import '../../../infrastructure/backup/backup_file_service.dart';
 import '../../../infrastructure/import/nwu_zhengfang_v9_importer.dart';
 import '../../../infrastructure/import/webview_session_service.dart';
@@ -347,20 +346,9 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   }
 
   Future<ImportDiff> _buildDiff(RemoteTimetable timetable) async {
-    final repository = ref.read(scheduleDataRepositoryProvider);
-    final semesters = await repository.loadSemesters();
-    ScheduleDataSnapshot? local;
-    for (final semester in semesters) {
-      if (semester.id == timetable.semester.id) {
-        local = await repository.loadSemester(semester.id);
-        break;
-      }
-    }
-    return const ImportDiffEngine().build(
-      incoming: timetable,
-      local: local,
-      previousImport: await repository.loadLatestImport(timetable.semester.id),
-    );
+    return ref
+        .read(scheduleDataRepositoryProvider)
+        .previewImportedTimetable(timetable);
   }
 
   Future<ImportDiagnostic> _enrichDiagnostic(

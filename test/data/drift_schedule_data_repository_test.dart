@@ -429,6 +429,21 @@ void main() {
         (await repository.loadSemester(timetable.semester.id)).courses.single;
     await repository.deleteCourse(course.id);
 
+    final preview = await repository.previewImportedTimetable(timetable);
+    expect(preview.hasLocallyDeleted, isTrue);
+    expect(preview.locallyDeletedCount, 1);
+
+    await repository.commitImportedTimetable(timetable);
+    final keptDeleted =
+        (await repository.loadSemester(timetable.semester.id)).courses.single;
+    expect(keptDeleted.deleted, isTrue);
+    expect(
+      (await database.select(database.deletedSourceItems).get())
+          .single
+          .sourceCourseKey,
+      'course-1',
+    );
+
     await repository.commitImportedTimetable(
       timetable,
       resolution: ImportConflictResolution.copy(
