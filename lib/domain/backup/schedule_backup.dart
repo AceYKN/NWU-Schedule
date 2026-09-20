@@ -499,6 +499,19 @@ class ScheduleBackup {
     );
     final semesterIds = backup.semesters.map((item) => item.id).toSet();
     final courseIds = backup.courses.map((item) => item.id).toSet();
+    final coursesById = {
+      for (final course in backup.courses) course.id: course,
+    };
+    final rulesById = {
+      for (final rule in backup.meetingRules) rule.id: rule,
+    };
+    final preferredSemesterId = backup.settings['preferredSemesterId'];
+    if (preferredSemesterId != null &&
+        !semesterIds.contains(preferredSemesterId)) {
+      throw BackupValidationException(
+        'preferredSemesterId 引用了不存在的学期 $preferredSemesterId',
+      );
+    }
     for (final course in backup.courses) {
       if (!semesterIds.contains(course.semesterId)) {
         throw BackupValidationException(
@@ -524,6 +537,28 @@ class ScheduleBackup {
         throw BackupValidationException(
           '调课记录 ${exception.id} 引用了不存在的课程 ${exception.courseId}',
         );
+      }
+      final course =
+          exception.courseId == null ? null : coursesById[exception.courseId];
+      if (course != null && course.semesterId != exception.semesterId) {
+        throw BackupValidationException(
+          '调课记录 ${exception.id} 的课程与学期不一致',
+        );
+      }
+      if (exception.type != CourseExceptionType.add) {
+        final sourceMeetingId = exception.sourceMeetingId;
+        final rule =
+            sourceMeetingId == null ? null : rulesById[sourceMeetingId];
+        if (rule == null) {
+          throw BackupValidationException(
+            '调课记录 ${exception.id} 引用了不存在的上课安排 $sourceMeetingId',
+          );
+        }
+        if (rule.courseId != exception.courseId) {
+          throw BackupValidationException(
+            '调课记录 ${exception.id} 的上课安排与课程不一致',
+          );
+        }
       }
     }
     for (final snapshot in backup.importSnapshots) {

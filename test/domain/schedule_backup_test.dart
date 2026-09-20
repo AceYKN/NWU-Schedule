@@ -213,6 +213,23 @@ void main() {
       }),
       throwsA(isA<BackupValidationException>()),
     );
+    final missingMeetingException = Map<String, dynamic>.from(
+      (source['exceptions'] as List).single as Map,
+    )..['sourceMeetingId'] = 'missing-rule';
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'exceptions': [missingMeetingException],
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'settings': {'preferredSemesterId': 'missing-semester'},
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
   });
 
   test('rejects fractional and non-finite numeric schema fields', () {
