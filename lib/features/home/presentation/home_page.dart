@@ -273,14 +273,23 @@ class _HomeContent extends StatelessWidget {
           if (state.todayCourses.isEmpty)
             const _EmptyAgenda()
           else
-            ...state.todayCourses.map(
-              (course) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: CourseCard(
-                  instance: course,
-                  compact: true,
-                  status: _agendaStatus(course, state),
+            ...state.todayCourses.take(5).map(
+                  (course) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: CourseCard(
+                      instance: course,
+                      compact: true,
+                      status: _agendaStatus(course, state),
+                    ),
+                  ),
                 ),
+          if (state.todayCourses.length > 5)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _showFullAgenda(context, state.todayCourses),
+                icon: const Icon(Icons.list_alt_outlined),
+                label: Text('查看今日全部课程（${state.todayCourses.length}）'),
               ),
             ),
         ],
@@ -489,5 +498,43 @@ String _courseSubtitle(EffectiveCourseInstance course) {
 }
 
 String _nextDescription(EffectiveCourseInstance course) {
-  return '${weekdayName(course.date.weekday)} ${course.startTime.hour.toString().padLeft(2, '0')}:${course.startTime.minute.toString().padLeft(2, '0')} ${course.courseName} · ${course.location ?? '地点待补充'}';
+  final teacher = course.teacher == null ? '' : ' · ${course.teacher}';
+  return '${weekdayName(course.date.weekday)} ${course.startTime.hour.toString().padLeft(2, '0')}:${course.startTime.minute.toString().padLeft(2, '0')} ${course.courseName} · ${course.location ?? '地点待补充'}$teacher';
+}
+
+void _showFullAgenda(
+  BuildContext context,
+  List<EffectiveCourseInstance> courses,
+) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (sheetContext) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.82,
+          ),
+          child: ListView(
+            children: [
+              Text(
+                '今日全部课程',
+                style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 14),
+              for (final course in courses)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: CourseCard(instance: course),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
