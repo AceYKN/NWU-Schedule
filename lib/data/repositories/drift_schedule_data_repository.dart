@@ -691,6 +691,12 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
           fields: change.fields,
         );
         await _upsertCourse(course, reconciledRules.rules);
+        await _removeExceptionsForRemovedMeetingRules(
+          courseId: course.id,
+          existing: existingRules,
+          retained: reconciledRules.rules,
+          idRemap: reconciledRules.idRemap,
+        );
         await _remapExceptionMeetingIds(
           courseId: course.id,
           idRemap: reconciledRules.idRemap,
@@ -951,6 +957,27 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         ),
       );
     }
+  }
+
+  Future<void> _removeExceptionsForRemovedMeetingRules({
+    required String courseId,
+    required List<domain.MeetingRule> existing,
+    required List<domain.MeetingRule> retained,
+    required Map<String, String> idRemap,
+  }) async {
+    final retainedIds = {for (final rule in retained) rule.id};
+    final removedIds = [
+      for (final rule in existing)
+        if (!retainedIds.contains(rule.id) && !idRemap.containsKey(rule.id))
+          rule.id,
+    ];
+    if (removedIds.isEmpty) return;
+    await (database.delete(database.courseExceptions)
+          ..where((table) => Expression.and([
+                table.courseId.equals(courseId),
+                table.sourceMeetingId.isIn(removedIds),
+              ])))
+        .go();
   }
 
   domain.MeetingRule? _bestMeetingMatch(

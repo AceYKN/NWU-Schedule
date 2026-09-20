@@ -664,6 +664,7 @@ void main() {
       int weekday = 1,
       int startSection = 3,
       int endSection = 4,
+      bool omitMeeting = false,
     }) =>
         RemoteTimetable(
           semester: const RemoteSemester(
@@ -681,18 +682,20 @@ void main() {
               teachingClass: '软件工程2401',
               credits: 2,
               assessment: '考查',
-              meetings: [
-                ImportedMeeting(
-                  sourceMeetingKey: meetingKey,
-                  weekday: weekday,
-                  startSection: startSection,
-                  endSection: endSection,
-                  teacher: teacher,
-                  campus: '长安校区',
-                  room: room,
-                  weekMask: weekMask,
-                ),
-              ],
+              meetings: omitMeeting
+                  ? const <ImportedMeeting>[]
+                  : [
+                      ImportedMeeting(
+                        sourceMeetingKey: meetingKey,
+                        weekday: weekday,
+                        startSection: startSection,
+                        endSection: endSection,
+                        teacher: teacher,
+                        campus: '长安校区',
+                        room: room,
+                        weekMask: weekMask,
+                      ),
+                    ],
             ),
           ],
         );
@@ -775,6 +778,19 @@ void main() {
       loaded.exceptions.map((exception) => exception.sourceMeetingId),
       everyElement(originalRule.id),
     );
+
+    await repository.commitImportedTimetable(
+      timetable(
+        meetingKey: 'dom|removed',
+        teacher: '教师 B',
+        room: '3508',
+        weekMask: WeekMask.all(20),
+        omitMeeting: true,
+      ),
+    );
+    loaded = await repository.loadSemester('nwu-2026-2027-1');
+    expect(loaded.meetingRules, isEmpty);
+    expect(loaded.exceptions, isEmpty);
 
     final definition = CalendarDefinition.fromJson({
       'id': 'nwu-2026-2027-1',
