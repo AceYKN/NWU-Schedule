@@ -131,6 +131,36 @@ void main() {
     );
   });
 
+  test('trusts only the observed authenticated timetable paths for the bridge',
+      () {
+    expect(
+      NwuZhengfangV9Importer.isTrustedTimetableUri(
+        Uri.parse(
+          'https://jwgl.nwu.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html',
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      NwuZhengfangV9Importer.isTrustedTimetableUri(
+        Uri.parse('https://jwgl.nwu.edu.cn/jwglxt/kbcx/xskbcx_cxXsgrkb.html'),
+      ),
+      isTrue,
+    );
+    expect(
+      NwuZhengfangV9Importer.isTrustedTimetableUri(
+        Uri.parse('https://jwgl.nwu.edu.cn/jwglxt/xtgl/index_initMenu.html'),
+      ),
+      isFalse,
+    );
+    expect(
+      NwuZhengfangV9Importer.isTrustedTimetableUri(
+        Uri.parse('https://example.com/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html'),
+      ),
+      isFalse,
+    );
+  });
+
   test('diagnostic export contains runtime metadata fields', () {
     final diagnostic = const ImportDiagnostic(
       adapterVersion: 'nwu-zhengfang-v9',

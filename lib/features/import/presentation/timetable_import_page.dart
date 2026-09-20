@@ -108,6 +108,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     }
     if (mounted) setState(() => _currentUrl = url);
     if (NwuZhengfangV9Importer.isLoginUri(uri) ||
+        !NwuZhengfangV9Importer.isTrustedTimetableUri(uri) ||
         !await _hasTimetableContext()) {
       if (generation != _navigationGeneration || url != _latestStartedUrl) {
         return;

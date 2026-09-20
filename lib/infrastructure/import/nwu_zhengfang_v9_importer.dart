@@ -29,6 +29,18 @@ class NwuZhengfangV9Importer implements TimetableImporter {
         path.contains('/auth');
   }
 
+  /// Paths observed for the authenticated Zhengfang personal timetable pages.
+  ///
+  /// This is deliberately narrower than [isAllowedUri]. The latter protects
+  /// the navigation host boundary; this allowlist protects the JavaScript
+  /// bridge boundary. The endpoint and response schema remain unverified.
+  static bool isTrustedTimetableUri(Uri uri) {
+    if (!isAllowedUri(uri) || isLoginUri(uri)) return false;
+    final path = uri.path.toLowerCase();
+    return path == '/jwglxt/kbcx/xskbcx_cxxskbcxindex.html' ||
+        path == '/jwglxt/kbcx/xskbcx_cxxsgrkb.html';
+  }
+
   NwuZhengfangV9Importer({
     required this.readPayload,
     this.parser = const TimetableImportParser(),
