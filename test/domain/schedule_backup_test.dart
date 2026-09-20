@@ -246,6 +246,18 @@ void main() {
       }),
       throwsA(isA<BackupValidationException>()),
     );
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'meetingRules': [
+          {
+            ...(source['meetingRules'] as List).single as Map,
+            'weekMask': 0,
+          },
+        ],
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
     final missingMeetingException = Map<String, dynamic>.from(
       (source['exceptions'] as List).single as Map,
     )..['sourceMeetingId'] = 'missing-rule';

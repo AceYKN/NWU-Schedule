@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../core/time/campus_clock.dart';
+import '../../core/nwu/constants.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/week_mask.dart';
 import '../course/course.dart';
@@ -515,6 +516,12 @@ class ScheduleBackup {
       if (!courseIds.contains(rule.courseId)) {
         throw BackupValidationException(
           '上课安排 ${rule.id} 引用了不存在的课程 ${rule.courseId}',
+        );
+      }
+      if (rule.weekMask.value <= 0 ||
+          rule.weekMask.value.bitLength > maxSupportedTeachingWeeks) {
+        throw BackupValidationException(
+          '上课安排 ${rule.id} 的周次位掩码无效',
         );
       }
     }
