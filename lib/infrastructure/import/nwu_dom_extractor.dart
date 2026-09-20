@@ -179,11 +179,14 @@ class NwuDomExtractor {
         };
   };
 
-  const firstMarkerIndexAfter = (after, markers) => {
-    const indexes = markers
-      .filter((item) => item != null && item.index >= after)
-      .map((item) => item.index);
-    return indexes.length ? Math.min(...indexes) : null;
+  const markerAfter = (source, after, pattern) => {
+    const match = pattern.exec(source.slice(after));
+    return match == null
+      ? null
+      : {
+          index: after + match.index,
+          end: after + match.index + match[0].length,
+        };
   };
 
   const parseListCourseInfo = ({
@@ -200,13 +203,6 @@ class NwuDomExtractor {
     const campus = marker(source, /校区\s*[:：]/);
     const room = marker(source, /上课地点\s*[:：]/);
     const teacher = marker(source, /教师\s*[:：]/);
-    const teachingClass = marker(source, /教学班\s*[:：]/);
-    const classComposition = marker(source, /教学班组成\s*[:：]/);
-    const assessment = marker(source, /考核方式\s*[:：]/);
-    const selectionNote = marker(source, /选课备注\s*[:：]/);
-    const hours = marker(source, /课程学时组成\s*[:：]/);
-    const creditsMarker = marker(source, /学分\s*[:：]/);
-    const courseCode = marker(source, /课程(?:代码|编号|号)\s*[:：]/);
 
     if (week == null) {
       issue(
@@ -267,17 +263,18 @@ class NwuDomExtractor {
     const weekText = normalize(source.slice(week.end, campus.index));
     const campusText = normalize(source.slice(campus.end, room.index));
     const roomText = normalize(source.slice(room.end, teacher.index));
-    const teacherEnd = firstMarkerIndexAfter(teacher.end, [
-      teachingClass,
-      classComposition,
-      assessment,
-      selectionNote,
-      hours,
-      creditsMarker,
-      courseCode,
-    ]);
+    // These labels are delimiters only. Their values are never read into the
+    // product payload, identity fingerprint, diagnostics, or diff. Keeping a
+    // single boundary matcher here prevents obsolete academic metadata from
+    // becoming an accidental product field again while still trimming the
+    // teacher value before the next Zhengfang label.
+    const teacherBoundary = markerAfter(
+      source,
+      teacher.end,
+      /(?:教学班(?:组成)?|考核方式|选课备注|课程学时组成|周学时|总学时|学分|课程(?:代码|编号|号))\s*[:：]/,
+    );
     const teacherText = normalize(
-      source.slice(teacher.end, teacherEnd ?? source.length),
+      source.slice(teacher.end, teacherBoundary?.index ?? source.length),
     );
     if (!name) {
       issue(path + '.courseName', '课程名为空，已跳过该行', 'error', details);
@@ -390,7 +387,7 @@ class NwuDomExtractor {
         // A broken section cell can leave the row without a valid range. It
         // is still recognisable as a course row from its detail labels, and
         // must reach the section validation below instead of disappearing.
-        return /(?:周数\s*[:：]|校区\s*[:：]|上课地点\s*[:：]|教师\s*[:：]|教学班\s*[:：]|学分\s*[:：]|课程(?:代码|编号|号)\s*[:：])/.test(value);
+        return /(?:周数\s*[:：]|校区\s*[:：]|上课地点\s*[:：]|教师\s*[:：])/.test(value);
       });
 
       for (let infoIndex = 0; infoIndex < infoCells.length; infoIndex++) {
