@@ -40,24 +40,40 @@ const parseFixtureDocument = (html) => {
   const tables = [...html.matchAll(/<table\b([^>]*)>([\s\S]*?)<\/table>/gi)]
     .map((tableMatch) => {
       const tableAttributes = tableMatch[1];
+      const parseRows = (source) => [...source.matchAll(
+        /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi,
+      )].map((rowMatch) => ({
+        cells: [...rowMatch[1].matchAll(
+          /<(td|th)\b([^>]*)>([\s\S]*?)<\/\1>/gi,
+        )].map((cellMatch) => {
+          const attrs = cellMatch[2];
+          const value = decodeText(cellMatch[3]);
+          return {
+            id: attribute(attrs, 'id') ?? '',
+            innerText: value,
+            textContent: value,
+            rowSpan: Number(attribute(attrs, 'rowspan') ?? 1),
+            colSpan: Number(attribute(attrs, 'colspan') ?? 1),
+          };
+        }),
+      }));
+      const sections = [...tableMatch[2].matchAll(
+        /<(thead|tbody|tfoot)\b[^>]*>([\s\S]*?)<\/\1>/gi,
+      )];
+      const rowGroups = sections.length
+        ? sections.map((section) => parseRows(section[2]))
+        : [parseRows(tableMatch[2])];
+      const rows = rowGroups.flat();
+      for (const groupRows of rowGroups) {
+        const parent = { rows: groupRows };
+        for (const row of groupRows) {
+          row.parentElement = parent;
+          for (const cell of row.cells) cell.parentElement = row;
+        }
+      }
       const table = {
         id: attribute(tableAttributes, 'id') ?? '',
-        rows: [...tableMatch[2].matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)]
-          .map((rowMatch) => ({
-            cells: [...rowMatch[1].matchAll(
-              /<(td|th)\b([^>]*)>([\s\S]*?)<\/\1>/gi,
-            )].map((cellMatch) => {
-              const attrs = cellMatch[2];
-              const value = decodeText(cellMatch[3]);
-              return {
-                id: attribute(attrs, 'id') ?? '',
-                innerText: value,
-                textContent: value,
-                rowSpan: Number(attribute(attrs, 'rowspan') ?? 1),
-                colSpan: Number(attribute(attrs, 'colspan') ?? 1),
-              };
-            }),
-          })),
+        rows,
       };
       table.querySelectorAll = (selector) =>
         selector === 'tr' ? table.rows : [];
@@ -201,6 +217,60 @@ assert.deepEqual(
     [3, 3, 4, '单周'],
   ],
 );
+
+const rowSpanZeroGroupFixture = `
+<!doctype html>
+<html lang="zh-CN">
+  <body>
+    <h1>2026-2027 第一学期</h1>
+    <table>
+      <thead>
+        <tr>
+          <th>课程名称</th>
+          <th>星期</th>
+          <th>节次</th>
+          <th>周次</th>
+          <th>教室</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td rowspan="0">第一组课程</td>
+          <td>星期一</td>
+          <td>1-2节</td>
+          <td>1-8周</td>
+          <td>101</td>
+        </tr>
+        <tr>
+          <td>星期二</td>
+          <td>3-4节</td>
+          <td>单周</td>
+          <td>102</td>
+        </tr>
+      </tbody>
+      <tbody>
+        <tr>
+          <td>第二组课程</td>
+          <td>星期三</td>
+          <td>5-6节</td>
+          <td>2-10周</td>
+          <td>201</td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>`;
+const rowSpanZeroGroups = runExtraction(rowSpanZeroGroupFixture);
+assert.equal(
+  rowSpanZeroGroups.payload.issues.filter((issue) => issue.severity === 'error').length,
+  0,
+);
+assert.deepEqual(
+  rowSpanZeroGroups.payload.courses.map((course) => course.name),
+  ['第一组课程', '第二组课程'],
+);
+assert.equal(rowSpanZeroGroups.payload.courses[0].meetings.length, 2);
+assert.equal(rowSpanZeroGroups.payload.courses[1].meetings.length, 1);
 
 const invalidWeekDocument = parseFixtureDocument(genericFixture);
 const invalidWeekTable = invalidWeekDocument.tables[0];

@@ -454,6 +454,7 @@ class NwuDomExtractor {
   );
   const buildTableGrid = (table) => {
     const rows = Array.from(table.rows || table.querySelectorAll('tr'));
+    const rowIndexes = new Map(rows.map((row, index) => [row, index]));
     const grid = [];
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
       const row = rows[rowIndex];
@@ -466,13 +467,24 @@ class NwuDomExtractor {
         // HTML uses rowspan="0" to mean all remaining rows in the current
         // table section. The DOM exposes that value as 0; treating it as one
         // row shifts every following logical column.
+        const rowGroup = row.parentElement && row.parentElement.rows
+          ? Array.from(row.parentElement.rows)
+          : rows;
+        const rowGroupIndex = rowGroup.indexOf(row);
         const rowSpan = declaredRowSpan === 0
-          ? Math.max(1, rows.length - rowIndex)
+          ? Math.max(
+              1,
+              rowGroup.length - Math.max(0, rowGroupIndex),
+            )
           : Math.max(1, declaredRowSpan || 1);
         const colSpan = Math.max(1, Number(cell.colSpan) || 1);
         const value = text(cell);
         for (let rowOffset = 0; rowOffset < rowSpan; rowOffset++) {
-          const targetRow = rowIndex + rowOffset;
+          const groupRow = rowGroup[rowGroupIndex + rowOffset];
+          const targetRow = rowIndexes.has(groupRow)
+            ? rowIndexes.get(groupRow)
+            : rowIndex + rowOffset;
+          if (targetRow == null || targetRow >= rows.length) break;
           if (!grid[targetRow]) grid[targetRow] = [];
           for (let columnOffset = 0; columnOffset < colSpan; columnOffset++) {
             const targetColumn = columnIndex + columnOffset;
