@@ -34,6 +34,29 @@ void main() {
     expect(course.copyWith().note, '原备注');
   });
 
+  test('copying local fields preserves course creation time', () {
+    final createdAt = DateTime.utc(2026, 9, 1, 8);
+    final updatedAt = DateTime.utc(2026, 9, 1, 9);
+    final course = Course(
+      id: 'course-1',
+      semesterId: 'semester-1',
+      sourceType: CourseSourceType.manual,
+      name: '软件测试',
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+
+    final nextUpdatedAt = DateTime.utc(2026, 9, 1, 10);
+    final updated = course.copyWith(
+      colorOverride: 0xff123456,
+      hidden: true,
+      updatedAt: nextUpdatedAt,
+    );
+
+    expect(updated.createdAt, createdAt);
+    expect(updated.updatedAt, nextUpdatedAt);
+  });
+
   test('meeting rules enforce section and weekday bounds', () {
     expect(() => makeRule(weekday: 8), throwsArgumentError);
     expect(() => makeRule(start: 5, end: 4), throwsArgumentError);
