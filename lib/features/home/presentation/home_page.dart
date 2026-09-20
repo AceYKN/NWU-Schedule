@@ -144,8 +144,8 @@ class _MissingCalendarContent extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  '当前版本尚未包含\n${semester.label}校历。\n\n'
-                  '课程数据已经保存；在校历更新前，教学周、放假和调休信息可能无法完全准确计算。',
+                  '课程数据已安全保存，但当前版本缺少\n${semester.label}校历。\n\n'
+                  '因此暂时无法生成按日期计算的完整课表。更新到包含该校历的版本后即可正常使用。',
                 ),
                 const SizedBox(height: 16),
                 Align(

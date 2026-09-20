@@ -34,4 +34,13 @@ void main() {
     expect(error.code, NwuErrorCode.databaseFailure);
     expect(nwuUserMessage(error, action: '保存失败'), '保存失败：本地数据暂时无法读取或保存，请重试。');
   });
+
+  test('explains that a missing calendar blocks date-based schedules', () {
+    final error = const CalendarMissingError();
+
+    expect(
+      error.userMessage,
+      '课程数据已安全保存，但当前版本缺少该学期校历，因此暂时无法生成按日期计算的完整课表。更新到包含该校历的版本后即可正常使用。',
+    );
+  });
 }

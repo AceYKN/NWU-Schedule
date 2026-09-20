@@ -61,7 +61,7 @@ final class CalendarMissingError extends NwuAppError {
   const CalendarMissingError()
       : super(
           NwuErrorCode.calendarMissing,
-          '当前版本尚未包含这个学期的校历，课程已保存但教学周和调休计算可能不完整。',
+          '课程数据已安全保存，但当前版本缺少该学期校历，因此暂时无法生成按日期计算的完整课表。更新到包含该校历的版本后即可正常使用。',
         );
 }
 
