@@ -12,6 +12,15 @@
 
 公开入口 `https://jwgl.nwu.edu.cn/jwglxt/` 当前展示的是登录页；因此入口页和登录路径不应注入课表 Bridge，只有进入课表上下文后才允许读取页面数据。公开页面可见的登录入口为 [`/jwglxt/`](https://jwgl.nwu.edu.cn/jwglxt/) 和 [`/jwglxt/xtgl/login_slogin.html`](https://jwgl.nwu.edu.cn/jwglxt/xtgl/login_slogin.html)。
 
+当前根据真实设备提供的课表页路径，Bridge 只信任以下两个已观察的个人课表页面：
+
+```text
+/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html
+/jwglxt/kbcx/xskbcx_cxXsgrkb.html
+```
+
+其余仍在官方域名下的页面可以继续导航，但不会获得课表 JavaScript Bridge；页面路径或 DOM 结构变化时应导出诊断后再更新适配器。当前诊断版本为 `nwu-zhengfang-v9-dom-v2`。这项路径验证不等同于真实 API endpoint、`gnmkdm` 或响应 schema 已验证。
+
 ## 首次导入
 
 1. 从“设置 → 从教务系统导入”进入。
