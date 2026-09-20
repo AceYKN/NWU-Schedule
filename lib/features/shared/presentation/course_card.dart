@@ -210,16 +210,17 @@ void showCourseDetails(
                               icon: const Icon(Icons.palette_outlined),
                               label: const Text('修改颜色'),
                             ),
-                            OutlinedButton.icon(
-                              onPressed: () => _showExceptionEditor(
-                                context,
-                                sheetContext,
-                                ref,
-                                instance,
+                            if (!instance.isException)
+                              OutlinedButton.icon(
+                                onPressed: () => _showExceptionEditor(
+                                  context,
+                                  sheetContext,
+                                  ref,
+                                  instance,
+                                ),
+                                icon: const Icon(Icons.edit_calendar_outlined),
+                                label: const Text('临时变更'),
                               ),
-                              icon: const Icon(Icons.edit_calendar_outlined),
-                              label: const Text('临时变更'),
-                            ),
                             if (!instance.isException) ...[
                               OutlinedButton.icon(
                                 onPressed: () {
