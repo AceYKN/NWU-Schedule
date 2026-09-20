@@ -10,6 +10,7 @@ class PlannedNotification {
     required this.title,
     required this.body,
     required this.payload,
+    required this.route,
   });
 
   final int id;
@@ -17,6 +18,7 @@ class PlannedNotification {
   final String title;
   final String body;
   final String payload;
+  final String route;
 
   Map<String, Object?> toJson() => {
         'id': id,
@@ -24,6 +26,7 @@ class PlannedNotification {
         'title': title,
         'body': body,
         'payload': payload,
+        'route': route,
       };
 }
 
@@ -96,6 +99,12 @@ class NotificationPlanner {
       title: instance.courseName,
       body: '$location · $teacher\n$start 上课',
       payload: key,
+      // A standalone ADD is represented by a synthetic in-memory course id
+      // rather than a persisted Course row. Open Home for that case; normal
+      // courses can take the user straight to their detail page.
+      route: instance.isException && instance.exceptionId == instance.course.id
+          ? '/'
+          : '/course/${instance.course.id}',
     );
   }
 

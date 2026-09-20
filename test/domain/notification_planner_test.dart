@@ -71,6 +71,7 @@ void main() {
     expect(plan.first.body, contains('3406 · 教师 A'));
     expect(plan.first.body, contains('上课'));
     expect(plan.first.fireAtUtc.isAfter(DateTime.utc(2026, 9, 6)), isTrue);
+    expect(plan.first.toJson()['route'], '/course/course-1');
   });
 
   test('supports every configured lead time', () {
@@ -146,6 +147,7 @@ void main() {
     expect(added.title, '临时实验课');
     expect(added.body, contains('实验室 321'));
     expect(added.fireAtUtc, DateTime.utc(2026, 9, 9, 5, 50));
+    expect(added.toJson()['route'], '/');
   });
 
   test('moves a reminder from the source occurrence to the target occurrence',

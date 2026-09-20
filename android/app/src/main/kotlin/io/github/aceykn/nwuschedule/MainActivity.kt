@@ -229,10 +229,12 @@ class MainActivity : FlutterActivity() {
                 if (fireAt <= System.currentTimeMillis()) continue
                 val title = request["title"]?.toString() ?: error("通知缺少 title")
                 val body = request["body"]?.toString() ?: error("通知缺少 body")
+                val route = request["route"]?.toString()?.takeIf { it.isNotBlank() } ?: "/"
                 val intent = Intent(this, CourseNotificationReceiver::class.java).apply {
                     putExtra(CourseNotificationReceiver.EXTRA_ID, id)
                     putExtra(CourseNotificationReceiver.EXTRA_TITLE, title)
                     putExtra(CourseNotificationReceiver.EXTRA_BODY, body)
+                    putExtra(CourseNotificationReceiver.EXTRA_ROUTE, route)
                 }
                 val pendingIntent = PendingIntent.getBroadcast(
                     this,
