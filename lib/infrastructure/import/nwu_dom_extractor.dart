@@ -53,30 +53,6 @@ class NwuDomExtractor {
     return (hash >>> 0).toString(16).padStart(8, '0');
   };
 
-  const syntheticCourseKey = (
-    name,
-    weekday,
-    startSection,
-    endSection,
-    identityHint = '',
-  ) => {
-    const normalizedIdentityHint = normalize(identityHint);
-    // Only structural grouping evidence may become an identity hint. Display
-    // metadata such as teaching class, course code, teacher, or room is
-    // intentionally excluded because those values can change remotely.
-    const identity = normalizedIdentityHint
-      ? 'identity|' + normalizedIdentityHint
-      : 'shape|' + [weekday, startSection, endSection].join('|');
-    const value = [
-      'nwu-v3',
-      academicYear,
-      term,
-      normalize(name),
-      identity,
-    ].join('|');
-    return 'nwu-v3|course|' + hashIdentity(value);
-  };
-
   const issue = (path, message, severity = 'warning', details = null) => {
     const item = { path: path, message: message, severity: severity };
     if (details && typeof details === 'object') item.details = details;
@@ -130,7 +106,7 @@ class NwuDomExtractor {
   };
 
   const addMeeting = ({
-    sourceCourseKey,
+    courseGroupKey,
     name,
     weekday,
     startSection,
@@ -145,12 +121,14 @@ class NwuDomExtractor {
   }) => {
     if (!validateWeekText(weekText, path + '.weeks', details)) return;
 
-    let course = courses.find(
-      (item) => item.sourceCourseKey === sourceCourseKey,
-    );
+    // courseGroupKey exists only while walking the DOM. It may contain a row
+    // ordinal to keep two visually separate rows apart during parsing, but it
+    // must never become part of the persisted sourceCourseKey. The latter is
+    // derived from stable structural data in buildPayload().
+    let course = courses.find((item) => item.groupKey === courseGroupKey);
     if (!course) {
       course = {
-        sourceCourseKey: sourceCourseKey,
+        groupKey: courseGroupKey,
         name: name,
         meetings: [],
         identityHint: identityHint,
@@ -168,7 +146,7 @@ class NwuDomExtractor {
       weekText,
     ].join('|');
     const sourceMeetingKey =
-      sourceCourseKey + '|meeting|' + meetingKey;
+      courseGroupKey + '|meeting|' + meetingKey;
 
     if (
       course.meetings.some(
@@ -215,6 +193,7 @@ class NwuDomExtractor {
     endSection,
     path,
     details,
+    courseGroupKey,
     identityHint,
   }) => {
     const week = marker(source, /周数\s*[:：]/);
@@ -310,13 +289,7 @@ class NwuDomExtractor {
     }
 
     addMeeting({
-      sourceCourseKey: syntheticCourseKey(
-        name,
-        weekday,
-        startSection,
-        endSection,
-        identityHint,
-      ),
+      courseGroupKey: courseGroupKey,
       name: name,
       weekday: weekday,
       startSection: startSection,
@@ -345,6 +318,7 @@ class NwuDomExtractor {
     let currentWeekday = null;
     let currentRange = null;
     let currentGroupKey = null;
+    let currentIdentityHint = '';
     let currentRangeRowsRemaining = 0;
     let sawCourseInfo = false;
 
@@ -361,6 +335,7 @@ class NwuDomExtractor {
         currentWeekday = match ? Number(match[1]) : null;
         currentRange = null;
         currentGroupKey = null;
+        currentIdentityHint = '';
         currentRangeRowsRemaining = 0;
       }
 
@@ -387,8 +362,11 @@ class NwuDomExtractor {
             ? Math.max(1, rowGroup.length - Math.max(0, rowGroupIndex))
             : Math.max(1, declaredRowSpan || 1);
           currentGroupKey = span > 1
-            ? 'span-' + rowIndex + '-' + sectionCell.id
-            : 'row-' + rowIndex;
+            ? 'verified-span-' + rowIndex + '-' + sectionCell.id
+            : 'verified-row-' + rowIndex;
+          currentIdentityHint = span > 1
+            ? 'section|' + sectionCell.id
+            : '';
           currentRangeRowsRemaining = span;
         }
       }
@@ -451,7 +429,8 @@ class NwuDomExtractor {
           endSection: currentRange.endSection,
           path: path,
           details: details,
-          identityHint: currentGroupKey || 'row-' + rowIndex,
+          courseGroupKey: currentGroupKey || 'verified-row-' + rowIndex,
+          identityHint: currentIdentityHint,
         });
       }
 
@@ -844,22 +823,16 @@ class NwuDomExtractor {
         if (candidate + span > rowIndex) spanStart = candidate;
         break;
       }
-      const identityHint = spanStart == null ? 'row-' + rowIndex : 'span-' + spanStart;
-      const identityDay = spanStart == null
-        ? weekday
-        : dayNumber((grid[spanStart] || [])[dayIndex] || '') || weekday;
-      const identityRange = spanStart == null
-        ? range
-        : sectionRange((grid[spanStart] || [])[sectionIndex] || '') || range;
+      // A row/section ordinal is useful only for keeping the current DOM
+      // group separate while parsing. Generic tables do not expose a stable
+      // remote identifier, so the final course fingerprint intentionally uses
+      // only the course name and meeting structure.
+      const courseGroupKey = spanStart == null
+        ? 'generic-row-' + rowIndex
+        : 'generic-span-' + spanStart;
 
       addMeeting({
-        sourceCourseKey: syntheticCourseKey(
-          name,
-          identityDay,
-          identityRange.startSection,
-          identityRange.endSection,
-          identityHint,
-        ),
+        courseGroupKey: courseGroupKey,
         name: name,
         weekday: weekday,
         startSection: range.startSection,
@@ -870,7 +843,7 @@ class NwuDomExtractor {
         weekText: weekText,
         path: rowPath,
         details: rowDetails,
-        identityHint: identityHint,
+        identityHint: '',
       });
     }
   }

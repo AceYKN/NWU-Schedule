@@ -489,6 +489,74 @@ assert.deepEqual(
     .sort(),
 );
 
+// DOM row positions are parser-local grouping aids, not remote identity. A
+// newly inserted course row must not rotate the keys of existing courses or
+// their meeting exceptions on the next import.
+const insertedListRowFixture = realListFixture
+  .replace(
+    'id="xq_rowspan_1" rowspan="5"',
+    'id="xq_rowspan_1" rowspan="6"',
+  )
+  .replace(
+    '        <tr>\n          <td id="jc_1-1-2" rowspan="2">',
+    `        <tr>
+          <td id="jc_1-11-11">11</td>
+          <td>前置课程★周数：1-18周校区:长安校区上课地点：101教师：教师前教学班：前置课程-0001教学班组成：软件工程202401</td>
+        </tr>
+        <tr>
+          <td id="jc_1-1-2" rowspan="2">`,
+  );
+const insertedListRow = runExtraction(insertedListRowFixture);
+assert.equal(
+  insertedListRow.payload.issues.filter((issue) => issue.severity === 'error')
+    .length,
+  0,
+);
+const courseIdentity = (payload, name) => payload.courses
+  .filter((course) => course.name === name)
+  .map((course) => ({
+    sourceCourseKey: course.sourceCourseKey,
+    sourceMeetingKeys: course.meetings
+      .map((meeting) => meeting.sourceMeetingKey)
+      .sort(),
+  }))
+  .sort((left, right) =>
+    left.sourceCourseKey.localeCompare(right.sourceCourseKey));
+for (const course of realList.payload.courses) {
+  assert.deepEqual(
+    courseIdentity(insertedListRow.payload, course.name),
+    courseIdentity(realList.payload, course.name),
+  );
+}
+
+const insertedGenericRowFixture = genericFixture.replace(
+  '        <tr>\n          <td>计算机网络</td>',
+  `        <tr>
+          <td>前置课程</td>
+          <td>星期五</td>
+          <td>7-8节</td>
+          <td>1-18周</td>
+          <td>教师前</td>
+          <td>101</td>
+          <td>教学班前</td>
+          <td>CS399</td>
+        </tr>
+        <tr>
+          <td>计算机网络</td>`,
+);
+const insertedGenericRow = runExtraction(insertedGenericRowFixture);
+assert.equal(
+  insertedGenericRow.payload.issues.filter((issue) => issue.severity === 'error')
+    .length,
+  0,
+);
+for (const course of generic.payload.courses) {
+  assert.deepEqual(
+    courseIdentity(insertedGenericRow.payload, course.name),
+    courseIdentity(generic.payload, course.name),
+  );
+}
+
 const experiment = realList.payload.courses.find(
   (course) => course.name === '数据结构实验',
 );
