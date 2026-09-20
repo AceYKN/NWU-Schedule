@@ -153,6 +153,11 @@ void showCourseDetails(
                           value: weekdayName(instance.date.weekday),
                         ),
                         _DetailLine(
+                          label: '节次',
+                          value:
+                              '第 ${instance.startSection}-${instance.endSection} 节',
+                        ),
+                        _DetailLine(
                           label: '时间',
                           value:
                               '${formatMinutes(instance.startTime.hour * 60 + instance.startTime.minute)}–'

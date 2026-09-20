@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../core/nwu/periods.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/week_mask.dart';
 import '../../../domain/course/course.dart';
@@ -171,8 +172,14 @@ class _CourseDetail extends StatelessWidget {
         if (rules.isEmpty)
           const Card(child: ListTile(title: Text('暂无上课安排')))
         else
-          ...rules.map(
-            (rule) => Card(
+          ...rules.map((rule) {
+            final startPeriod = const NwuPeriodRepository().byNumber(
+              rule.startSection,
+            );
+            final endPeriod = const NwuPeriodRepository().byNumber(
+              rule.endSection,
+            );
+            return Card(
               child: ListTile(
                 leading: const Icon(Icons.schedule_outlined),
                 title: Text(
@@ -180,6 +187,7 @@ class _CourseDetail extends StatelessWidget {
                 ),
                 subtitle: Text(
                   [
+                    '${startPeriod.startLabel}–${endPeriod.endLabel}',
                     exception == null
                         ? formatWeekMask(rule.weekMask)
                         : '单次课程 · ${_formatDate(exception!.targetDate)}',
@@ -189,8 +197,8 @@ class _CourseDetail extends StatelessWidget {
                   ].join(' · '),
                 ),
               ),
-            ),
-          ),
+            );
+          }),
       ],
     );
   }

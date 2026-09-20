@@ -133,6 +133,8 @@ void main() {
     expect(find.text('软件测试'), findsOneWidget);
     expect(find.text('上课安排'), findsOneWidget);
     expect(find.textContaining('教师 A'), findsOneWidget);
+    expect(find.textContaining('第 3-4 节'), findsOneWidget);
+    expect(find.textContaining('10:10–12:00'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
