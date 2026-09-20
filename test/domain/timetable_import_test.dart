@@ -71,6 +71,8 @@ void main() {
         'rawLength': 3,
         'rawShape': 'mixed',
         'parsedNumbers': [321],
+        'unexpectedCharacterClasses': ['han'],
+        'unexpectedCharacterCount': 2,
       },
     );
     final restored = ImportIssue.fromJson(original.toJson());
@@ -81,6 +83,8 @@ void main() {
     expect(restored.details['rowCount'], 9);
     expect(restored.details['rawShape'], 'mixed');
     expect(restored.details['parsedNumbers'], [321]);
+    expect(restored.details['unexpectedCharacterClasses'], ['han']);
+    expect(restored.details['unexpectedCharacterCount'], 2);
     expect(restored.toString(), contains('parsedNumbers=[321]'));
     expect(
       const ImportIssue(
