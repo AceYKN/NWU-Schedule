@@ -38,8 +38,9 @@
 - 设置页显示通知已开启，系统 `POST_NOTIFICATIONS` 权限为 granted，并且应用已注册 `course_reminders` 通知渠道。
 - 将模拟器时钟临时推进到已排程 Alarm 的窗口后，通知栏真实出现“西北大学课程表”通知，正文为样例课程的上课提醒。
 - 点击该通知后进入应用的“课程详情”页，并显示样例课程 `123`；这验证了 Alarm → Receiver → 通知点击路由链路。
-- 启动器 Widget 选择器能够显示“西北大学课程表”的 `2 × 1` Provider；通过选择器的 Add 入口成功放置 1 枚实例，`dumpsys appwidget` 显示对应 Provider 的 `widgets.size=1`。
-- 该实例在桌面显示 `NEXT / 123 / 08:00–09:50`，点击后能打开 NWU-Schedule；尚未把它计作 Small/Medium/Large、多实例或跨日期切换的完整验收。
+- 启动器 Widget 选择器能够显示“西北大学课程表”的 `2 × 1` Provider；通过选择器的 Add 入口成功放置 2 枚实例，`dumpsys appwidget` 显示 Provider 实例 `id=2/3` 与 `widgets.size=2`。
+- 同一 Provider 的实例已在模拟器上覆盖 Small、Medium、Large：Small 显示 `NEXT / 123 / 08:00–09:50`，拉宽后显示 `TODAY` 列表，拉高后显示 `TODAY + TOMORROW`；Medium/Large 的课程行点击进入“课程详情”，空白区域点击回到 Home。
+- 将模拟器时间推进到当天 09:00 后，Small 不再把已结束的 08:00 课程作为 NEXT；推进到下一天 09:00 后，Large 的 TODAY/TOMORROW 均为 `No Class`，Small 选择下一个未来实例。
 - 设备复核发现无地点课程曾在 Native Widget 中显示为字面量 `null`；已修复为 `地点待补充`，重新安装 debug APK 后 `widget_small_meta` 已显示 `08:00  地点待补充`。
 
 以上证据只覆盖设备烟测的子集，仍不等同于真实 NWU 账号导入或完整 Widget 验收。
@@ -53,7 +54,7 @@
 | 真实 endpoint、`gnmkdm`、POST 参数、响应 schema、稳定远端 ID | BLOCKED（需真实会话） | 只记录字段名/路径，不记录 Cookie、Token 或原始响应 |
 | 关闭导入后必须重新登录 | BLOCKED（需设备 Owner） | 重新进入 Import 的手工验证 |
 | 通知权限拒绝/允许、实际触发、点击、无重复 | PARTIAL（模拟器已验证触发与点击） | 仍缺少拒绝/重新允许、无重复及真实设备记录 |
-| Small/Medium/Large Widget、多个实例、日期/时间切换 | PARTIAL（已放置 1 枚 `2 × 1` 实例） | 仍缺少各尺寸、多实例及日期/时间切换记录 |
+| Small/Medium/Large Widget、多个实例、日期/时间切换 | PARTIAL（模拟器已覆盖三尺寸、两实例和日期/时间滚动） | 仍缺少真实设备 Owner 的最终复核，以及重启/真实数据编辑后的记录 |
 | 第 11 节作息时间 | BLOCKED（需项目 Owner） | 校方最新作息确认；当前代码按 SPEC 暂存 `21:00–21:50` |
 
 真实联调只应使用 `docs/manual-integration.md` 的个人课表路径，并且认证材料必须在聊天、仓库、Issue、日志和诊断文件之外提供。

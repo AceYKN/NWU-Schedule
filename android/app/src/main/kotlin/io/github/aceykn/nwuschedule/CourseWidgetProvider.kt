@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Bundle
 import android.widget.RemoteViews
 import org.json.JSONArray
 import org.json.JSONObject
@@ -32,6 +33,16 @@ class CourseWidgetProvider : AppWidgetProvider() {
         for (appWidgetId in appWidgetIds) {
             render(context, appWidgetManager, appWidgetId)
         }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        render(context, appWidgetManager, appWidgetId)
     }
 
     companion object {
