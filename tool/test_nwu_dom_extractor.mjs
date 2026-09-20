@@ -484,6 +484,21 @@ assert.equal(
   1,
 );
 
+const missingWeekLabelFixture = realListFixture.replace(
+  '数据结构实验☆周数：1-9周',
+  '数据结构实验☆1-9周',
+);
+const missingWeekLabel = runExtraction(missingWeekLabelFixture);
+const missingWeekIssue = missingWeekLabel.payload.issues.find((issue) =>
+  issue.path.endsWith('.weeks') && issue.severity === 'error');
+assert.ok(missingWeekIssue);
+assert.equal(
+  missingWeekLabel.payload.courses
+    .flatMap((course) => course.meetings)
+    .some((meeting) => meeting.weekText === '1-9周'),
+  false,
+);
+
 const prefixed = runExtraction(
   realListFixture.replace('机器学习★', '【调】机器学习★'),
 );

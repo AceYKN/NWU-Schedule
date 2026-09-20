@@ -209,18 +209,50 @@ class NwuDomExtractor {
     const creditsMarker = marker(source, /学分\s*[:：]/);
     const courseCode = marker(source, /课程(?:代码|编号|号)\s*[:：]/);
 
+    if (week == null) {
+      issue(
+        path + '.weeks',
+        '周次标签无法识别，已跳过该行',
+        'error',
+        details,
+      );
+      return;
+    }
+    if (campus == null) {
+      issue(
+        path + '.campus',
+        '校区标签无法识别，已跳过该行',
+        'error',
+        details,
+      );
+      return;
+    }
+    if (room == null) {
+      issue(
+        path + '.room',
+        '上课地点标签无法识别，已跳过该行',
+        'error',
+        details,
+      );
+      return;
+    }
+    if (teacher == null) {
+      issue(
+        path + '.teacher',
+        '教师标签无法识别，已跳过该行',
+        'error',
+        details,
+      );
+      return;
+    }
     if (
-      week == null ||
-      campus == null ||
-      room == null ||
-      teacher == null ||
       !(week.index < campus.index &&
         campus.index < room.index &&
         room.index < teacher.index)
     ) {
       issue(
-        path,
-        '课表信息标签无法识别，已跳过该行',
+        path + '.structure',
+        '课表信息标签顺序无法识别，已跳过该行',
         'error',
         details,
       );
@@ -378,11 +410,15 @@ class NwuDomExtractor {
         }
       }
 
-      const infoCells = cells.filter((cell) => {
+      // Once a section context is present, every non-empty non-key cell is a
+      // candidate course detail cell. Do not filter only by the `周数` label:
+      // a malformed row missing that label must become a validation error,
+      // rather than disappearing and being interpreted as a remote deletion.
+      const infoCells = currentRange == null ? [] : cells.filter((cell) => {
         const id = cell.id || '';
         if (/^xq_rowspan_[1-7]$/.test(id)) return false;
         if (/^jc_[1-7]-\d+-\d+$/.test(id)) return false;
-        return /周数\s*[:：]/.test(text(cell));
+        return text(cell).length > 0;
       });
 
       for (let infoIndex = 0; infoIndex < infoCells.length; infoIndex++) {
