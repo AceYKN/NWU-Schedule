@@ -531,4 +531,24 @@ const detectedContext = vm.runInNewContext(contextScript, {
 });
 assert.equal(detectedContext, 'timetable');
 
+const pathOnlyContext = vm.runInNewContext(contextScript, {
+  window: {},
+  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+  document: {
+    body: { innerText: '课程 星期 节次 周次 教室' },
+    querySelector: () => null,
+  },
+});
+assert.equal(pathOnlyContext, 'other');
+
+const payloadContext = vm.runInNewContext(contextScript, {
+  window: { __NWU_SCHEDULE_PAYLOAD__: { courses: [] } },
+  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+  document: {
+    body: { innerText: '' },
+    querySelector: () => null,
+  },
+});
+assert.equal(payloadContext, 'timetable');
+
 console.log('NWU DOM fixtures passed');

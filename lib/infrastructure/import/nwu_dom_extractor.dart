@@ -854,13 +854,14 @@ class NwuDomExtractor {
     return 'timetable';
   }
 
-  const path = location.pathname.toLowerCase();
-  const pathHint = /(?:kbcx|xskbcx|timetable|schedule|course)/.test(path);
+  // The URL allowlist is enforced by the Flutter WebView layer. Inside an
+  // allowlisted page, still require a concrete extraction source before the
+  // bridge can be enabled. A path fragment or a couple of Chinese labels are
+  // not sufficient: ordinary Zhengfang pages may contain both while exposing
+  // no timetable data at all.
   const payloadHint = window.__NWU_SCHEDULE_PAYLOAD__ != null ||
     window.__NWU_TIMETABLE__ != null ||
     window.nwuSchedulePayload != null;
-  const labels = ['课程', '星期', '节次', '周次', '教室']
-    .filter((label) => bodyText.includes(label)).length;
-  return pathHint || payloadHint || labels >= 2 ? 'timetable' : 'other';
+  return payloadHint ? 'timetable' : 'other';
 })()''';
 }
