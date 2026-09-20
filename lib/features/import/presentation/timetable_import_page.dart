@@ -17,6 +17,7 @@ import '../../../domain/errors/app_error.dart';
 import '../../../infrastructure/backup/backup_file_service.dart';
 import '../../../infrastructure/import/nwu_dom_extractor.dart';
 import '../../../infrastructure/import/nwu_zhengfang_v9_importer.dart';
+import '../../../infrastructure/import/webview_diagnostics.dart';
 import '../../../infrastructure/import/webview_session_service.dart';
 
 class TimetableImportPage extends ConsumerStatefulWidget {
@@ -191,7 +192,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       _setFailure(
         nwuUserMessage(error, action: '无法读取课表'),
         await _enrichDiagnostic(ImportDiagnostic(
-          adapterVersion: 'nwu-zhengfang-v9',
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
           parserStage: 'webview-read',
           currentUrlPath: _currentUrlPath,
           error: redactImportError(error),
@@ -269,7 +270,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       _setFailure(
         nwuUserMessage(error, action: '课表桥接数据无效'),
         await _enrichDiagnostic(ImportDiagnostic(
-          adapterVersion: 'nwu-zhengfang-v9',
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
           parserStage: 'bridge-message',
           currentUrlPath: _currentUrlPath,
           error: redactImportError(error),
@@ -288,7 +289,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     try {
       await ref.read(scheduleDataRepositoryProvider).commitImportedTimetable(
             timetable,
-            adapterVersion: 'nwu-zhengfang-v9',
+            adapterVersion: NwuZhengfangV9Importer.adapterVersion,
             resolution: _resolution,
           );
       ref.invalidate(scheduleLoadProvider);
@@ -329,7 +330,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     final failure = TimetableImportFailure(
       '教务页面加载失败',
       ImportDiagnostic(
-        adapterVersion: 'nwu-zhengfang-v9',
+        adapterVersion: NwuZhengfangV9Importer.adapterVersion,
         parserStage: 'web-resource',
         currentUrlPath: _currentUrlPath,
         error: redactImportError(error.description),
@@ -401,21 +402,13 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     return diagnostic.copyWith(
       appVersion: nwuAppVersion,
       androidVersion: Platform.operatingSystemVersion,
-      webViewVersion: _webViewVersion(userAgent),
+      webViewVersion: WebViewDiagnostics.versionFromUserAgent(userAgent),
       currentUrlPath: _currentUrlPath,
       httpStatus: diagnostic.httpStatus ?? _lastHttpStatus,
       selectors: diagnostic.selectors.isEmpty
           ? _payloadSelectors
           : diagnostic.selectors,
     );
-  }
-
-  static String? _webViewVersion(String? userAgent) {
-    if (userAgent == null || userAgent.isEmpty) return null;
-    return RegExp(r'(?:Chrome|Version)/([0-9.]+)')
-            .firstMatch(userAgent)
-            ?.group(1) ??
-        userAgent;
   }
 
   String? get _currentUrlPath {

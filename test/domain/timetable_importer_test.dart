@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nwu_schedule/domain/import/timetable_importer.dart';
+import 'package:nwu_schedule/infrastructure/import/webview_diagnostics.dart';
 import 'package:nwu_schedule/infrastructure/import/nwu_zhengfang_v9_importer.dart';
 
 void main() {
@@ -24,6 +25,10 @@ void main() {
     expect(semesters.single.id, 'nwu-2026-2027-1');
     expect(timetable.courses, hasLength(2));
     expect(importer.runtimeType.toString(), contains('NwuZhengfangV9Importer'));
+    expect(
+      NwuZhengfangV9Importer.adapterVersion,
+      'nwu-zhengfang-v9-dom-v2',
+    );
   });
 
   test('discovers and imports the selected semester from one payload',
@@ -144,6 +149,21 @@ void main() {
     expect(json['webViewVersion'], '132.0.0');
     expect(json['selectedSemesterId'], 'nwu-2026-2027-1');
     expect(json['selectors'], ['table']);
+  });
+
+  test('prefers the Chromium WebView version over the legacy Version token',
+      () {
+    const userAgent =
+        'Mozilla/5.0 Version/4.0 Chrome/132.0.6834.79 Mobile Safari/537.36';
+    expect(
+      WebViewDiagnostics.versionFromUserAgent(userAgent),
+      '132.0.6834.79',
+    );
+    expect(
+      WebViewDiagnostics.versionFromUserAgent('Mozilla/5.0 Version/4.0'),
+      '4.0',
+    );
+    expect(WebViewDiagnostics.versionFromUserAgent(null), isNull);
   });
 
   test('adapter failure exposes only redacted diagnostics', () async {

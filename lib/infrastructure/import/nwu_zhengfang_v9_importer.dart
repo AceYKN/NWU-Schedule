@@ -7,6 +7,7 @@ typedef TimetablePayloadReader = Future<Map<String, dynamic>> Function();
 /// page/API discovery remains outside this normalizer because the authenticated
 /// endpoint and response shape must be observed in a real student session.
 class NwuZhengfangV9Importer implements TimetableImporter {
+  static const adapterVersion = 'nwu-zhengfang-v9-dom-v2';
   static final entryUri = Uri.parse('https://jwgl.nwu.edu.cn/jwglxt/');
 
   static bool isAllowedUri(Uri uri) =>
@@ -60,7 +61,7 @@ class NwuZhengfangV9Importer implements TimetableImporter {
       throw TimetableImportFailure(
         '当前页面的学期与所选学期不一致',
         ImportDiagnostic(
-          adapterVersion: 'nwu-zhengfang-v9',
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
           parserStage: 'semester-match',
           selectedSemesterId: semester.id,
         ),
@@ -78,7 +79,7 @@ class NwuZhengfangV9Importer implements TimetableImporter {
       throw TimetableImportFailure(
         '无法读取课表：$safeError',
         ImportDiagnostic(
-          adapterVersion: 'nwu-zhengfang-v9',
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
           parserStage: 'payload-read',
           error: safeError,
         ),
@@ -97,7 +98,7 @@ class NwuZhengfangV9Importer implements TimetableImporter {
         throw TimetableImportFailure(
           '课表数据校验失败',
           ImportDiagnostic(
-            adapterVersion: 'nwu-zhengfang-v9',
+            adapterVersion: NwuZhengfangV9Importer.adapterVersion,
             parserStage: '$stage-validation',
             responseSchemaKeys:
                 payload.keys.map((key) => key.toString()).toList(),
@@ -113,7 +114,7 @@ class NwuZhengfangV9Importer implements TimetableImporter {
       throw TimetableImportFailure(
         '无法读取课表：$safeError',
         ImportDiagnostic(
-          adapterVersion: 'nwu-zhengfang-v9',
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
           parserStage: stage,
           error: redactImportError(error),
         ),
@@ -150,7 +151,7 @@ class NwuZhengfangV9Importer implements TimetableImporter {
     throw TimetableImportFailure(
       '未找到所选学期的课表数据',
       ImportDiagnostic(
-        adapterVersion: 'nwu-zhengfang-v9',
+        adapterVersion: NwuZhengfangV9Importer.adapterVersion,
         parserStage: 'semester-payload',
         selectedSemesterId: selected.id,
         responseSchemaKeys: payload.keys.map((key) => key.toString()).toList(),
