@@ -40,6 +40,18 @@ void main() {
     weekMask: WeekMask.all(4),
   );
 
+  ScheduleEngine makeEngine({
+    Iterable<CourseException> exceptions = const [],
+  }) {
+    return ScheduleEngine(
+      semesterId: 'semester-1',
+      calendarEngine: CalendarEngine(definition),
+      courses: [course],
+      meetingRules: [rule],
+      exceptions: exceptions,
+    );
+  }
+
   test('plans future notifications from effective instances', () {
     final engine = ScheduleEngine(
       semesterId: 'semester-1',
@@ -61,29 +73,79 @@ void main() {
     expect(plan.first.fireAtUtc.isAfter(DateTime.utc(2026, 9, 6)), isTrue);
   });
 
+  test('supports every configured lead time', () {
+    final engine = makeEngine();
+    final courseStartUtc = DateTime.utc(2026, 9, 7, 2, 10);
+
+    for (final leadMinutes in [5, 10, 15, 20, 30, 60]) {
+      final plan = const NotificationPlanner().build(
+        engine: engine,
+        now: DateTime.utc(2026, 9, 6),
+        leadMinutes: leadMinutes,
+        until: DateTime.utc(2026, 9, 7, 3),
+      );
+
+      expect(plan, hasLength(1));
+      expect(
+        plan.single.fireAtUtc,
+        courseStartUtc.subtract(Duration(minutes: leadMinutes)),
+      );
+    }
+  });
+
   test('cancelled and past instances are not planned', () {
-    final engine = ScheduleEngine(
-      semesterId: 'semester-1',
-      calendarEngine: CalendarEngine(definition),
-      courses: [course],
-      meetingRules: [rule],
-      exceptions: [
-        __cancelException(),
-      ],
-    );
+    final engine = makeEngine(exceptions: [__cancelException()]);
     final plan = const NotificationPlanner().build(
       engine: engine,
-      now: DateTime.utc(2026, 9, 14, 3),
+      now: DateTime.utc(2026, 9, 6),
       leadMinutes: 15,
+      until: DateTime.utc(2026, 9, 15),
     );
 
-    expect(plan, isNotEmpty);
+    expect(
+      plan.where((item) => item.payload.contains('2026-09-07')),
+      isEmpty,
+    );
+    expect(
+      plan.where((item) => item.payload.contains('2026-09-14')),
+      hasLength(1),
+    );
     expect(
       plan.every(
-        (item) => item.fireAtUtc.isAfter(DateTime.utc(2026, 9, 14, 3)),
+        (item) => item.fireAtUtc.isAfter(DateTime.utc(2026, 9, 6)),
       ),
       isTrue,
     );
+  });
+
+  test('plans an ADD exception as a real notification instance', () {
+    final engine = makeEngine(
+      exceptions: [
+        CourseException(
+          id: 'add-1',
+          semesterId: 'semester-1',
+          type: CourseExceptionType.add,
+          targetDate: DateTime(2026, 9, 9),
+          targetStartSection: 5,
+          targetEndSection: 6,
+          addedCourseName: '临时实验课',
+          roomOverride: '实验室 321',
+        ),
+      ],
+    );
+
+    final plan = const NotificationPlanner().build(
+      engine: engine,
+      now: DateTime.utc(2026, 9, 8),
+      leadMinutes: 10,
+      until: DateTime.utc(2026, 9, 10),
+    );
+
+    final added =
+        plan.where((item) => item.payload.contains('2026-09-09')).single;
+    expect(added.title, '临时实验课');
+    expect(added.body, contains('实验室 321'));
+    expect(added.fireAtUtc, DateTime.utc(2026, 9, 9, 5, 50));
   });
 
   test('moves a reminder from the source occurrence to the target occurrence',
