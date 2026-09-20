@@ -8,6 +8,7 @@ import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../domain/calendar/calendar_engine.dart';
+import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
 import '../../../domain/schedule/schedule_engine.dart';
 import '../../../domain/schedule/schedule_now_state.dart';
@@ -51,8 +52,8 @@ class _HomePageState extends ConsumerState<HomePage>
     final load = ref.watch(scheduleLoadProvider);
     return load.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) => const Center(
-        child: Text('暂时无法读取本地课表'),
+      error: (error, stackTrace) => Center(
+        child: Text(nwuUserMessage(error, action: '读取本地课表失败')),
       ),
       data: (value) {
         if (value is ScheduleNoSemester) {

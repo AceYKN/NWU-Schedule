@@ -66,7 +66,9 @@ class CourseManagementPage extends ConsumerWidget {
     final load = ref.watch(scheduleLoadProvider);
     return load.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) => const Center(child: Text('无法读取课程')),
+      error: (error, stackTrace) => Center(
+        child: Text(nwuUserMessage(error, action: '读取课程失败')),
+      ),
       data: (value) {
         if (value is! ScheduleReady) {
           return const Center(child: Text('请先创建或导入学期'));

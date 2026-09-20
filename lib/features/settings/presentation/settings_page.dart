@@ -27,7 +27,7 @@ class SettingsPage extends ConsumerWidget {
         ScheduleNoSemester() => '尚未导入学期',
       },
       loading: () => '正在读取本地数据',
-      error: (error, stackTrace) => '暂时无法读取本地数据',
+      error: (error, stackTrace) => nwuUserMessage(error, action: '读取本地数据失败'),
     );
     final selectedThemeId =
         ref.watch(themeIdProvider).asData?.value ?? officialThemes.first.id;

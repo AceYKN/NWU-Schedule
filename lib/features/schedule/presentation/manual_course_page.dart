@@ -255,7 +255,9 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
     final load = ref.watch(scheduleLoadProvider);
     return load.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) => const Center(child: Text('无法读取学期')),
+      error: (error, stackTrace) => Center(
+        child: Text(nwuUserMessage(error, action: '读取学期失败')),
+      ),
       data: (state) {
         if (state is! ScheduleReady) {
           return const Center(child: Text('请先在设置中创建学期'));

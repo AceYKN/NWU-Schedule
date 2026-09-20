@@ -7,6 +7,7 @@ import '../../../core/time/campus_clock.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../domain/calendar/calendar_engine.dart';
 import '../../../domain/calendar/calendar_definition.dart';
+import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
 import '../../../domain/schedule/schedule_engine.dart';
 import '../../shared/presentation/course_card.dart';
@@ -26,7 +27,9 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     final load = ref.watch(scheduleLoadProvider);
     return load.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) => const Center(child: Text('暂时无法读取本地课表')),
+      error: (error, stackTrace) => Center(
+        child: Text(nwuUserMessage(error, action: '读取本地课表失败')),
+      ),
       data: (value) {
         if (value is! ScheduleReady) {
           return const Center(child: Text('当前没有可展示的校历'));
