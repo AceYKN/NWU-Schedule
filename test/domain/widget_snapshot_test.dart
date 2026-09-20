@@ -57,10 +57,12 @@ void main() {
     expect(snapshot.next?.courseName, '软件测试');
     expect(snapshot.today, isEmpty);
     expect(snapshot.tomorrow.single.location, '长安校区 · 3406');
+    expect(snapshot.instances, hasLength(4));
     final json = jsonDecode(snapshot.encode()) as Map<String, dynamic>;
     expect(json['next'], isA<Map>());
     expect((json['today'] as List), isEmpty);
     expect((json['tomorrow'] as List), hasLength(1));
+    expect((json['instances'] as List), hasLength(4));
   });
 
   test('does not duplicate engine decisions in the native payload', () {

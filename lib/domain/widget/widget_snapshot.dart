@@ -11,6 +11,7 @@ class WidgetSnapshot {
     required this.next,
     required this.today,
     required this.tomorrow,
+    this.instances = const [],
   });
 
   final DateTime generatedAtUtc;
@@ -18,11 +19,20 @@ class WidgetSnapshot {
   final List<WidgetCourseItem> today;
   final List<WidgetCourseItem> tomorrow;
 
+  /// Effective instances from the current campus date through semester end.
+  ///
+  /// The Android renderer only filters this local snapshot by campus date and
+  /// time. It never reimplements calendar or recurrence logic, which keeps a
+  /// widget refresh after midnight from displaying stale `today`/`tomorrow`
+  /// arrays.
+  final List<WidgetCourseItem> instances;
+
   Map<String, Object?> toJson() => {
         'generatedAt': generatedAtUtc.toUtc().toIso8601String(),
         'next': next?.toJson(),
         'today': today.map((item) => item.toJson()).toList(),
         'tomorrow': tomorrow.map((item) => item.toJson()).toList(),
+        'instances': instances.map((item) => item.toJson()).toList(),
       };
 
   String encode() => jsonEncode(toJson());
@@ -78,6 +88,15 @@ class WidgetSnapshotBuilder {
     final campusNow = CampusClock.toCampusWallTime(nowUtc);
     final today = dateOnly(campusNow);
     final tomorrow = today.add(const Duration(days: 1));
+    final instances = <WidgetCourseItem>[];
+    final semesterEnd = engine.calendarEngine.definition.semesterEndDate;
+    for (var date = today;
+        !date.isAfter(semesterEnd);
+        date = date.add(const Duration(days: 1))) {
+      for (final instance in engine.getCoursesForDate(date)) {
+        instances.add(_item(instance)!);
+      }
+    }
     return WidgetSnapshot(
       generatedAtUtc: nowUtc,
       next: _item(engine.getNextCourse(nowUtc)),
@@ -89,6 +108,7 @@ class WidgetSnapshotBuilder {
         for (final instance in engine.getCoursesForDate(tomorrow))
           _item(instance)!,
       ],
+      instances: List.unmodifiable(instances),
     );
   }
 

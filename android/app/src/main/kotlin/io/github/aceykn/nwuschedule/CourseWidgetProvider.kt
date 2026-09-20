@@ -10,6 +10,9 @@ import android.os.Build
 import android.widget.RemoteViews
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
 
 class CourseWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -69,7 +72,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
             snapshot: JSONObject,
             appWidgetId: Int,
         ) {
-            val next = snapshot.optJSONObject("next")
+            val next = nextItem(snapshot)
             if (next == null) {
                 views.setTextViewText(R.id.widget_small_label, "NEXT")
                 views.setTextViewText(R.id.widget_small_name, "No Class")
@@ -94,7 +97,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
             snapshot: JSONObject,
             appWidgetId: Int,
         ) {
-            val items = array(snapshot.optJSONArray("today"))
+            val items = todayItems(snapshot)
             views.removeAllViews(R.id.widget_today_list)
             views.setTextViewText(
                 R.id.widget_empty,
@@ -118,8 +121,8 @@ class CourseWidgetProvider : AppWidgetProvider() {
             snapshot: JSONObject,
             appWidgetId: Int,
         ) {
-            val today = array(snapshot.optJSONArray("today"))
-            val tomorrow = array(snapshot.optJSONArray("tomorrow"))
+            val today = todayItems(snapshot)
+            val tomorrow = tomorrowItems(snapshot)
             views.removeAllViews(R.id.widget_today_list)
             views.removeAllViews(R.id.widget_tomorrow_list)
             addItems(context, views, R.id.widget_today_list, today, appWidgetId + 1)
@@ -208,6 +211,84 @@ class CourseWidgetProvider : AppWidgetProvider() {
                 JSONObject()
             }
         }
+
+        private fun nextItem(snapshot: JSONObject): JSONObject? {
+            if (!snapshot.has("instances")) {
+                return snapshot.optJSONObject("next")
+            }
+            val nowKey = campusNowKey()
+            return array(snapshot.optJSONArray("instances"))
+                .mapNotNull { item ->
+                    val startKey = startKey(item)
+                    if (startKey != null && startKey > nowKey) {
+                        startKey to item
+                    } else {
+                        null
+                    }
+                }
+                .minByOrNull { it.first }
+                ?.second
+        }
+
+        private fun todayItems(snapshot: JSONObject): List<JSONObject> {
+            if (!snapshot.has("instances")) {
+                return array(snapshot.optJSONArray("today"))
+            }
+            val today = campusDateKey()
+            return array(snapshot.optJSONArray("instances"))
+                .filter { itemDate(it) == today }
+        }
+
+        private fun tomorrowItems(snapshot: JSONObject): List<JSONObject> {
+            if (!snapshot.has("instances")) {
+                return array(snapshot.optJSONArray("tomorrow"))
+            }
+            val tomorrow = campusDateKey(offsetDays = 1)
+            return array(snapshot.optJSONArray("instances"))
+                .filter { itemDate(it) == tomorrow }
+        }
+
+        private fun itemDate(item: JSONObject): String {
+            val date = item.optString("date", "")
+            if (date.length >= 10) return date.substring(0, 10)
+            return startKey(item)?.substring(0, 10).orEmpty()
+        }
+
+        private fun startKey(item: JSONObject): String? {
+            val value = item.optString("startTime", "")
+            return value.takeIf { it.length >= 16 }?.substring(0, 16)
+        }
+
+        private fun campusDateKey(offsetDays: Int = 0): String {
+            val calendar = Calendar.getInstance(
+                TimeZone.getTimeZone("Asia/Shanghai"),
+                Locale.US,
+            )
+            calendar.add(Calendar.DAY_OF_MONTH, offsetDays)
+            return dateKey(calendar)
+        }
+
+        private fun campusNowKey(): String {
+            val calendar = Calendar.getInstance(
+                TimeZone.getTimeZone("Asia/Shanghai"),
+                Locale.US,
+            )
+            return "${dateKey(calendar)}T" +
+                String.format(
+                    Locale.US,
+                    "%02d:%02d",
+                    calendar.get(Calendar.HOUR_OF_DAY),
+                    calendar.get(Calendar.MINUTE),
+                )
+        }
+
+        private fun dateKey(calendar: Calendar): String = String.format(
+            Locale.US,
+            "%04d-%02d-%02d",
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH) + 1,
+            calendar.get(Calendar.DAY_OF_MONTH),
+        )
 
         private fun array(value: JSONArray?): List<JSONObject> {
             if (value == null) return emptyList()
