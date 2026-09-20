@@ -21,10 +21,11 @@
 | Rolling WidgetSnapshot 与 Android 当前日期/时间过滤 | `widget_snapshot_test.dart`、`CourseWidgetProvider.kt` | PASS（自动化/静态） |
 | 通知权限、重建、旧 Alarm 清理 | `bootstrap_test.dart`、`notification_planner_test.dart`、`MainActivity.kt` | PASS（自动化/静态） |
 | 隐私边界、无统计/广告依赖、merged manifest | privacy/manifest validators 与 CI | PASS（自动化） |
+| 课表显示设置的实时预览 | `widget_test.dart`、`schedule_display_settings_page.dart` | PASS（自动化） |
 | UI、Golden、无障碍 | `test/widget`、`test/golden`、`accessibility_test.dart` | PASS（自动化） |
 | Android 构建 | [GitHub Actions Run #221](https://github.com/AceYKN/NWU-Schedule/actions/runs/35544178477)：debug/release APK 与 merged manifest 校验 | PASS |
 
-最近一次本地全量检查：校历校验、隐私校验、DOM fixture、`flutter analyze`、183 项 `flutter test` 和本地 debug APK 构建均通过。新增证据包括：旧数据库课程元数据显式清空、备份恢复晚期坏引用保持原数据、Medium/Large Native Widget 缺失地点显示“地点待补充”、手动课程“添加第二条上课安排 → 保存 → 重新打开编辑页仍保留两条”，以及未知校历学期可安全导入并显示符合 SPEC 文案的缺失校历提示。[GitHub Actions Run #221](https://github.com/AceYKN/NWU-Schedule/actions/runs/35544178477) 以 `main` 提交 `060ebf3` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
+最近一次本地全量检查：校历校验、隐私校验、DOM fixture、`flutter analyze`、184 项 `flutter test` 和本地 debug APK 构建均通过。新增证据包括：旧数据库课程元数据显式清空、备份恢复晚期坏引用保持原数据、Medium/Large Native Widget 缺失地点显示“地点待补充”、手动课程“添加第二条上课安排 → 保存 → 重新打开编辑页仍保留两条”、未知校历学期可安全导入并显示符合 SPEC 文案的缺失校历提示，以及课表显示设置开关即时更新预览。[GitHub Actions Run #223](https://github.com/AceYKN/NWU-Schedule/actions/runs/35544988365) 以 `main` 提交 `b6e4cc5` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
 
 ## 设备上已核对但不等同于真实集成通过
 
