@@ -110,7 +110,8 @@ void main() {
     expect((await repository.loadSemester(semester.id)).courses, isEmpty);
   });
 
-  test('clears obsolete course metadata when saving over a legacy row', () async {
+  test('clears obsolete course metadata when saving over a legacy row',
+      () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
     final repository = DriftScheduleDataRepository(database);
