@@ -55,6 +55,27 @@ void main() {
     expect(restored.issues.single.message, '节次无法识别，已跳过该行');
   });
 
+  test('round-trips safe structural details on import issues', () {
+    const original = ImportIssue(
+      path: 'tables[0].rows[2].weeks',
+      message: '周次格式无效，已跳过该行',
+      severity: ImportIssueSeverity.error,
+      details: {
+        'tableIndex': 0,
+        'rowIndex': 2,
+        'columnCount': 8,
+        'rawLength': 3,
+        'rawShape': 'mixed',
+        'parsedNumbers': [321],
+      },
+    );
+    final restored = ImportIssue.fromJson(original.toJson());
+
+    expect(restored, isNotNull);
+    expect(restored!.details['rawShape'], 'mixed');
+    expect(restored.details['parsedNumbers'], [321]);
+  });
+
   test('validates empty IDs, bad weekday, section and duplicate rules', () {
     final timetable = const TimetableImportParser().parse({
       ...fixture,
@@ -92,6 +113,25 @@ void main() {
     expect(
         report.issues.any((issue) => issue.path.contains('weekday')), isTrue);
     expect(report.issues.any((issue) => issue.message.contains('重复')), isTrue);
+  });
+
+  test('does not clamp invalid total weeks or accept an empty timetable', () {
+    final tooManyWeeks = const TimetableImportParser().parse({
+      ...fixture,
+      'semester': {
+        ...(fixture['semester'] as Map<String, dynamic>),
+        'totalWeeks': 65,
+      },
+      'totalWeeks': 65,
+    });
+    expect(tooManyWeeks.totalWeeks, 65);
+    expect(validateTimetable(tooManyWeeks).isValid, isFalse);
+
+    final empty = const TimetableImportParser().parse({
+      ...fixture,
+      'courses': <Object?>[],
+    });
+    expect(validateTimetable(empty).isValid, isFalse);
   });
 
   test('parser does not silently accept a missing course list', () {

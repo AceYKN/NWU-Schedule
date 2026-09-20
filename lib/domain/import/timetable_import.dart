@@ -123,16 +123,19 @@ class ImportIssue {
     required this.path,
     required this.message,
     required this.severity,
+    this.details = const <String, Object?>{},
   });
 
   final String path;
   final String message;
   final ImportIssueSeverity severity;
+  final Map<String, Object?> details;
 
   Map<String, Object?> toJson() => {
         'path': path,
         'message': message,
         'severity': severity.name,
+        if (details.isNotEmpty) 'details': details,
       };
 
   static ImportIssue? fromJson(Object? value) {
@@ -140,6 +143,7 @@ class ImportIssue {
     final path = value['path'];
     final message = value['message'];
     final severity = value['severity'];
+    final rawDetails = value['details'];
     if (path is! String ||
         path.trim().isEmpty ||
         message is! String ||
@@ -152,10 +156,14 @@ class ImportIssue {
       _ => null,
     };
     if (parsedSeverity == null) return null;
+    final details = rawDetails is Map
+        ? Map<String, Object?>.from(rawDetails)
+        : const <String, Object?>{};
     return ImportIssue(
       path: path,
       message: message,
       severity: parsedSeverity,
+      details: details,
     );
   }
 
@@ -453,6 +461,13 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
     issues.add(const ImportIssue(
       path: 'totalWeeks',
       message: '教学周必须在 1 到 64 之间',
+      severity: ImportIssueSeverity.error,
+    ));
+  }
+  if (timetable.courses.isEmpty) {
+    issues.add(const ImportIssue(
+      path: 'courses',
+      message: '课表没有可导入的课程',
       severity: ImportIssueSeverity.error,
     ));
   }
