@@ -214,4 +214,53 @@ void main() {
       ),
     );
   });
+
+  test('invalid week diagnostics retain the payload schema and field path',
+      () async {
+    final importer = NwuZhengfangV9Importer(
+      readPayload: () async => {
+        ...fixture,
+        'courses': [
+          {
+            'sourceCourseKey': 'course-321',
+            'name': '软件测试',
+            'meetings': [
+              {
+                'sourceMeetingKey': 'meeting-321',
+                'weekday': 1,
+                'startSection': 1,
+                'endSection': 2,
+                'weekText': '321',
+              },
+            ],
+          },
+        ],
+      },
+    );
+    final semester = (await importer.getSemesters()).single;
+
+    await expectLater(
+      importer.importSemester(semester),
+      throwsA(
+        isA<TimetableImportFailure>().having(
+          (failure) => failure.diagnostic,
+          'diagnostic',
+          isA<ImportDiagnostic>()
+              .having(
+                (diagnostic) => diagnostic.responseSchemaKeys,
+                'responseSchemaKeys',
+                contains('courses'),
+              )
+              .having(
+                (diagnostic) => diagnostic.error,
+                'error',
+                allOf(
+                  contains('courses[0].meetings[0].weekText'),
+                  contains('raw="321"'),
+                ),
+              ),
+        ),
+      ),
+    );
+  });
 }

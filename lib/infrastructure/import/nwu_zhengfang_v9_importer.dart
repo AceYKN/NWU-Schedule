@@ -128,6 +128,8 @@ class NwuZhengfangV9Importer implements TimetableImporter {
         ImportDiagnostic(
           adapterVersion: NwuZhengfangV9Importer.adapterVersion,
           parserStage: stage,
+          responseSchemaKeys:
+              payload.keys.map((key) => key.toString()).toList(),
           error: redactImportError(error),
         ),
       );
