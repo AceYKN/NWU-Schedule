@@ -50,6 +50,7 @@ class WidgetCourseItem {
     required this.location,
     required this.teacher,
     required this.isException,
+    this.exceptionId,
   });
 
   final String courseId;
@@ -62,6 +63,7 @@ class WidgetCourseItem {
   final String? location;
   final String? teacher;
   final bool isException;
+  final String? exceptionId;
 
   Map<String, Object?> toJson() => {
         'courseId': courseId,
@@ -74,6 +76,7 @@ class WidgetCourseItem {
         'location': location,
         'teacher': teacher,
         'isException': isException,
+        if (exceptionId != null) 'exceptionId': exceptionId,
       };
 }
 
@@ -125,6 +128,7 @@ class WidgetSnapshotBuilder {
       location: instance.location,
       teacher: instance.teacher,
       isException: instance.isException,
+      exceptionId: instance.exceptionId,
     );
   }
 }

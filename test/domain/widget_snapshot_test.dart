@@ -220,6 +220,11 @@ void main() {
     expect(added.startSection, 5);
     expect(added.location, '实验室 321');
     expect(added.isException, isTrue);
+    expect(added.exceptionId, 'add-1');
+    expect(
+      (added.toJson()['exceptionId']),
+      'add-1',
+    );
     expect(
       snapshot.instances.where((item) => item.date == DateTime(2026, 9, 7)),
       hasLength(1),

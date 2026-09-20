@@ -183,9 +183,15 @@ class CourseWidgetProvider : AppWidgetProvider() {
                 listOf(location, teacher).filter { it.isNotBlank() }.joinToString(" · "),
             )
             val courseId = item.text("courseId")
+            val exceptionId = item.text("exceptionId")
+            val route = if (exceptionId.isNotBlank() && exceptionId == courseId) {
+                "/"
+            } else {
+                "/course/$courseId"
+            }
             row.setOnClickPendingIntent(
                 R.id.widget_row_root,
-                activityIntent(context, "/course/$courseId", requestCode),
+                activityIntent(context, route, requestCode),
             )
             return row
         }
