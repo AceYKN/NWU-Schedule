@@ -69,6 +69,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
           },
           onPageFinished: (url) => _onPageFinished(url),
           onWebResourceError: (error) {
+            if (error.isForMainFrame == false) return;
             unawaited(_recordWebResourceError(error));
           },
           onHttpError: _recordHttpError,
@@ -855,10 +856,13 @@ const _payloadExtractionScript = r'''(() => {
   const bodyText = document.body ? document.body.innerText : '';
   const year = bodyText.match(/(20\d{2})\s*[-—~至]\s*(20\d{2})/);
   const termText = bodyText.match(/第\s*([一二三123])\s*学期/);
-  if (!year) return JSON.stringify(null);
+  if (!year || !termText) return JSON.stringify(null);
   const termMap = { '一': 1, '二': 2, '三': 3, '1': 1, '2': 2, '3': 3 };
-  const term = termMap[termText ? termText[1] : '1'] || 1;
-  const text = (node) => (node && node.innerText ? node.innerText : '').trim();
+  const term = termMap[termText[1]];
+  if (!term) return JSON.stringify(null);
+  const normalize = (value) => String(value == null ? '' : value)
+    .replace(/\s+/g, ' ').trim();
+  const text = (node) => normalize(node && node.innerText ? node.innerText : '');
   const headerIndex = (headers, patterns) => headers.findIndex((header) =>
     patterns.some((pattern) => header.includes(pattern)));
   const dayNumber = (value) => {
@@ -894,15 +898,17 @@ const _payloadExtractionScript = r'''(() => {
     const assessmentIndex = headerIndex(headers, ['考核方式', '考试性质']);
     for (let rowIndex = 1; rowIndex < rows.length; rowIndex++) {
       const cells = Array.from(rows[rowIndex].querySelectorAll('td,th')).map(text);
-      const name = cells[nameIndex] || '';
+      const name = normalize(cells[nameIndex]);
       const weekday = dayNumber(cells[dayIndex]);
       const range = sectionRange(cells[sectionIndex]);
-      const weekText = cells[weekIndex] || '';
+      const weekText = normalize(cells[weekIndex]);
       if (!name || !weekday || !range || !weekText) continue;
       for (const match of weekText.matchAll(/\d+/g)) maxWeek = Math.max(maxWeek, Number(match[0]));
-      const code = codeIndex >= 0 ? cells[codeIndex] || null : null;
-      const teachingClass = classIndex >= 0 ? cells[classIndex] || null : null;
-      const key = code || (name + '|' + (teachingClass || '') + '|' + rowIndex);
+      const code = codeIndex >= 0 ? normalize(cells[codeIndex]) || null : null;
+      const teachingClass = classIndex >= 0 ? normalize(cells[classIndex]) || null : null;
+      const teacher = teacherIndex >= 0 ? normalize(cells[teacherIndex]) || null : null;
+      const room = roomIndex >= 0 ? normalize(cells[roomIndex]) || null : null;
+      const key = code || (name + '|' + (teachingClass || ''));
       let course = courses.find((item) => item.sourceCourseKey === key);
       if (!course) {
         course = {
@@ -911,19 +917,28 @@ const _payloadExtractionScript = r'''(() => {
           code: code,
           teachingClass: teachingClass,
           credits: creditIndex >= 0 && cells[creditIndex] ? Number(cells[creditIndex]) : null,
-          assessment: assessmentIndex >= 0 ? cells[assessmentIndex] || null : null,
+          assessment: assessmentIndex >= 0 ? normalize(cells[assessmentIndex]) || null : null,
           meetings: [],
         };
         courses.push(course);
       }
+      const meetingKey = [
+        weekday,
+        range.startSection,
+        range.endSection,
+        teacher || '',
+        room || '',
+        weekText,
+      ].join('|');
+      if (course.meetings.some((item) => item.sourceMeetingKey === key + '|meeting|' + meetingKey)) continue;
       course.meetings.push({
-        sourceMeetingKey: key + '|meeting|' + course.meetings.length,
+        sourceMeetingKey: key + '|meeting|' + meetingKey,
         weekday: weekday,
         startSection: range.startSection,
         endSection: range.endSection,
-        teacher: teacherIndex >= 0 ? cells[teacherIndex] || null : null,
+        teacher: teacher,
         campus: null,
-        room: roomIndex >= 0 ? cells[roomIndex] || null : null,
+        room: room,
         weekText: weekText,
       });
     }
