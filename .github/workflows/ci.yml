@@ -18,6 +18,7 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: dart run tool/validate_calendars.dart
+      - run: dart run tool/validate_privacy.dart
       - run: dart format --output=none --set-exit-if-changed lib test tool
       - run: flutter analyze
       - run: flutter test

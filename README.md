@@ -26,6 +26,7 @@ flutter pub get
 flutter analyze
 flutter test
 dart run tool/validate_calendars.dart
+dart run tool/validate_privacy.dart
 flutter build apk --debug
 flutter build apk --release
 ```
