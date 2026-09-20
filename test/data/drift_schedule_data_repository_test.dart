@@ -354,6 +354,74 @@ void main() {
         (await database.select(database.importSnapshots).get()), hasLength(3));
   });
 
+  test('preserves the course when the remote source key rotates', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    RemoteTimetable timetable({
+      required String key,
+      String room = '3406',
+    }) =>
+        RemoteTimetable(
+          semester: const RemoteSemester(
+            remoteTermKey: '2026-2027-1',
+            academicYear: '2026-2027',
+            term: 1,
+            label: '2026-2027 第一学期',
+          ),
+          totalWeeks: 20,
+          courses: [
+            ImportedCourse(
+              sourceCourseKey: key,
+              name: '软件测试',
+              code: 'CS301',
+              teachingClass: '软件工程2401',
+              credits: 2,
+              assessment: '考查',
+              meetings: [
+                ImportedMeeting(
+                  sourceMeetingKey: '$key-meeting',
+                  weekday: 1,
+                  startSection: 3,
+                  endSection: 4,
+                  teacher: '教师 A',
+                  campus: '长安校区',
+                  room: room,
+                  weekMask: WeekMask.all(16),
+                ),
+              ],
+            ),
+          ],
+        );
+
+    await repository.commitImportedTimetable(timetable(key: 'old-key'));
+    var loaded = await repository.loadSemester('nwu-2026-2027-1');
+    final originalId = loaded.courses.single.id;
+    await repository.saveCourse(
+      loaded.courses.single.copyWith(
+        note: '我的备注',
+        colorOverride: 0xff123456,
+      ),
+      loaded.meetingRules,
+    );
+
+    final diff = await repository.previewImportedTimetable(
+      timetable(key: 'new-key', room: '3508'),
+    );
+    expect(diff.changes, hasLength(1));
+    expect(diff.changes.single.kind, ImportChangeKind.modified);
+    await repository.commitImportedTimetable(
+      timetable(key: 'new-key', room: '3508'),
+    );
+
+    loaded = await repository.loadSemester('nwu-2026-2027-1');
+    expect(loaded.courses.single.id, originalId);
+    expect(loaded.courses.single.sourceCourseKey, 'new-key');
+    expect(loaded.courses.single.note, '我的备注');
+    expect(loaded.courses.single.colorOverride, 0xff123456);
+    expect(loaded.meetingRules.single.room, '3508');
+  });
+
   test('conflicting import rolls back without adding a snapshot', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);

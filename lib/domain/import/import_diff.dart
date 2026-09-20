@@ -187,17 +187,28 @@ class ImportDiffEngine {
           if (rule.courseId == course.id) rule,
       ];
     }
-    final remoteByKey = {
-      for (final course in incoming.courses) course.sourceCourseKey: course,
-    };
     final previousByKey = {
       for (final course in previousImport?.courses ?? const <ImportedCourse>[])
         course.sourceCourseKey: course,
     };
+    final matchedLocalKeys = <String>{};
+    final matchedPreviousKeys = <String>{};
     final changes = <ImportChange>[];
 
     for (final remote in incoming.courses) {
-      final localCourse = localImported[remote.sourceCourseKey];
+      var localCourse = localImported[remote.sourceCourseKey];
+      if (localCourse != null &&
+          matchedLocalKeys.contains(localCourse.sourceCourseKey)) {
+        localCourse = null;
+      }
+      localCourse ??= _uniqueLocalMetadataMatch(
+        remote,
+        localImported.values.where(
+          (course) =>
+              course.sourceCourseKey != null &&
+              !matchedLocalKeys.contains(course.sourceCourseKey),
+        ),
+      );
       if (localCourse == null) {
         changes.add(ImportChange(
           kind: deletedSourceCourseKeys.contains(remote.sourceCourseKey)
@@ -208,6 +219,7 @@ class ImportDiffEngine {
         ));
         continue;
       }
+      matchedLocalKeys.add(localCourse.sourceCourseKey!);
       if (deletedSourceCourseKeys.contains(remote.sourceCourseKey) ||
           localCourse.deleted) {
         changes.add(ImportChange(
@@ -218,7 +230,18 @@ class ImportDiffEngine {
         ));
         continue;
       }
-      final previous = previousByKey[remote.sourceCourseKey];
+      var previous = previousByKey[remote.sourceCourseKey];
+      if (previous != null &&
+          matchedPreviousKeys.contains(previous.sourceCourseKey)) {
+        previous = null;
+      }
+      previous ??= _uniquePreviousMetadataMatch(
+        remote,
+        (previousImport?.courses ?? const <ImportedCourse>[]).where(
+          (course) => !matchedPreviousKeys.contains(course.sourceCourseKey),
+        ),
+      );
+      if (previous != null) matchedPreviousKeys.add(previous.sourceCourseKey);
       final fields = _fields(
         localCourse: localCourse,
         localRules: localRules[localCourse.id] ?? const [],
@@ -226,11 +249,14 @@ class ImportDiffEngine {
         remote: remote,
       );
       final conflict = fields.any((field) => field.hasConflict);
+      final sourceKeyChanged =
+          localCourse.sourceCourseKey != remote.sourceCourseKey;
       final changed = fields.any(
-        (field) =>
-            field.decision != MergeDecision.local ||
-            !_same(field.localValue, field.remoteValue),
-      );
+            (field) =>
+                field.decision != MergeDecision.local ||
+                !_same(field.localValue, field.remoteValue),
+          ) ||
+          sourceKeyChanged;
       changes.add(ImportChange(
         kind: conflict
             ? ImportChangeKind.conflict
@@ -246,7 +272,7 @@ class ImportDiffEngine {
 
     for (final localCourse in localImported.values) {
       final key = localCourse.sourceCourseKey!;
-      if (remoteByKey.containsKey(key) || localCourse.deleted) continue;
+      if (matchedLocalKeys.contains(key) || localCourse.deleted) continue;
       changes.add(ImportChange(
         kind: ImportChangeKind.removed,
         sourceCourseKey: key,
@@ -264,6 +290,64 @@ class ImportDiffEngine {
       List.unmodifiable(changes),
       isNewSemester: local == null,
     );
+  }
+
+  Course? _uniqueLocalMetadataMatch(
+    ImportedCourse remote,
+    Iterable<Course> candidates,
+  ) {
+    final matches = candidates
+        .where(
+          (candidate) => _sameCourseMetadata(
+            remoteCode: remote.code,
+            remoteTeachingClass: remote.teachingClass,
+            candidateCode: candidate.code,
+            candidateTeachingClass: candidate.teachingClass,
+          ),
+        )
+        .toList(growable: false);
+    return matches.length == 1 ? matches.single : null;
+  }
+
+  ImportedCourse? _uniquePreviousMetadataMatch(
+    ImportedCourse remote,
+    Iterable<ImportedCourse> candidates,
+  ) {
+    final matches = candidates
+        .where(
+          (candidate) => _sameCourseMetadata(
+            remoteCode: remote.code,
+            remoteTeachingClass: remote.teachingClass,
+            candidateCode: candidate.code,
+            candidateTeachingClass: candidate.teachingClass,
+          ),
+        )
+        .toList(growable: false);
+    return matches.length == 1 ? matches.single : null;
+  }
+
+  static bool _sameCourseMetadata({
+    required String? remoteCode,
+    required String? remoteTeachingClass,
+    required String? candidateCode,
+    required String? candidateTeachingClass,
+  }) {
+    final normalizedRemoteCode = remoteCode?.trim();
+    final normalizedRemoteClass = remoteTeachingClass?.trim();
+    final normalizedCandidateCode = candidateCode?.trim();
+    final normalizedCandidateClass = candidateTeachingClass?.trim();
+    if (normalizedRemoteCode == null ||
+        normalizedRemoteCode.isEmpty ||
+        normalizedRemoteClass == null ||
+        normalizedRemoteClass.isEmpty ||
+        normalizedCandidateCode == null ||
+        normalizedCandidateCode.isEmpty ||
+        normalizedCandidateClass == null ||
+        normalizedCandidateClass.isEmpty) {
+      return false;
+    }
+    return normalizedRemoteCode == normalizedCandidateCode &&
+        normalizedRemoteClass == normalizedCandidateClass;
   }
 
   List<ImportFieldChange> _fields({

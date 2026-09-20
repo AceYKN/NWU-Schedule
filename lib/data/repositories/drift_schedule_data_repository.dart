@@ -667,7 +667,12 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
                     .equals('course:${semester.id}:${remote.sourceCourseKey}')))
               .go();
         }
-        final existing = localCourses[remote.sourceCourseKey];
+        // A Zhengfang adapter may rotate an opaque source key while retaining
+        // the unique course code + teaching-class identity. ImportDiffEngine
+        // has already matched that course conservatively; keep its database
+        // id and local fields while adopting the new remote key.
+        final existing =
+            localCourses[remote.sourceCourseKey] ?? change.localCourse;
         final course = _courseFromRemote(
           semester: semester,
           remote: remote,

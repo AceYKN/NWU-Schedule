@@ -168,6 +168,71 @@ void main() {
     );
   });
 
+  test('matches a rotated source key by unique course code and teaching class',
+      () {
+    final base = local();
+    final localCourse = Course(
+      id: base.courses.single.id,
+      semesterId: base.courses.single.semesterId,
+      sourceType: base.courses.single.sourceType,
+      sourceCourseKey: 'old-key',
+      name: base.courses.single.name,
+      code: base.courses.single.code,
+      teachingClass: base.courses.single.teachingClass,
+      credits: base.courses.single.credits,
+      assessment: base.courses.single.assessment,
+    );
+    final localWithRotatedKey = ScheduleDataSnapshot(
+      semester: base.semester,
+      courses: [localCourse],
+      meetingRules: base.meetingRules,
+      exceptions: base.exceptions,
+    );
+    final diff = const ImportDiffEngine().build(
+      incoming: timetable([course(key: 'new-key')]),
+      local: localWithRotatedKey,
+      previousImport: timetable([course(key: 'old-key')]),
+    );
+
+    expect(diff.changes, hasLength(1));
+    expect(diff.changes.single.kind, ImportChangeKind.modified);
+    expect(diff.changes.single.localCourse?.id, 'local-course-1');
+    expect(diff.changes.single.remoteCourse?.sourceCourseKey, 'new-key');
+  });
+
+  test('does not guess when code and teaching class are not unique', () {
+    final base = local();
+    final secondCourse = Course(
+      id: 'local-course-2',
+      semesterId: base.courses.single.semesterId,
+      sourceType: base.courses.single.sourceType,
+      sourceCourseKey: 'second-key',
+      name: base.courses.single.name,
+      code: base.courses.single.code,
+      teachingClass: base.courses.single.teachingClass,
+      credits: base.courses.single.credits,
+      assessment: base.courses.single.assessment,
+    );
+    final localWithDuplicateMetadata = ScheduleDataSnapshot(
+      semester: base.semester,
+      courses: [base.courses.single, secondCourse],
+      meetingRules: base.meetingRules,
+      exceptions: base.exceptions,
+    );
+    final diff = const ImportDiffEngine().build(
+      incoming: timetable([course(key: 'new-key')]),
+      local: localWithDuplicateMetadata,
+      previousImport: null,
+    );
+
+    expect(diff.changes.where((item) => item.kind == ImportChangeKind.added),
+        hasLength(1));
+    expect(
+      diff.changes.where((item) => item.kind == ImportChangeKind.removed),
+      hasLength(2),
+    );
+  });
+
   test('divergent local and remote changes produce a conflict', () {
     final diff = const ImportDiffEngine().build(
       incoming: timetable([course(room: '3201')]),
