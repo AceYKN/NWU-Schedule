@@ -1,4 +1,5 @@
 import 'package:drift/native.dart';
+import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nwu_schedule/core/utils/week_mask.dart';
 import 'package:nwu_schedule/data/database/app_database.dart';
@@ -107,6 +108,62 @@ void main() {
     await expectLater(
         repository.saveCourse(course, [wrongRule]), throwsArgumentError);
     expect((await repository.loadSemester(semester.id)).courses, isEmpty);
+  });
+
+  test('clears obsolete course metadata when saving over a legacy row', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final semester = domain.Semester(
+      id: 'legacy-semester',
+      academicYear: '2026-2027',
+      term: domain.SemesterTerm.first,
+      label: '第一学期',
+      createdAt: DateTime(2026, 9, 1),
+    );
+    await repository.saveSemester(semester);
+
+    await database.into(database.courses).insert(
+          CoursesCompanion.insert(
+            id: 'legacy-course',
+            semesterId: semester.id,
+            sourceType: domain.CourseSourceType.manual.name,
+            name: '旧课程',
+            code: const Value('CS101'),
+            teachingClass: const Value('教学班 A'),
+            credits: const Value(3.0),
+            assessment: const Value('考查'),
+            createdAt: DateTime(2026, 9, 1),
+            updatedAt: DateTime(2026, 9, 1),
+          ),
+        );
+
+    await repository.saveCourse(
+      domain.Course(
+        id: 'legacy-course',
+        semesterId: semester.id,
+        sourceType: domain.CourseSourceType.manual,
+        name: '新课程',
+      ),
+      [
+        domain.MeetingRule(
+          id: 'legacy-rule',
+          courseId: 'legacy-course',
+          weekday: DateTime.monday,
+          startSection: 1,
+          endSection: 2,
+          weekMask: WeekMask.fromWeeks([1]),
+        ),
+      ],
+    );
+
+    final row = await (database.select(database.courses)
+          ..where((table) => table.id.equals('legacy-course')))
+        .getSingle();
+    expect(row.code, isNull);
+    expect(row.teachingClass, isNull);
+    expect(row.credits, isNull);
+    expect(row.assessment, isNull);
   });
 
   test('saves a course and removes deleted-rule exceptions atomically',
