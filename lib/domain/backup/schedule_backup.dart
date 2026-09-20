@@ -23,7 +23,9 @@ String? _backupOptionalString(Object? value) {
 int _backupRequiredInt(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is int) return value;
-  if (value is num) return value.toInt();
+  if (value is num && value.isFinite && value == value.toInt()) {
+    return value.toInt();
+  }
   throw BackupValidationException('$key 必须是整数');
 }
 
@@ -533,20 +535,24 @@ class ScheduleBackup {
   static int _requiredInt(Map<String, dynamic> json, String key) {
     final value = json[key];
     if (value is int) return value;
-    if (value is num) return value.toInt();
+    if (value is num && value.isFinite && value == value.toInt()) {
+      return value.toInt();
+    }
     throw BackupValidationException('$key 必须是整数');
   }
 
   static int? _optionalInt(Object? value) {
     if (value == null) return null;
     if (value is int) return value;
-    if (value is num) return value.toInt();
+    if (value is num && value.isFinite && value == value.toInt()) {
+      return value.toInt();
+    }
     throw BackupValidationException('字段必须是整数');
   }
 
   static double? _optionalDouble(Object? value) {
     if (value == null) return null;
-    if (value is num) return value.toDouble();
+    if (value is num && value.isFinite) return value.toDouble();
     throw BackupValidationException('credits 必须是数字');
   }
 

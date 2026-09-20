@@ -177,4 +177,66 @@ void main() {
       throwsA(isA<BackupValidationException>()),
     );
   });
+
+  test('rejects fractional and non-finite numeric schema fields', () {
+    final source = ScheduleBackup(
+      createdAt: DateTime.utc(2026, 9, 17),
+      semesters: [semester],
+      courses: [course],
+      meetingRules: [rule],
+      exceptions: [exception],
+      settings: const {},
+      appearance: const {},
+    ).toJson();
+
+    final fractionalCourse = Map<String, dynamic>.from(
+      (source['courses'] as List).single as Map,
+    )..['colorOverride'] = 1.5;
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'courses': [fractionalCourse],
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
+
+    final fractionalRule = Map<String, dynamic>.from(
+      (source['meetingRules'] as List).single as Map,
+    )..['weekMask'] = 1.5;
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'meetingRules': [fractionalRule],
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
+
+    final nonFiniteCourse = Map<String, dynamic>.from(
+      (source['courses'] as List).single as Map,
+    )..['credits'] = double.nan;
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'courses': [nonFiniteCourse],
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
+
+    final fractionalSnapshot = {
+      'id': 'snapshot-1',
+      'semesterId': semester.id,
+      'importedAt': '2026-09-17T00:00:00Z',
+      'adapterVersion': 'test',
+      'schemaVersion': 1.5,
+      'normalizedJson': '{}',
+      'hash': 'hash',
+    };
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'importSnapshots': [fractionalSnapshot],
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
+  });
 }
