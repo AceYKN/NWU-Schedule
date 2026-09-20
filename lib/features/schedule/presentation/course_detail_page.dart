@@ -6,6 +6,7 @@ import '../../../app/bootstrap.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/week_mask.dart';
 import '../../../domain/course/course.dart';
+import '../../../domain/course/course_exception.dart';
 import '../../../domain/course/meeting_rule.dart';
 import '../../../domain/semester/semester.dart';
 
@@ -30,6 +31,7 @@ class CourseDetailPage extends ConsumerWidget {
           semester: detail.semester,
           course: detail.course,
           rules: detail.rules,
+          exception: detail.exception,
         );
       },
     );
@@ -50,6 +52,40 @@ class CourseDetailPage extends ConsumerWidget {
           );
         }
       }
+      for (final exception in snapshot.exceptions) {
+        if (exception.id != courseId ||
+            exception.type != CourseExceptionType.add ||
+            exception.courseId != null ||
+            exception.targetDate == null ||
+            exception.targetStartSection == null ||
+            exception.targetEndSection == null) {
+          continue;
+        }
+        final course = Course(
+          id: exception.id,
+          semesterId: semester.id,
+          sourceType: CourseSourceType.manual,
+          name: exception.addedCourseName ?? '临时课程',
+          note: exception.note,
+        );
+        final rule = MeetingRule(
+          id: '${exception.id}-rule',
+          courseId: course.id,
+          weekday: exception.targetDate!.weekday,
+          startSection: exception.targetStartSection!,
+          endSection: exception.targetEndSection!,
+          teacher: exception.teacherOverride,
+          campus: exception.campusOverride,
+          room: exception.roomOverride,
+          weekMask: const WeekMask(0, rawText: '单次课程'),
+        );
+        return _CourseDetail(
+          semester: semester,
+          course: course,
+          rules: [rule],
+          exception: exception,
+        );
+      }
     }
     return null;
   }
@@ -60,11 +96,13 @@ class _CourseDetail extends StatelessWidget {
     required this.semester,
     required this.course,
     required this.rules,
+    this.exception,
   });
 
   final Semester semester;
   final Course course;
   final List<MeetingRule> rules;
+  final CourseException? exception;
 
   @override
   Widget build(BuildContext context) {
@@ -107,6 +145,12 @@ class _CourseDetail extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text('${course.code ?? '无课程代码'} · ${semester.label}'),
+                if (exception != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '临时加课 · ${_formatDate(exception!.targetDate)}',
+                  ),
+                ],
                 if (course.teachingClass != null) ...[
                   const SizedBox(height: 4),
                   Text('教学班：${course.teachingClass}'),
@@ -148,7 +192,9 @@ class _CourseDetail extends StatelessWidget {
                 ),
                 subtitle: Text(
                   [
-                    formatWeekMask(rule.weekMask),
+                    exception == null
+                        ? formatWeekMask(rule.weekMask)
+                        : '单次课程 · ${_formatDate(exception!.targetDate)}',
                     if (rule.campus != null) rule.campus!,
                     if (rule.room != null) rule.room!,
                     if (rule.teacher != null) rule.teacher!,
@@ -160,4 +206,10 @@ class _CourseDetail extends StatelessWidget {
       ],
     );
   }
+}
+
+String _formatDate(DateTime? date) {
+  if (date == null) return '日期待补充';
+  return '${date.year}-${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
 }

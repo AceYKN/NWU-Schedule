@@ -8,6 +8,7 @@ import 'package:nwu_schedule/app/bootstrap.dart';
 import 'package:nwu_schedule/app/router.dart';
 import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
+import 'package:nwu_schedule/domain/course/course_exception.dart' as domain;
 
 void main() {
   testWidgets('starts the NWU Schedule app', (WidgetTester tester) async {
@@ -109,6 +110,27 @@ void main() {
             .single
             .hidden,
         isFalse);
+
+    await DriftScheduleDataRepository(database).saveException(
+      domain.CourseException(
+        id: 'standalone-add-1',
+        semesterId: 'nwu-2026-2027-1',
+        type: domain.CourseExceptionType.add,
+        targetDate: DateTime(2026, 9, 21),
+        targetStartSection: 3,
+        targetEndSection: 4,
+        addedCourseName: '临时项目讨论',
+        teacherOverride: '苏老师',
+        campusOverride: '长安校区',
+        roomOverride: '3406',
+      ),
+    );
+    appRouter.go('/course/standalone-add-1');
+    await tester.pumpAndSettle();
+    expect(find.text('临时项目讨论'), findsOneWidget);
+    expect(find.textContaining('临时加课'), findsOneWidget);
+    expect(find.textContaining('单次课程'), findsOneWidget);
+
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
