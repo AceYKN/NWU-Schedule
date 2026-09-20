@@ -82,6 +82,10 @@ class NwuDomExtractor {
   const addMeeting = ({
     sourceCourseKey,
     name,
+    code = null,
+    teachingClass = null,
+    credits = null,
+    assessment = null,
     weekday,
     startSection,
     endSection,
@@ -101,13 +105,22 @@ class NwuDomExtractor {
       course = {
         sourceCourseKey: sourceCourseKey,
         name: name,
-        code: null,
-        teachingClass: null,
-        credits: null,
-        assessment: null,
+        code: code,
+        teachingClass: teachingClass,
+        credits: credits,
+        assessment: assessment,
         meetings: [],
       };
       courses.push(course);
+    } else {
+      if (course.code == null && code != null) course.code = code;
+      if (course.teachingClass == null && teachingClass != null) {
+        course.teachingClass = teachingClass;
+      }
+      if (course.credits == null && credits != null) course.credits = credits;
+      if (course.assessment == null && assessment != null) {
+        course.assessment = assessment;
+      }
     }
 
     const meetingKey = [
@@ -176,6 +189,7 @@ class NwuDomExtractor {
     const assessment = marker(source, /考核方式\s*[:：]/);
     const selectionNote = marker(source, /选课备注\s*[:：]/);
     const hours = marker(source, /课程学时组成\s*[:：]/);
+    const creditsMarker = marker(source, /学分\s*[:：]/);
 
     if (
       week == null ||
@@ -208,10 +222,49 @@ class NwuDomExtractor {
       assessment,
       selectionNote,
       hours,
+      creditsMarker,
     ]);
     const teacherText = normalize(
       source.slice(teacher.end, teacherEnd ?? source.length),
     );
+    const teachingClassEnd = firstMarkerIndexAfter(teachingClass?.end ?? -1, [
+      classComposition,
+      assessment,
+      selectionNote,
+      hours,
+      creditsMarker,
+    ]);
+    const teachingClassText = teachingClass == null
+      ? null
+      : normalize(
+          source.slice(
+            teachingClass.end,
+            teachingClassEnd ?? source.length,
+          ),
+        ) || null;
+    const assessmentEnd = firstMarkerIndexAfter(assessment?.end ?? -1, [
+      selectionNote,
+      hours,
+      creditsMarker,
+    ]);
+    const assessmentText = assessment == null
+      ? null
+      : normalize(
+          source.slice(assessment.end, assessmentEnd ?? source.length),
+        ) || null;
+    const creditsText = creditsMarker == null
+      ? ''
+      : normalize(source.slice(creditsMarker.end));
+    const creditsMatch = creditsText.match(/^\d+(?:\.\d+)?/);
+    const credits = creditsMatch == null ? null : Number(creditsMatch[0]);
+    if (creditsText && !Number.isFinite(credits)) {
+      issue(
+        path + '.credits',
+        '学分格式无法识别，已按空值处理',
+        'warning',
+        details,
+      );
+    }
 
     if (!name) {
       issue(path + '.courseName', '课程名为空，已跳过该行', 'error', details);
@@ -223,8 +276,12 @@ class NwuDomExtractor {
     }
 
     addMeeting({
-      sourceCourseKey: 'dom-list|' + name,
+      sourceCourseKey:
+        'dom-list|' + name + '|' + (teachingClassText || ''),
       name: name,
+      teachingClass: teachingClassText,
+      credits: credits,
+      assessment: assessmentText,
       weekday: weekday,
       startSection: startSection,
       endSection: endSection,
@@ -559,12 +616,16 @@ class NwuDomExtractor {
       uniqueHeaderIndex(headers, ['节次', '上课节次']);
     const weekIndex =
       uniqueHeaderIndex(headers, ['周次', '上课周次']);
+    const codeIndex = headerIndex(headers, ['课程代码', '课程编号', '课程号']);
     const teacherIndex =
       headerIndex(headers, ['教师', '任课教师', '上课教师']);
     const campusIndex =
       headerIndex(headers, ['校区', '校区名称']);
     const roomIndex =
       headerIndex(headers, ['教室', '上课地点', '地点']);
+    const classIndex = headerIndex(headers, ['教学班', '班级']);
+    const creditIndex = headerIndex(headers, ['学分']);
+    const assessmentIndex = headerIndex(headers, ['考核方式', '考试性质']);
 
     for (let rowIndex = headerEnd + 1; rowIndex < grid.length; rowIndex++) {
       const rowPath = 'tables[' + tableIndex + '].rows[' + rowIndex + ']';
@@ -619,9 +680,31 @@ class NwuDomExtractor {
         continue;
       }
 
+      const code = codeIndex >= 0 ? cellAt(codeIndex) || null : null;
+      const teachingClass = classIndex >= 0 ? cellAt(classIndex) || null : null;
+      const rawCredits = creditIndex >= 0 ? cellAt(creditIndex) : '';
+      const parsedCredits = rawCredits ? Number(rawCredits) : NaN;
+      const credits = Number.isFinite(parsedCredits) && parsedCredits >= 0
+        ? parsedCredits
+        : null;
+      if (rawCredits && credits == null) {
+        issue(
+          rowPath + '.credits',
+          '学分格式无法识别，已按空值处理',
+          'warning',
+          rowDetails,
+        );
+      }
+
       addMeeting({
-        sourceCourseKey: 'dom-grid|' + name,
+        sourceCourseKey:
+          'dom-grid|' + (code || name) + '|' + (teachingClass || ''),
         name: name,
+        code: code,
+        teachingClass: teachingClass,
+        credits: credits,
+        assessment:
+          assessmentIndex >= 0 ? cellAt(assessmentIndex) || null : null,
         weekday: weekday,
         startSection: range.startSection,
         endSection: range.endSection,
