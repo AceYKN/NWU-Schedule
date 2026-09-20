@@ -499,6 +499,20 @@ assert.equal(
   false,
 );
 
+const brokenSectionIdFixture = realListFixture.replace(
+  'id="jc_1-1-2"',
+  'id="broken-section-id"',
+);
+const brokenSectionId = runExtraction(brokenSectionIdFixture);
+const brokenSectionIssue = brokenSectionId.payload.issues.find((issue) =>
+  issue.path.endsWith('.sections') && issue.severity === 'error');
+assert.ok(brokenSectionIssue);
+assert.equal(
+  brokenSectionId.payload.courses
+    .some((course) => course.name === '数据结构实验'),
+  false,
+);
+
 const prefixed = runExtraction(
   realListFixture.replace('机器学习★', '【调】机器学习★'),
 );

@@ -414,11 +414,17 @@ class NwuDomExtractor {
       // candidate course detail cell. Do not filter only by the `周数` label:
       // a malformed row missing that label must become a validation error,
       // rather than disappearing and being interpreted as a remote deletion.
-      const infoCells = currentRange == null ? [] : cells.filter((cell) => {
+      const infoCells = cells.filter((cell) => {
         const id = cell.id || '';
         if (/^xq_rowspan_[1-7]$/.test(id)) return false;
         if (/^jc_[1-7]-\d+-\d+$/.test(id)) return false;
-        return text(cell).length > 0;
+        const value = text(cell);
+        if (!value) return false;
+        if (currentRange != null) return true;
+        // A broken section cell can leave the row without a valid range. It
+        // is still recognisable as a course row from its detail labels, and
+        // must reach the section validation below instead of disappearing.
+        return /(?:周数\s*[:：]|校区\s*[:：]|上课地点\s*[:：]|教师\s*[:：]|教学班\s*[:：]|学分\s*[:：]|课程(?:代码|编号|号)\s*[:：])/.test(value);
       });
 
       for (let infoIndex = 0; infoIndex < infoCells.length; infoIndex++) {
