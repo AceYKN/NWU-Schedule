@@ -396,8 +396,9 @@ class TimetableImportParser {
             '1-$totalWeeks周')
         .toString();
     final weekMask = rawWeekMask is num
-        ? WeekMask(
-            rawWeekMask.toInt(),
+        ? _numericWeekMask(
+            rawWeekMask,
+            path: '$path.weekMask',
             rawText: json['rawWeekText']?.toString() ?? rawWeekText,
           )
         : _parseWeekMask(
@@ -417,6 +418,17 @@ class TimetableImportParser {
       room: _optionalString(json['room'] ?? json['roomName'] ?? json['jxcd']),
       weekMask: weekMask,
     );
+  }
+
+  WeekMask _numericWeekMask(
+    num value, {
+    required String path,
+    required String rawText,
+  }) {
+    if (!value.isFinite || value != value.toInt()) {
+      throw FormatException('$path 必须是整数');
+    }
+    return WeekMask(value.toInt(), rawText: rawText);
   }
 
   WeekMask _parseWeekMask(

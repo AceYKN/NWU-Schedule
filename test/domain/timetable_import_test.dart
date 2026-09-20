@@ -268,6 +268,27 @@ void main() {
       }),
       throwsFormatException,
     );
+    expect(
+      () => const TimetableImportParser().parse({
+        ...fixture,
+        'courses': [
+          {
+            'sourceCourseKey': 'fractional-mask',
+            'name': '软件测试',
+            'meetings': [
+              {
+                'sourceMeetingKey': 'fractional-mask-meeting',
+                'weekday': 1,
+                'startSection': 1,
+                'endSection': 2,
+                'weekMask': 1.5,
+              },
+            ],
+          },
+        ],
+      }),
+      throwsFormatException,
+    );
   });
 
   test('parser does not silently accept a missing course list', () {
