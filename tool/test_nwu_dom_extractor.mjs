@@ -121,10 +121,10 @@ const software = generic.payload.courses.find(
   (course) => course.name === '软件测试',
 );
 assert.ok(software);
-assert.equal(software.code, undefined);
-assert.equal(software.teachingClass, undefined);
-assert.equal(software.credits, undefined);
-assert.equal(software.assessment, undefined);
+assert.equal(software.code, 'CS301');
+assert.equal(software.teachingClass, '软件2401');
+assert.equal(software.credits, null);
+assert.equal(software.assessment, null);
 assert.equal(software.meetings.length, 2);
 assert.equal(software.meetings[0].room, '321');
 assert.equal(software.meetings[0].weekText, '1-16周');
@@ -186,9 +186,9 @@ const experiment = realList.payload.courses.find(
   (course) => course.name === '数据结构实验',
 );
 assert.ok(experiment);
-assert.equal(experiment.teachingClass, undefined);
-assert.equal(experiment.credits, undefined);
-assert.equal(experiment.assessment, undefined);
+assert.equal(experiment.teachingClass, '数据结构实验-0003');
+assert.equal(experiment.credits, 1);
+assert.equal(experiment.assessment, '考查');
 assert.equal(experiment.meetings.length, 2);
 assert.deepEqual(
   experiment.meetings.map((meeting) => meeting.weekText),
@@ -208,9 +208,9 @@ const realSoftware = realList.payload.courses.find(
   (course) => course.name === '软件测试（双语）',
 );
 assert.ok(realSoftware);
-assert.equal(realSoftware.teachingClass, undefined);
-assert.equal(realSoftware.credits, undefined);
-assert.equal(realSoftware.assessment, undefined);
+assert.equal(realSoftware.teachingClass, '软件测试（双语）-0002');
+assert.equal(realSoftware.credits, 2.5);
+assert.equal(realSoftware.assessment, '考试');
 assert.equal(realSoftware.meetings.length, 1);
 assert.deepEqual(
   realSoftware.meetings.map((meeting) => [
@@ -226,19 +226,18 @@ assert.deepEqual(
 );
 
 const realSoftwareSecondClass = realList.payload.courses.find(
-  (course) => course.name === '软件测试（双语）' &&
-    course.meetings[0]?.room === '计算机技术实验室-321',
+  (course) => course.teachingClass === '软件测试（双语）-0002A',
 );
 assert.ok(realSoftwareSecondClass);
 assert.equal(realSoftwareSecondClass.meetings.length, 1);
-assert.equal(realSoftwareSecondClass.assessment, undefined);
+assert.equal(realSoftwareSecondClass.assessment, '未安排');
 
 const mining = realList.payload.courses.find(
   (course) => course.name === 'Web数据挖掘（双语）',
 );
 assert.ok(mining);
-assert.equal(mining.teachingClass, undefined);
-assert.equal(mining.credits, undefined);
+assert.equal(mining.teachingClass, 'Web数据挖掘（双语）-0001');
+assert.equal(mining.credits, 3);
 assert.equal(mining.meetings[0].weekday, 2);
 assert.equal(mining.meetings[0].weekText, '1-8周,10-18周');
 
@@ -246,16 +245,16 @@ const project = realList.payload.courses.find(
   (course) => course.name === 'IT项目管理（双语)(含上机）',
 );
 assert.ok(project);
-assert.equal(project.teachingClass, undefined);
-assert.equal(project.credits, undefined);
+assert.equal(project.teachingClass, 'IT项目管理-0002');
+assert.equal(project.credits, 3.5);
 assert.equal(project.meetings[0].weekText, '1-17周(单)');
 
 const ml = realList.payload.courses.find(
   (course) => course.name === '机器学习',
 );
 assert.ok(ml);
-assert.equal(ml.teachingClass, undefined);
-assert.equal(ml.credits, undefined);
+assert.equal(ml.teachingClass, '机器学习-0001');
+assert.equal(ml.credits, 3);
 assert.equal(ml.meetings[0].weekday, 4);
 assert.equal(ml.meetings[0].startSection, 5);
 assert.equal(ml.meetings[0].endSection, 8);
@@ -267,11 +266,16 @@ assert.equal(
     .some((meeting) => /\b321\b/.test(meeting.weekText)),
   false,
 );
-assert.ok(realList.payload.courses.every((course) =>
-  !Object.hasOwn(course, 'code') &&
-  !Object.hasOwn(course, 'teachingClass') &&
-  !Object.hasOwn(course, 'credits') &&
-  !Object.hasOwn(course, 'assessment')));
+assert.ok(realList.payload.courses.every((course) => course.code == null));
+
+const prefixed = runExtraction(
+  realListFixture.replace('机器学习★', '【调】机器学习★'),
+);
+assert.ok(prefixed.payload.courses.some((course) => course.name === '机器学习'));
+assert.equal(
+  prefixed.payload.courses.some((course) => course.name.startsWith('【调】')),
+  false,
+);
 
 const detectedContext = vm.runInNewContext(contextScript, {
   window: {},
