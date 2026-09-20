@@ -87,7 +87,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
             }
             views.setOnClickPendingIntent(
                 R.id.widget_root,
-                activityIntent(context, "/", appWidgetId),
+                activityIntent(context, "/", widgetRequestCode(appWidgetId, 0)),
             )
         }
 
@@ -106,12 +106,12 @@ class CourseWidgetProvider : AppWidgetProvider() {
             items.take(5).forEachIndexed { index, item ->
                 views.addView(
                     R.id.widget_today_list,
-                    row(context, item, appWidgetId + index + 1),
+                    row(context, item, widgetRequestCode(appWidgetId, index + 1)),
                 )
             }
             views.setOnClickPendingIntent(
                 R.id.widget_root,
-                activityIntent(context, "/", appWidgetId),
+                activityIntent(context, "/", widgetRequestCode(appWidgetId, 0)),
             )
         }
 
@@ -125,8 +125,20 @@ class CourseWidgetProvider : AppWidgetProvider() {
             val tomorrow = tomorrowItems(snapshot)
             views.removeAllViews(R.id.widget_today_list)
             views.removeAllViews(R.id.widget_tomorrow_list)
-            addItems(context, views, R.id.widget_today_list, today, appWidgetId + 1)
-            addItems(context, views, R.id.widget_tomorrow_list, tomorrow, appWidgetId + 100)
+            addItems(
+                context,
+                views,
+                R.id.widget_today_list,
+                today,
+                widgetRequestCode(appWidgetId, 100),
+            )
+            addItems(
+                context,
+                views,
+                R.id.widget_tomorrow_list,
+                tomorrow,
+                widgetRequestCode(appWidgetId, 200),
+            )
             views.setTextViewText(
                 R.id.widget_today_empty,
                 if (today.isEmpty()) "No Class" else "",
@@ -137,7 +149,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(
                 R.id.widget_root,
-                activityIntent(context, "/", appWidgetId),
+                activityIntent(context, "/", widgetRequestCode(appWidgetId, 0)),
             )
         }
 
@@ -199,6 +211,12 @@ class CourseWidgetProvider : AppWidgetProvider() {
                     },
             )
         }
+
+        // PendingIntent identity ignores extras. Keep every clickable slot in
+        // its own per-widget namespace so multiple widgets cannot overwrite
+        // each other's root or course-detail intents.
+        private fun widgetRequestCode(appWidgetId: Int, slot: Int): Int =
+            appWidgetId * 1000 + slot
 
         private fun readSnapshot(context: Context): JSONObject {
             val raw = context.getSharedPreferences(
