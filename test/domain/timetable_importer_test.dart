@@ -243,6 +243,32 @@ void main() {
     );
   });
 
+  test('keeps a bridge-disabled payload read as an authentication failure',
+      () async {
+    final importer = NwuZhengfangV9Importer(
+      readPayload: () async => throw const FormatException(
+        '登录完成后请先打开课表页面',
+      ),
+    );
+
+    await expectLater(
+      importer.getSemesters(),
+      throwsA(
+        isA<TimetableImportFailure>()
+            .having(
+              (failure) => failure.diagnostic.parserStage,
+              'parserStage',
+              'payload-read',
+            )
+            .having(
+              (failure) => importFailureUserMessage(failure),
+              'userMessage',
+              contains('登录状态已经失效'),
+            ),
+      ),
+    );
+  });
+
   test('wraps malformed semester payloads with schema diagnostics', () async {
     final importer = NwuZhengfangV9Importer(
       readPayload: () async => {
