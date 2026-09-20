@@ -82,10 +82,6 @@ class NwuDomExtractor {
   const addMeeting = ({
     sourceCourseKey,
     name,
-    code = null,
-    teachingClass = null,
-    credits = null,
-    assessment = null,
     weekday,
     startSection,
     endSection,
@@ -105,22 +101,9 @@ class NwuDomExtractor {
       course = {
         sourceCourseKey: sourceCourseKey,
         name: name,
-        code: code,
-        teachingClass: teachingClass,
-        credits: credits,
-        assessment: assessment,
         meetings: [],
       };
       courses.push(course);
-    } else {
-      if (course.code == null && code != null) course.code = code;
-      if (course.teachingClass == null && teachingClass != null) {
-        course.teachingClass = teachingClass;
-      }
-      if (course.credits == null && credits != null) course.credits = credits;
-      if (course.assessment == null && assessment != null) {
-        course.assessment = assessment;
-      }
     }
 
     // Keep identity tied to the recurring time pattern, not mutable display
@@ -239,52 +222,9 @@ class NwuDomExtractor {
       return;
     }
 
-    const teachingClassEnd = firstMarkerIndexAfter(teachingClass?.end ?? -1, [
-      classComposition,
-      assessment,
-      selectionNote,
-      hours,
-      creditsMarker,
-    ]);
-    const teachingClassText = teachingClass == null
-      ? null
-      : normalize(
-          source.slice(
-            teachingClass.end,
-            teachingClassEnd ?? source.length,
-          ),
-        ) || null;
-    const assessmentEnd = firstMarkerIndexAfter(assessment?.end ?? -1, [
-      selectionNote,
-      hours,
-      creditsMarker,
-    ]);
-    const assessmentText = assessment == null
-      ? null
-      : normalize(
-          source.slice(assessment.end, assessmentEnd ?? source.length),
-        ) || null;
-    const creditsText = creditsMarker == null
-      ? ''
-      : normalize(source.slice(creditsMarker.end));
-    const creditsMatch = creditsText.match(/^\d+(?:\.\d+)?/);
-    const credits = creditsMatch == null ? null : Number(creditsMatch[0]);
-    if (creditsText && !Number.isFinite(credits)) {
-      issue(
-        path + '.credits',
-        '学分格式无法识别，已按空值处理',
-        'warning',
-        details,
-      );
-    }
-
     addMeeting({
-      sourceCourseKey:
-        'dom-list|' + name + '|' + (teachingClassText || ''),
+      sourceCourseKey: 'dom-list|' + name + '|' + (roomText || ''),
       name: name,
-      teachingClass: teachingClassText,
-      credits: credits,
-      assessment: assessmentText,
       weekday: weekday,
       startSection: startSection,
       endSection: endSection,
@@ -629,7 +569,6 @@ class NwuDomExtractor {
     const classIndex = headerIndex(headers, ['教学班', '班级']);
     const creditIndex = headerIndex(headers, ['学分']);
     const assessmentIndex = headerIndex(headers, ['考核方式', '考试性质']);
-
     for (let rowIndex = headerEnd + 1; rowIndex < grid.length; rowIndex++) {
       const rowPath = 'tables[' + tableIndex + '].rows[' + rowIndex + ']';
       const cells = grid[rowIndex] || [];
