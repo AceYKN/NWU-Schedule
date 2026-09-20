@@ -14,6 +14,20 @@ class NwuZhengfangV9Importer implements TimetableImporter {
       uri.host == 'jwgl.nwu.edu.cn' &&
       (uri.path == '/jwglxt' || uri.path.startsWith('/jwglxt/'));
 
+  /// The public Zhengfang entry path renders the login form itself. Keep it
+  /// explicit here so the WebView layer cannot mistake the entry page for an
+  /// authenticated timetable context just because it is on the allow-listed
+  /// host.
+  static bool isLoginUri(Uri uri) {
+    if (!isAllowedUri(uri)) return false;
+    final path = uri.path.toLowerCase();
+    return path == '/jwglxt' ||
+        path == '/jwglxt/' ||
+        path.contains('/login') ||
+        path.contains('/sso') ||
+        path.contains('/auth');
+  }
+
   NwuZhengfangV9Importer({
     required this.readPayload,
     this.parser = const TimetableImportParser(),

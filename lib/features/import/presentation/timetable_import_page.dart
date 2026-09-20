@@ -86,24 +86,41 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
 
   Future<void> _onPageFinished(String url) async {
     final uri = Uri.tryParse(url);
-    if (uri == null || !NwuZhengfangV9Importer.isAllowedUri(uri)) return;
+    if (uri == null || !NwuZhengfangV9Importer.isAllowedUri(uri)) {
+      await _disableBridge();
+      return;
+    }
     if (mounted) setState(() => _currentUrl = url);
-    final isLoginPage = uri.path.contains('login') ||
-        uri.path.contains('sso') ||
-        uri.path.contains('auth');
-    if (isLoginPage) {
-      if (_bridgeEnabled) {
-        await _controller.removeJavaScriptChannel(_bridgeName);
-        _bridgeEnabled = false;
-      }
+    if (NwuZhengfangV9Importer.isLoginUri(uri) ||
+        !await _hasTimetableContext()) {
+      await _disableBridge();
       return;
     }
     if (_bridgeEnabled) return;
+    if (!mounted) return;
     await _controller.addJavaScriptChannel(
       _bridgeName,
       onMessageReceived: (message) => _handleBridgeMessage(message.message),
     );
     _bridgeEnabled = true;
+  }
+
+  Future<bool> _hasTimetableContext() async {
+    try {
+      final value = await _controller.runJavaScriptReturningResult(
+        _timetableContextScript,
+      );
+      return value.toString().replaceAll('"', '').toLowerCase() == 'timetable';
+    } on Object {
+      // A page that cannot be inspected is not a safe context for the bridge.
+      return false;
+    }
+  }
+
+  Future<void> _disableBridge() async {
+    if (!_bridgeEnabled) return;
+    _bridgeEnabled = false;
+    await _bestEffort(() => _controller.removeJavaScriptChannel(_bridgeName));
   }
 
   Future<Map<String, dynamic>> _readPayload() async {
@@ -387,11 +404,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   }
 
   Future<void> _clearSession() async {
-    final bridgeWasEnabled = _bridgeEnabled;
-    _bridgeEnabled = false;
-    if (bridgeWasEnabled) {
-      await _bestEffort(() => _controller.removeJavaScriptChannel(_bridgeName));
-    }
+    await _disableBridge();
     await _bestEffort(
       () => _controller.runJavaScript(
         'try { localStorage.clear(); sessionStorage.clear(); '
@@ -957,4 +970,24 @@ const _payloadExtractionScript = r'''(() => {
     totalWeeks: totalWeeks,
     courses: courses,
   });
+})()''';
+
+const _timetableContextScript = r'''(() => {
+  const loginControl = document.querySelector(
+    'input[type="password"], #yhm, #mm, '
+      + 'input[name*="password" i], input[id*="password" i]'
+  );
+  const bodyText = (document.body ? document.body.innerText : '')
+    .replace(/\s+/g, ' ').trim();
+  const loginText = bodyText.includes('用户登录') && bodyText.includes('密码');
+  if (loginControl || loginText) return 'login';
+
+  const path = location.pathname.toLowerCase();
+  const pathHint = /(?:kbcx|xskbcx|timetable|schedule|course)/.test(path);
+  const payloadHint = window.__NWU_SCHEDULE_PAYLOAD__ != null ||
+    window.__NWU_TIMETABLE__ != null ||
+    window.nwuSchedulePayload != null;
+  const labels = ['课程', '星期', '节次', '周次', '教室']
+    .filter((label) => bodyText.includes(label)).length;
+  return pathHint || payloadHint || labels >= 2 ? 'timetable' : 'other';
 })()''';

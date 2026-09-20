@@ -95,6 +95,37 @@ void main() {
     );
   });
 
+  test('recognizes the official entry and login paths as unauthenticated', () {
+    expect(
+      NwuZhengfangV9Importer.isLoginUri(
+        Uri.parse('https://jwgl.nwu.edu.cn/jwglxt/'),
+      ),
+      isTrue,
+    );
+    expect(
+      NwuZhengfangV9Importer.isLoginUri(
+        Uri.parse(
+          'https://jwgl.nwu.edu.cn/jwglxt/xtgl/login_slogin.html',
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      NwuZhengfangV9Importer.isLoginUri(
+        Uri.parse(
+          'https://jwgl.nwu.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html',
+        ),
+      ),
+      isFalse,
+    );
+    expect(
+      NwuZhengfangV9Importer.isLoginUri(
+        Uri.parse('https://example.com/jwglxt/login'),
+      ),
+      isFalse,
+    );
+  });
+
   test('diagnostic export contains runtime metadata fields', () {
     final diagnostic = const ImportDiagnostic(
       adapterVersion: 'nwu-zhengfang-v9',
