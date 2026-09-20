@@ -292,6 +292,27 @@ assert.equal(
   false,
 );
 
+const shiftedWeekDocument = parseFixtureDocument(genericFixture);
+const shiftedWeekCell = shiftedWeekDocument.tables[0].rows[2].cells[3];
+shiftedWeekCell.innerText = '1-18周 教室32';
+shiftedWeekCell.textContent = '1-18周 教室32';
+const shiftedWeekPayload = JSON.parse(vm.runInNewContext(extractionScript, {
+  window: {},
+  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+  document: shiftedWeekDocument.document,
+}));
+const shiftedWeekIssue = shiftedWeekPayload.issues.find((issue) =>
+  issue.path.endsWith('.weeks') && issue.severity === 'error');
+assert.ok(shiftedWeekIssue);
+assert.deepEqual(shiftedWeekIssue.details.parsedNumbers, [1, 18, 32]);
+assert.deepEqual(shiftedWeekIssue.details.unexpectedCharacters, ['教', '室']);
+assert.equal(
+  shiftedWeekPayload.courses
+    .flatMap((course) => course.meetings)
+    .some((meeting) => meeting.weekText.includes('教室32')),
+  false,
+);
+
 const duplicateHeaderDocument = parseFixtureDocument(genericFixture);
 const duplicateHeaderCell = duplicateHeaderDocument.tables[0].rows[1].cells[0];
 duplicateHeaderCell.innerText = '星期周次';

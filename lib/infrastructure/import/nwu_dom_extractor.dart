@@ -57,19 +57,27 @@ class NwuDomExtractor {
       weekText.matchAll(/\d+/g),
       (match) => Number(match[0]),
     );
+    const unexpectedCharacters = Array.from(new Set(
+      Array.from(
+        weekText.matchAll(/[^\d\s,，、()（）\[\]{}单双全周次第\-~～—至]/g),
+        (match) => match[0],
+      ),
+    ));
     const weekDetails = {
       ...details,
       rawLength: weekText.length,
       rawShape: weekShape(weekText, weekNumbers),
       parsedNumbers: weekNumbers,
+      unexpectedCharacters: unexpectedCharacters,
     };
     const invalid =
+      unexpectedCharacters.length > 0 ||
       (!weekNumbers.length && !/单|双|全/.test(weekText)) ||
       weekNumbers.some(
         (week) => !Number.isInteger(week) || week < 1 || week > 64,
       );
     if (invalid) {
-      issue(path, '周次格式无效，已跳过该行', 'error', weekDetails);
+      issue(path, '周次字段包含无法识别的内容，已跳过该行', 'error', weekDetails);
       return false;
     }
     if (/单|双|全/.test(weekText) && !weekNumbers.length) {

@@ -132,6 +132,7 @@ class ImportIssue {
     'rawLength',
     'rawShape',
     'parsedNumbers',
+    'unexpectedCharacters',
     'detectedRequiredColumns',
     'invalidColumns',
     'duplicateColumns',
