@@ -123,12 +123,13 @@ class NwuDomExtractor {
       }
     }
 
+    // Keep identity tied to the recurring time pattern, not mutable display
+    // metadata such as teacher or room. Re-import reconciliation can therefore
+    // preserve local overrides when a teacher or classroom changes.
     const meetingKey = [
       weekday,
       startSection,
       endSection,
-      teacher || '',
-      room || '',
       weekText,
     ].join('|');
     const sourceMeetingKey =
@@ -211,7 +212,9 @@ class NwuDomExtractor {
 
     const rawName = normalize(source.slice(0, week.index));
     const name = normalize(
-      rawName.replace(/[◎★〇◆■☆]+$/u, ''),
+      rawName
+        .replace(/^(?:【调】|\[自修\])\s*/u, '')
+        .replace(/[◎★〇◆■☆]+$/u, ''),
     );
     const weekText = normalize(source.slice(week.end, campus.index));
     const campusText = normalize(source.slice(campus.end, room.index));
@@ -227,45 +230,6 @@ class NwuDomExtractor {
     const teacherText = normalize(
       source.slice(teacher.end, teacherEnd ?? source.length),
     );
-    const teachingClassEnd = firstMarkerIndexAfter(teachingClass?.end ?? -1, [
-      classComposition,
-      assessment,
-      selectionNote,
-      hours,
-      creditsMarker,
-    ]);
-    const teachingClassText = teachingClass == null
-      ? null
-      : normalize(
-          source.slice(
-            teachingClass.end,
-            teachingClassEnd ?? source.length,
-          ),
-        ) || null;
-    const assessmentEnd = firstMarkerIndexAfter(assessment?.end ?? -1, [
-      selectionNote,
-      hours,
-      creditsMarker,
-    ]);
-    const assessmentText = assessment == null
-      ? null
-      : normalize(
-          source.slice(assessment.end, assessmentEnd ?? source.length),
-        ) || null;
-    const creditsText = creditsMarker == null
-      ? ''
-      : normalize(source.slice(creditsMarker.end));
-    const creditsMatch = creditsText.match(/^\d+(?:\.\d+)?/);
-    const credits = creditsMatch == null ? null : Number(creditsMatch[0]);
-    if (creditsText && !Number.isFinite(credits)) {
-      issue(
-        path + '.credits',
-        '学分格式无法识别，已按空值处理',
-        'warning',
-        details,
-      );
-    }
-
     if (!name) {
       issue(path + '.courseName', '课程名为空，已跳过该行', 'error', details);
       return;
@@ -276,12 +240,11 @@ class NwuDomExtractor {
     }
 
     addMeeting({
-      sourceCourseKey:
-        'dom-list|' + name + '|' + (teachingClassText || ''),
+      // Product-level course identity is the course itself. Teaching-class,
+      // credit and assessment metadata are intentionally ignored; different
+      // lecture/lab rows for the same named course become multiple meetings.
+      sourceCourseKey: 'dom-list|' + name,
       name: name,
-      teachingClass: teachingClassText,
-      credits: credits,
-      assessment: assessmentText,
       weekday: weekday,
       startSection: startSection,
       endSection: endSection,
