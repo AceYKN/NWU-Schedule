@@ -30,6 +30,14 @@ void main() {
     );
   }
 
+  final mainActivity = File(
+    'android/app/src/main/kotlin/io/github/aceykn/nwuschedule/MainActivity.kt',
+  ).readAsStringSync();
+  if (!mainActivity.contains('ApplicationInfo.FLAG_DEBUGGABLE') ||
+      !mainActivity.contains('WebView.setWebContentsDebuggingEnabled(false)')) {
+    throw StateError('Release WebView debugging is not explicitly disabled');
+  }
+
   final pubspec = File('pubspec.yaml').readAsStringSync().toLowerCase();
   const forbiddenPackages = [
     'firebase',
@@ -54,6 +62,7 @@ void main() {
   }
 
   stdout.writeln(
-    'Privacy validation passed (permissions, backup policy, cleartext policy, dependencies).',
+    'Privacy validation passed (permissions, backup policy, cleartext policy, '
+    'WebView debugging, dependencies).',
   );
 }
