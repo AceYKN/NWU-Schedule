@@ -69,7 +69,14 @@ void main() {
       meetingRules: [rule],
       exceptions: [exception, movedException],
       settings: const {'preferredSemesterId': 'nwu-2026-2027-1'},
-      appearance: const {'themeId': 'stone-blue'},
+      appearance: const {
+        'themeId': 'stone-blue',
+        'themeMode': 'dark',
+        'scheduleDisplay': {
+          'showWeekend': true,
+          'showTeacher': false,
+        },
+      },
     );
 
     final encoded = original.toJson();
@@ -94,6 +101,11 @@ void main() {
     expect(restoredMove.targetDate, DateTime(2026, 10, 8));
     expect(restored.settings['preferredSemesterId'], semester.id);
     expect(restored.appearance['themeId'], 'stone-blue');
+    expect(restored.appearance['themeMode'], 'dark');
+    expect(
+      (restored.appearance['scheduleDisplay'] as Map)['showWeekend'],
+      isTrue,
+    );
   });
 
   test('reads legacy exception instants as campus dates', () {
@@ -141,6 +153,31 @@ void main() {
       () => ScheduleBackup.fromJson({
         ...source,
         'appearance': {'webViewStorage': 'x'},
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'appearance': {'themeMode': 'sepia'},
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'appearance': {
+          'scheduleDisplay': {'showWeekend': 'true'},
+        },
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'appearance': {
+          'scheduleDisplay': {'unknownFlag': true},
+        },
       }),
       throwsA(isA<BackupValidationException>()),
     );

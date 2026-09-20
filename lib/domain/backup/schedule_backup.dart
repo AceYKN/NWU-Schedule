@@ -29,6 +29,19 @@ int _backupRequiredInt(Map<String, dynamic> json, String key) {
   throw BackupValidationException('$key 必须是整数');
 }
 
+/// Maps the display fields in the backup appearance object to local settings.
+///
+/// This belongs to the backup contract rather than the Flutter UI so the data
+/// repository can restore the complete appearance atomically with the dataset.
+const backupScheduleDisplaySettingKeys = <String, String>{
+  'showWeekend': 'schedule.weekView.showWeekend',
+  'showTeacher': 'schedule.weekView.showTeacher',
+  'showInactiveCourses': 'schedule.weekView.showInactiveCourses',
+  'showPeriodTimes': 'schedule.weekView.showPeriodTimes',
+  'highlightCurrentPeriod': 'schedule.weekView.highlightCurrentPeriod',
+  'showBackToCurrentWeekFab': 'schedule.weekView.showBackToCurrentWeekFab',
+};
+
 DateTime _backupRequiredDate(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is String) {
@@ -193,7 +206,7 @@ class ScheduleBackup {
       exceptions:
           _records(json, 'exceptions', (item) => _exceptionFromJson(item)),
       settings: _settings(json['settings']),
-      appearance: _objectMap(json['appearance'], 'appearance'),
+      appearance: _appearance(json['appearance']),
       importSnapshots: _records(
         json,
         'importSnapshots',
@@ -207,7 +220,6 @@ class ScheduleBackup {
         required: false,
       ),
     );
-    _assertNoSensitiveKeys(backup.appearance, 'appearance');
     _validateReferences(backup);
     return backup;
   }
@@ -404,6 +416,62 @@ class ScheduleBackup {
         throw BackupValidationException('settings.$key 必须是字符串');
       }
       result[key] = entry.value as String;
+    }
+    return Map.unmodifiable(result);
+  }
+
+  static Map<String, Object?> _appearance(Object? value) {
+    final map = _objectMap(value, 'appearance');
+    _assertNoSensitiveKeys(map, 'appearance');
+    final result = <String, Object?>{};
+    for (final entry in map.entries) {
+      switch (entry.key) {
+        case 'themeId':
+          final themeId = entry.value;
+          if (themeId is! String || themeId.trim().isEmpty) {
+            throw const BackupValidationException(
+              'appearance.themeId 必须是非空字符串',
+            );
+          }
+          result[entry.key] = themeId;
+        case 'themeMode':
+          final themeMode = entry.value;
+          if (themeMode is! String ||
+              !const {'system', 'light', 'dark'}.contains(themeMode)) {
+            throw const BackupValidationException(
+              'appearance.themeMode 必须是 system、light 或 dark',
+            );
+          }
+          result[entry.key] = themeMode;
+        case 'scheduleDisplay':
+          final rawDisplay = entry.value;
+          if (rawDisplay is! Map) {
+            throw const BackupValidationException(
+              'appearance.scheduleDisplay 必须是对象',
+            );
+          }
+          final display = <String, Object?>{};
+          for (final displayEntry in rawDisplay.entries) {
+            final key = displayEntry.key;
+            if (key is! String ||
+                !backupScheduleDisplaySettingKeys.containsKey(key)) {
+              throw BackupValidationException(
+                'appearance.scheduleDisplay.$key 不是支持的字段',
+              );
+            }
+            if (displayEntry.value is! bool) {
+              throw BackupValidationException(
+                'appearance.scheduleDisplay.$key 必须是布尔值',
+              );
+            }
+            display[key] = displayEntry.value;
+          }
+          result[entry.key] = Map.unmodifiable(display);
+        default:
+          throw BackupValidationException(
+            'appearance.${entry.key} 不是支持的字段',
+          );
+      }
     }
     return Map.unmodifiable(result);
   }

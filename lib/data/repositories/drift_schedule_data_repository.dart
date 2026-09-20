@@ -566,7 +566,37 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
               ),
             );
       }
+      for (final entry in _appearanceSettings(validated.appearance).entries) {
+        await database.into(database.appSettings).insertOnConflictUpdate(
+              db.AppSettingsCompanion.insert(
+                key: entry.key,
+                value: entry.value,
+              ),
+            );
+      }
     });
+  }
+
+  Map<String, String> _appearanceSettings(Map<String, Object?> appearance) {
+    final result = <String, String>{};
+    final themeId = appearance['themeId'];
+    if (themeId is String) {
+      result['appearance.themeId'] = themeId;
+    }
+    final themeMode = appearance['themeMode'];
+    if (themeMode is String) {
+      result['appearance.themeMode'] = themeMode;
+    }
+    final rawDisplay = appearance['scheduleDisplay'];
+    if (rawDisplay is Map) {
+      for (final entry in backupScheduleDisplaySettingKeys.entries) {
+        final value = rawDisplay[entry.key];
+        if (value is bool) {
+          result[entry.value] = value.toString();
+        }
+      }
+    }
+    return result;
   }
 
   @override

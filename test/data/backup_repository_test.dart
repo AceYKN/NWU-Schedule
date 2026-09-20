@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nwu_schedule/core/utils/week_mask.dart';
 import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
+import 'package:nwu_schedule/domain/backup/schedule_backup.dart';
 import 'package:nwu_schedule/domain/calendar/calendar_definition.dart';
 import 'package:nwu_schedule/domain/calendar/calendar_engine.dart';
 import 'package:nwu_schedule/domain/course/course.dart' as domain;
@@ -188,7 +189,15 @@ void main() {
     await repository.setSetting('notifications.leadMinutes', '10');
 
     final backup = await repository.createBackup(
-      appearance: const {'themeId': 'cedar-green'},
+      appearance: const {
+        'themeId': 'cedar-green',
+        'themeMode': 'dark',
+        'scheduleDisplay': {
+          'showWeekend': true,
+          'showTeacher': false,
+          'showPeriodTimes': false,
+        },
+      },
     );
     await repository.clearAllData();
     await repository.restoreBackup(backup);
@@ -203,6 +212,58 @@ void main() {
     expect(restored.exceptions.single.addedCourseName, '备份临时课');
     expect(await repository.getSetting('notifications.enabled'), 'true');
     expect(await repository.getSetting('notifications.leadMinutes'), '10');
+    expect(await repository.getSetting('appearance.themeId'), 'cedar-green');
+    expect(await repository.getSetting('appearance.themeMode'), 'dark');
+    expect(
+      await repository.getSetting('schedule.weekView.showWeekend'),
+      'true',
+    );
+    expect(
+      await repository.getSetting('schedule.weekView.showTeacher'),
+      'false',
+    );
+    expect(
+      await repository.getSetting('schedule.weekView.showPeriodTimes'),
+      'false',
+    );
     expect(backup.appearance['themeId'], 'cedar-green');
+  });
+
+  test('rejects invalid appearance before replacing the local dataset',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final semester = domain.Semester(
+      id: 'restore-atomicity-semester',
+      academicYear: '2026-2027',
+      term: domain.SemesterTerm.first,
+      label: '2026-2027 第一学期',
+      createdAt: DateTime(2026, 9, 1),
+    );
+    await repository.saveSemester(semester);
+    final backup = await repository.createBackup();
+    final invalid = ScheduleBackup(
+      createdAt: backup.createdAt,
+      semesters: backup.semesters,
+      courses: backup.courses,
+      meetingRules: backup.meetingRules,
+      exceptions: backup.exceptions,
+      settings: backup.settings,
+      appearance: const {
+        'scheduleDisplay': {'showWeekend': 'yes'},
+      },
+      importSnapshots: backup.importSnapshots,
+      deletedSourceItems: backup.deletedSourceItems,
+    );
+
+    await expectLater(
+      repository.restoreBackup(invalid),
+      throwsA(isA<BackupValidationException>()),
+    );
+    expect(
+      (await repository.loadSemesters()).map((item) => item.id),
+      contains(semester.id),
+    );
   });
 }

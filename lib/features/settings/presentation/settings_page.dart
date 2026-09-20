@@ -469,25 +469,6 @@ Future<void> _restoreBackup(BuildContext context, WidgetRef ref) async {
     if (confirmed != true || !context.mounted) return;
     final repository = ref.read(scheduleDataRepositoryProvider);
     await repository.restoreBackup(backup);
-    final themeId = backup.appearance['themeId'];
-    if (themeId is String &&
-        officialThemes.any((theme) => theme.id == themeId)) {
-      await repository.setSetting('appearance.themeId', themeId);
-    }
-    final themeMode = backup.appearance['themeMode'];
-    if (themeMode is String &&
-        AppThemeMode.values.any((mode) => mode.name == themeMode)) {
-      await repository.setSetting('appearance.themeMode', themeMode);
-    }
-    final rawDisplay = backup.appearance['scheduleDisplay'];
-    if (rawDisplay is Map) {
-      for (final entry in scheduleDisplaySettingKeys.entries) {
-        final value = rawDisplay[entry.key];
-        if (value is bool) {
-          await repository.setSetting(entry.value, value.toString());
-        }
-      }
-    }
     ref.invalidate(themeIdProvider);
     ref.invalidate(themeModeProvider);
     ref.invalidate(scheduleDisplayPreferencesProvider);
