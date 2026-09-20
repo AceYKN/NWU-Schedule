@@ -48,7 +48,11 @@ class CourseNotificationReceiver : BroadcastReceiver() {
         manager.notify(
             id,
             builder
-                .setSmallIcon(context.applicationInfo.icon)
+                // Launcher icons can be adaptive or full-colour resources and
+                // are not valid notification small icons on every Android
+                // version. Keep a dedicated monochrome resource for the
+                // status bar so the reminder is rendered reliably.
+                .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(Notification.BigTextStyle().bigText(body))
