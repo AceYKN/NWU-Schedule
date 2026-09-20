@@ -462,15 +462,12 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
   if (confirmed != true || !context.mounted) return;
   try {
     await ref.read(scheduleDataRepositoryProvider).clearAllData();
-    try {
-      await ref.read(notificationServiceProvider).clear();
-      await ref.read(widgetServiceProvider).clear();
+    await _bestEffort(() => ref.read(notificationServiceProvider).clear());
+    await _bestEffort(() => ref.read(widgetServiceProvider).clear());
+    await _bestEffort(() async {
       await WebViewCookieManager().clearCookies();
-      await const WebViewSessionService().clear();
-    } on Object {
-      // Local data is already cleared. Platform storage cleanup is best
-      // effort on unsupported test/future platforms.
-    }
+    });
+    await _bestEffort(const WebViewSessionService().clear);
     ref.invalidate(themeIdProvider);
     ref.invalidate(onboardingCompletedProvider);
     ref.invalidate(notificationEnabledProvider);
@@ -481,6 +478,14 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
     if (context.mounted) {
       _showMessage(context, nwuUserMessage(error, action: '清除数据失败'));
     }
+  }
+}
+
+Future<void> _bestEffort(Future<void> Function() operation) async {
+  try {
+    await operation();
+  } on Object {
+    // Local data is already cleared; platform cleanup is best effort.
   }
 }
 

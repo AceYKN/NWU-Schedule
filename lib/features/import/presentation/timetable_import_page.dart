@@ -386,20 +386,30 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   }
 
   Future<void> _clearSession() async {
-    try {
-      if (_bridgeEnabled) {
-        await _controller.removeJavaScriptChannel(_bridgeName);
-      }
-      await _controller.runJavaScript(
+    final bridgeWasEnabled = _bridgeEnabled;
+    _bridgeEnabled = false;
+    if (bridgeWasEnabled) {
+      await _bestEffort(() => _controller.removeJavaScriptChannel(_bridgeName));
+    }
+    await _bestEffort(
+      () => _controller.runJavaScript(
         'try { localStorage.clear(); sessionStorage.clear(); '
         'document.querySelectorAll("input").forEach((e) => e.value = ""); } catch (_) {}',
-      );
-      await _controller.clearLocalStorage();
-      await _controller.clearCache();
+      ),
+    );
+    await _bestEffort(_controller.clearLocalStorage);
+    await _bestEffort(_controller.clearCache);
+    await _bestEffort(() async {
       await _cookieManager.clearCookies();
-      await const WebViewSessionService().clear();
+    });
+    await _bestEffort(const WebViewSessionService().clear);
+  }
+
+  Future<void> _bestEffort(Future<void> Function() operation) async {
+    try {
+      await operation();
     } on Object {
-      // The importer is best-effort cleanup even when the WebView is closing.
+      // Cleanup continues independently when the WebView is already closing.
     }
   }
 
