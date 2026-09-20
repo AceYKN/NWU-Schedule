@@ -21,9 +21,9 @@
 | 通知权限、重建、旧 Alarm 清理 | `bootstrap_test.dart`、`notification_planner_test.dart`、`MainActivity.kt` | PASS（自动化/静态） |
 | 隐私边界、无统计/广告依赖、merged manifest | privacy/manifest validators 与 CI | PASS（自动化） |
 | UI、Golden、无障碍 | `test/widget`、`test/golden`、`accessibility_test.dart` | PASS（自动化） |
-| Android 构建 | [GitHub Actions Run #210](https://github.com/AceYKN/NWU-Schedule/actions/runs/35540242715)：debug/release APK 与 merged manifest 校验 | PASS |
+| Android 构建 | [GitHub Actions Run #215](https://github.com/AceYKN/NWU-Schedule/actions/runs/35541626848)：debug/release APK 与 merged manifest 校验 | PASS |
 
-最近一次本地全量检查：校历校验、隐私校验、DOM fixture、`flutter analyze`、179 项 `flutter test` 均通过；本轮新增的身份匹配单元测试、脱敏 fixture helper 回归、obsolete metadata 边界收敛和本地 debug APK 构建也已通过。[GitHub Actions Run #210](https://github.com/AceYKN/NWU-Schedule/actions/runs/35540242715) 以 `main` 提交 `907c209` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
+最近一次本地全量检查：校历校验、隐私校验、DOM fixture、`flutter analyze`、181 项 `flutter test` 和本地 debug APK 构建均通过。新增证据包括：旧数据库课程元数据显式清空、备份恢复晚期坏引用保持原数据、Medium/Large Native Widget 缺失地点显示“地点待补充”。[GitHub Actions Run #215](https://github.com/AceYKN/NWU-Schedule/actions/runs/35541626848) 以 `main` 提交 `ccad4ea` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
 
 ## 设备上已核对但不等同于真实集成通过
 
