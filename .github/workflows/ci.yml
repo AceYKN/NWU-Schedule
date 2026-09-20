@@ -23,6 +23,9 @@ jobs:
       - run: flutter analyze
       - run: flutter test
       - run: flutter build apk --debug
+      - run: >-
+          dart run tool/validate_merged_manifest.dart
+          build/app/intermediates/merged_manifests/debug/processDebugManifest/AndroidManifest.xml
       - if: github.ref == 'refs/heads/main'
         name: Create ephemeral release signing key
         run: >-
@@ -43,3 +46,8 @@ jobs:
           NWU_RELEASE_STORE_PASSWORD: ci-store-password
           NWU_RELEASE_KEY_ALIAS: nwu-ci
           NWU_RELEASE_KEY_PASSWORD: ci-store-password
+      - if: github.ref == 'refs/heads/main'
+        run: >-
+          dart run tool/validate_merged_manifest.dart
+          build/app/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml
+          --release
