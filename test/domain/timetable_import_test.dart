@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nwu_schedule/core/utils/week_mask.dart';
 import 'package:nwu_schedule/domain/import/timetable_import.dart';
 
 void main() {
@@ -137,6 +138,66 @@ void main() {
     expect(
         report.issues.any((issue) => issue.path.contains('weekday')), isTrue);
     expect(report.issues.any((issue) => issue.message.contains('重复')), isTrue);
+  });
+
+  test('rejects blank identity fields and duplicate meeting structures', () {
+    final timetable = RemoteTimetable(
+      semester: const RemoteSemester(
+        remoteTermKey: ' ',
+        academicYear: '2026-2027',
+        term: 1,
+        label: ' ',
+      ),
+      totalWeeks: 20,
+      courses: [
+        ImportedCourse(
+          sourceCourseKey: ' ',
+          name: '重复安排课程',
+          code: null,
+          teachingClass: null,
+          credits: null,
+          assessment: null,
+          meetings: [
+            ImportedMeeting(
+              sourceMeetingKey: 'meeting-a',
+              weekday: 1,
+              startSection: 1,
+              endSection: 2,
+              teacher: '教师甲',
+              campus: '长安校区',
+              room: '101',
+              weekMask: WeekMask.all(20),
+            ),
+            ImportedMeeting(
+              sourceMeetingKey: 'meeting-b',
+              weekday: 1,
+              startSection: 1,
+              endSection: 2,
+              teacher: '教师甲',
+              campus: '长安校区',
+              room: '101',
+              weekMask: WeekMask.all(20),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final report = validateTimetable(timetable);
+    expect(report.isValid, isFalse);
+    expect(
+      report.issues.map((issue) => issue.path),
+      containsAll([
+        'semester.remoteTermKey',
+        'semester.label',
+        'courses[0].sourceCourseKey',
+        'courses[0].meetings[1]',
+      ]),
+    );
+    expect(
+      report.issues.any((issue) => issue.message.contains('完全重复')),
+      isTrue,
+    );
   });
 
   test('does not clamp invalid total weeks or accept an empty timetable', () {

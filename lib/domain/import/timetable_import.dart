@@ -1,4 +1,6 @@
 import '../../core/nwu/periods.dart';
+import 'dart:convert';
+
 import '../../core/utils/week_mask.dart';
 
 class RemoteSemester {
@@ -506,6 +508,20 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
       severity: ImportIssueSeverity.error,
     ));
   }
+  if (semester.remoteTermKey.trim().isEmpty) {
+    issues.add(const ImportIssue(
+      path: 'semester.remoteTermKey',
+      message: '学期源 ID 不能为空',
+      severity: ImportIssueSeverity.error,
+    ));
+  }
+  if (semester.label.trim().isEmpty) {
+    issues.add(const ImportIssue(
+      path: 'semester.label',
+      message: '学期名称不能为空',
+      severity: ImportIssueSeverity.error,
+    ));
+  }
   if (timetable.totalWeeks < 1 || timetable.totalWeeks > 64) {
     issues.add(const ImportIssue(
       path: 'totalWeeks',
@@ -526,6 +542,13 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
       courseIndex++) {
     final course = timetable.courses[courseIndex];
     final coursePath = 'courses[$courseIndex]';
+    if (course.sourceCourseKey.trim().isEmpty) {
+      issues.add(ImportIssue(
+        path: '$coursePath.sourceCourseKey',
+        message: '课程源 ID 不能为空',
+        severity: ImportIssueSeverity.error,
+      ));
+    }
     if (course.name.trim().isEmpty) {
       issues.add(ImportIssue(
         path: '$coursePath.name',
@@ -549,11 +572,19 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
       ));
     }
     final meetingKeys = <String>{};
+    final meetingSignatures = <String>{};
     for (var meetingIndex = 0;
         meetingIndex < course.meetings.length;
         meetingIndex++) {
       final meeting = course.meetings[meetingIndex];
       final path = '$coursePath.meetings[$meetingIndex]';
+      if (meeting.sourceMeetingKey.trim().isEmpty) {
+        issues.add(ImportIssue(
+          path: '$path.sourceMeetingKey',
+          message: '上课安排源 ID 不能为空',
+          severity: ImportIssueSeverity.error,
+        ));
+      }
       if (meeting.weekday < 1 || meeting.weekday > 7) {
         issues.add(ImportIssue(
           path: '$path.weekday',
@@ -590,6 +621,22 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
         issues.add(ImportIssue(
           path: '$path.sourceMeetingKey',
           message: '同一课程的上课安排源 ID 重复',
+          severity: ImportIssueSeverity.error,
+        ));
+      }
+      final signature = jsonEncode([
+        meeting.weekday,
+        meeting.startSection,
+        meeting.endSection,
+        meeting.weekMask.value,
+        meeting.teacher,
+        meeting.campus,
+        meeting.room,
+      ]);
+      if (!meetingSignatures.add(signature)) {
+        issues.add(ImportIssue(
+          path: path,
+          message: '同一课程包含完全重复的上课安排',
           severity: ImportIssueSeverity.error,
         ));
       }
