@@ -66,6 +66,25 @@ void main() {
     );
     await repository.saveSemester(semester);
     await repository.saveCourse(course, [rule]);
+    final weekendCourse = Course(
+      id: 'widget-pages-weekend-course',
+      semesterId: semester.id,
+      sourceType: CourseSourceType.manual,
+      name: '周末实验课',
+    );
+    await repository.saveCourse(
+      weekendCourse,
+      [
+        MeetingRule(
+          id: 'widget-pages-weekend-rule',
+          courseId: weekendCourse.id,
+          weekday: DateTime.saturday,
+          startSection: 1,
+          endSection: 2,
+          weekMask: WeekMask.all(calendar.totalWeeks),
+        ),
+      ],
+    );
 
     final page = ValueNotifier<Widget>(const HomePage());
     addTearDown(page.dispose);
@@ -99,6 +118,7 @@ void main() {
 
     await pumpPage(const SchedulePage());
     expect(find.text('周课表'), findsOneWidget);
+    expect(find.text('六'), findsOneWidget);
     final courseFinder = find.textContaining('软件测试', skipOffstage: false);
     await tester.ensureVisible(courseFinder);
     await tester.pumpAndSettle();

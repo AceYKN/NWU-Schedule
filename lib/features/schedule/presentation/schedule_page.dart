@@ -110,7 +110,6 @@ class _WeekContent extends StatefulWidget {
 
 class _WeekContentState extends State<_WeekContent> {
   late final PageController _pageController;
-  bool _showWeekendTemporarily = false;
 
   @override
   void initState() {
@@ -122,7 +121,6 @@ class _WeekContentState extends State<_WeekContent> {
   void didUpdateWidget(covariant _WeekContent oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.week != widget.week) {
-      _showWeekendTemporarily = false;
       if (_pageController.hasClients &&
           (_pageController.page ?? 0).round() != widget.week - 1) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -142,15 +140,6 @@ class _WeekContentState extends State<_WeekContent> {
 
   @override
   Widget build(BuildContext context) {
-    final viewModel = widget.engine.getWeekViewModel(
-      widget.week,
-      includeInactive: widget.preferences.showInactiveCourses,
-      now: widget.now,
-    );
-    final hiddenWeekendEntries = viewModel.activeEntries
-        .where((entry) => entry.weekday >= DateTime.saturday)
-        .toList(growable: false);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -165,50 +154,6 @@ class _WeekContentState extends State<_WeekContent> {
             onAddException: widget.onAddException,
           ),
         ),
-        if (!widget.preferences.showWeekend &&
-            hiddenWeekendEntries.isNotEmpty &&
-            !_showWeekendTemporarily)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Card(
-              color: Theme.of(context).colorScheme.secondaryContainer,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '本周周末有 ${hiddenWeekendEntries.length} 节课',
-                            style: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSecondaryContainer,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          Text(
-                            hiddenWeekendEntries
-                                .map((entry) => entry.course.name)
-                                .join('、'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () =>
-                          setState(() => _showWeekendTemporarily = true),
-                      child: const Text('查看周末'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
         Expanded(
           child: PageView.builder(
             controller: _pageController,
@@ -224,8 +169,11 @@ class _WeekContentState extends State<_WeekContent> {
                 includeInactive: widget.preferences.showInactiveCourses,
                 now: widget.now,
               );
-              final showWeekend = widget.preferences.showWeekend ||
-                  (pageWeek == widget.week && _showWeekendTemporarily);
+              final hasWeekendCourse = pageModel.activeEntries.any(
+                (entry) => entry.weekday >= DateTime.saturday,
+              );
+              final showWeekend =
+                  widget.preferences.showWeekend || hasWeekendCourse;
               final visibleDays = showWeekend
                   ? pageModel.days
                   : pageModel.days.take(5).toList(growable: false);

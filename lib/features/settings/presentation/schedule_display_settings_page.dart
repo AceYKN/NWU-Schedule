@@ -44,7 +44,8 @@ class ScheduleDisplaySettingsPage extends ConsumerWidget {
           child: Column(
             children: [
               _PreferenceSwitch(
-                title: '显示周末',
+                title: '始终显示周末',
+                subtitle: '关闭时，有周末课程的周仍会自动展示周末列',
                 value: preferences.showWeekend,
                 onChanged: (value) => _save(ref, 'showWeekend', value),
               ),
@@ -101,9 +102,11 @@ class _PreferenceSwitch extends StatelessWidget {
     required this.title,
     required this.value,
     required this.onChanged,
+    this.subtitle,
   });
 
   final String title;
+  final String? subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
 
@@ -113,6 +116,7 @@ class _PreferenceSwitch extends StatelessWidget {
       value: value,
       onChanged: onChanged,
       title: Text(title),
+      subtitle: subtitle == null ? null : Text(subtitle!),
     );
   }
 }
