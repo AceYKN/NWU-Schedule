@@ -595,7 +595,22 @@ class NwuDomExtractor {
     const invalidRequired = requiredHeaders
       .filter(([field]) => requiredIndexes[field].length !== 1)
       .map(([field]) => field);
-    if (invalidRequired.length) {
+    const duplicateRequired = requiredHeaders
+      .filter(([field]) => requiredIndexes[field].length === 1)
+      .filter(([field], fieldIndex, fields) => {
+        const index = requiredIndexes[field][0];
+        return fields.some(
+          ([otherField], otherIndex) =>
+            otherIndex !== fieldIndex &&
+            requiredIndexes[otherField].length === 1 &&
+            requiredIndexes[otherField][0] === index,
+        );
+      })
+      .map(([field]) => field);
+    const invalidColumns = [
+      ...new Set([...invalidRequired, ...duplicateRequired]),
+    ];
+    if (invalidColumns.length) {
       issue(
         'tables[' + tableIndex + '].header',
         '关键课表列无法唯一识别，未读取该表',
@@ -604,7 +619,8 @@ class NwuDomExtractor {
           tableIndex: tableIndex,
           headerRow: headerEnd,
           columnCount: headers.length,
-          invalidColumns: invalidRequired,
+          invalidColumns: invalidColumns,
+          duplicateColumns: duplicateRequired,
         },
       );
       continue;

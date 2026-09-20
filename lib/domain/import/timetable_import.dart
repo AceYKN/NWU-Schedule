@@ -129,6 +129,7 @@ class ImportIssue {
     'parsedNumbers',
     'detectedRequiredColumns',
     'invalidColumns',
+    'duplicateColumns',
   };
 
   const ImportIssue({

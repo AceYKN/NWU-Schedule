@@ -157,6 +157,27 @@ assert.equal(
   false,
 );
 
+const duplicateHeaderDocument = parseFixtureDocument(genericFixture);
+const duplicateHeaderCell = duplicateHeaderDocument.tables[0].rows[1].cells[0];
+duplicateHeaderCell.innerText = '星期周次';
+duplicateHeaderCell.textContent = '星期周次';
+const duplicateWeekHeaderCell = duplicateHeaderDocument.tables[0].rows[1].cells[2];
+duplicateWeekHeaderCell.innerText = '安排';
+duplicateWeekHeaderCell.textContent = '安排';
+const duplicateHeaderPayload = JSON.parse(vm.runInNewContext(extractionScript, {
+  window: {},
+  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+  document: duplicateHeaderDocument.document,
+}));
+const duplicateHeaderIssue = duplicateHeaderPayload.issues.find((issue) =>
+  issue.path.endsWith('.header') && issue.severity === 'error');
+assert.ok(duplicateHeaderIssue);
+assert.deepEqual(
+  duplicateHeaderIssue.details.duplicateColumns,
+  ['weekday', 'weeks'],
+);
+assert.equal(duplicateHeaderPayload.courses.length, 0);
+
 // Real NWU DOM shape captured from the authenticated student timetable page,
 // with personal data replaced by synthetic values.
 const realListFixture = fs.readFileSync(
