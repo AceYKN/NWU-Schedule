@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nwu_schedule/domain/errors/app_error.dart';
 import 'package:nwu_schedule/domain/import/timetable_importer.dart';
 import 'package:nwu_schedule/infrastructure/import/webview_diagnostics.dart';
 import 'package:nwu_schedule/infrastructure/import/nwu_zhengfang_v9_importer.dart';
@@ -212,6 +213,32 @@ void main() {
           'diagnostic',
           isNot(contains('secret')),
         ),
+      ),
+    );
+  });
+
+  test('classifies an unreadable timetable page as a parser mismatch',
+      () async {
+    final importer = NwuZhengfangV9Importer(
+      readPayload: () async => throw const FormatException(
+        '当前页面没有暴露可识别的课表数据，请打开个人课表页面后重试',
+      ),
+    );
+
+    await expectLater(
+      importer.getSemesters(),
+      throwsA(
+        isA<TimetableImportFailure>()
+            .having(
+              (failure) => failure.diagnostic.parserStage,
+              'parserStage',
+              'parser',
+            )
+            .having(
+              (failure) => importFailureUserMessage(failure),
+              'userMessage',
+              contains('无法识别教务系统课表'),
+            ),
       ),
     );
   });

@@ -107,11 +107,13 @@ class NwuZhengfangV9Importer implements TimetableImporter {
       return _cachedPayload = await readPayload();
     } on Object catch (error) {
       final safeError = redactImportError(error);
+      final parserMismatch =
+          error is FormatException && error.message.contains('没有暴露可识别的课表数据');
       throw TimetableImportFailure(
-        '无法读取课表：$safeError',
+        parserMismatch ? '当前版本暂时无法识别教务系统课表' : '无法读取课表：$safeError',
         ImportDiagnostic(
           adapterVersion: NwuZhengfangV9Importer.adapterVersion,
-          parserStage: 'payload-read',
+          parserStage: parserMismatch ? 'parser' : 'payload-read',
           error: safeError,
         ),
       );
