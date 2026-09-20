@@ -40,6 +40,7 @@
 - 点击该通知后进入应用的“课程详情”页，并显示样例课程 `123`；这验证了 Alarm → Receiver → 通知点击路由链路。
 - 启动器 Widget 选择器能够显示“西北大学课程表”的 `2 × 1` Provider；通过选择器的 Add 入口成功放置 1 枚实例，`dumpsys appwidget` 显示对应 Provider 的 `widgets.size=1`。
 - 该实例在桌面显示 `NEXT / 123 / 08:00–09:50`，点击后能打开 NWU-Schedule；尚未把它计作 Small/Medium/Large、多实例或跨日期切换的完整验收。
+- 设备复核发现无地点课程曾在 Native Widget 中显示为字面量 `null`；已修复为 `地点待补充`，重新安装 debug APK 后 `widget_small_meta` 已显示 `08:00  地点待补充`。
 
 以上证据只覆盖设备烟测的子集，仍不等同于真实 NWU 账号导入或完整 Widget 验收。
 

@@ -82,7 +82,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(R.id.widget_small_name, next.text("courseName"))
                 views.setTextViewText(
                     R.id.widget_small_meta,
-                    "${time(next.text("startTime"))}  ${next.text("location")}",
+                    "${time(next.text("startTime"))}  ${locationOrPlaceholder(next)}",
                 )
             }
             views.setOnClickPendingIntent(
@@ -176,11 +176,11 @@ class CourseWidgetProvider : AppWidgetProvider() {
             val row = RemoteViews(context.packageName, R.layout.widget_course_row)
             row.setTextViewText(R.id.widget_row_time, time(item.text("startTime")))
             row.setTextViewText(R.id.widget_row_name, item.text("courseName"))
-            val location = item.text("location")
-            val teacher = item.text("teacher")
+            val location = item.textOrNull("location")
+            val teacher = item.textOrNull("teacher")
             row.setTextViewText(
                 R.id.widget_row_meta,
-                listOf(location, teacher).filter { it.isNotBlank() }.joinToString(" · "),
+                listOfNotNull(location, teacher).joinToString(" · "),
             )
             val courseId = item.text("courseId")
             val exceptionId = item.text("exceptionId")
@@ -333,6 +333,14 @@ class CourseWidgetProvider : AppWidgetProvider() {
 
         private fun JSONObject.text(key: String): String {
             return optString(key, "")
+        }
+
+        private fun locationOrPlaceholder(item: JSONObject): String =
+            item.textOrNull("location") ?: "地点待补充"
+
+        private fun JSONObject.textOrNull(key: String): String? {
+            val value = optString(key, "").trim()
+            return value.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
         }
     }
 }
