@@ -13,6 +13,7 @@ class NwuZhengfangV9Importer implements TimetableImporter {
   static bool isAllowedUri(Uri uri) =>
       uri.scheme == 'https' &&
       uri.host == 'jwgl.nwu.edu.cn' &&
+      uri.port == 443 &&
       (uri.path == '/jwglxt' || uri.path.startsWith('/jwglxt/'));
 
   /// The public Zhengfang entry path renders the login form itself. Keep it

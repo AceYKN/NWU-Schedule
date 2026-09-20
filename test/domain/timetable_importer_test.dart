@@ -89,6 +89,12 @@ void main() {
     );
     expect(
       NwuZhengfangV9Importer.isAllowedUri(
+        Uri.parse('https://jwgl.nwu.edu.cn:8443/jwglxt/'),
+      ),
+      isFalse,
+    );
+    expect(
+      NwuZhengfangV9Importer.isAllowedUri(
         Uri.parse('https://example.com/jwglxt/'),
       ),
       isFalse,
