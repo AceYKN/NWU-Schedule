@@ -138,14 +138,15 @@ class _MissingCalendarContent extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '课表已保存',
+                  '课表已成功读取',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  '课程数据已安全保存，但当前版本缺少\n${semester.label}校历。\n\n'
+                  '当前版本尚未包含\n${semester.label}校历。\n\n'
+                  '课程数据已安全保存，但当前版本缺少该学期校历，\n'
                   '因此暂时无法生成按日期计算的完整课表。更新到包含该校历的版本后即可正常使用。',
                 ),
                 const SizedBox(height: 16),

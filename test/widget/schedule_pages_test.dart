@@ -47,7 +47,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('课表已保存'), findsOneWidget);
+    expect(find.text('课表已成功读取'), findsOneWidget);
+    expect(find.textContaining('当前版本尚未包含'), findsOneWidget);
     expect(find.textContaining('2027-2028 第一学期校历'), findsOneWidget);
     expect(find.textContaining('课程数据已安全保存'), findsOneWidget);
     expect(find.text('查看设置'), findsOneWidget);
