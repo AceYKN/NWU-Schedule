@@ -149,6 +149,26 @@ void main() {
     expect(report.issues.any((issue) => issue.message.contains('重复')), isTrue);
   });
 
+  test('rejects a course with no meetings before destructive import', () {
+    final timetable = const TimetableImportParser().parse({
+      ...fixture,
+      'courses': [
+        {
+          'sourceCourseKey': 'empty-meetings',
+          'name': '课程 A',
+          'meetings': <Object?>[],
+        },
+      ],
+    });
+
+    final report = validateTimetable(timetable);
+
+    expect(report.isValid, isFalse);
+    expect(report.errorCount, 1);
+    expect(report.issues.single.path, 'courses[0].meetings');
+    expect(report.issues.single.severity, ImportIssueSeverity.error);
+  });
+
   test('rejects blank identity fields and duplicate meeting structures', () {
     final timetable = RemoteTimetable(
       semester: const RemoteSemester(

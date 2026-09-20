@@ -990,18 +990,21 @@ void main() {
       everyElement(originalRule.id),
     );
 
-    await repository.commitImportedTimetable(
-      timetable(
-        meetingKey: 'dom|removed',
-        teacher: '教师 B',
-        room: '3508',
-        weekMask: WeekMask.all(20),
-        omitMeeting: true,
+    await expectLater(
+      repository.commitImportedTimetable(
+        timetable(
+          meetingKey: 'dom|removed',
+          teacher: '教师 B',
+          room: '3508',
+          weekMask: WeekMask.all(20),
+          omitMeeting: true,
+        ),
       ),
+      throwsA(isA<TimetableImportValidationException>()),
     );
     loaded = await repository.loadSemester('nwu-2026-2027-1');
-    expect(loaded.meetingRules, isEmpty);
-    expect(loaded.exceptions, isEmpty);
+    expect(loaded.meetingRules.single.id, originalRule.id);
+    expect(loaded.exceptions, hasLength(2));
 
     final definition = CalendarDefinition.fromJson({
       'id': 'nwu-2026-2027-1',

@@ -626,8 +626,8 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
     if (course.meetings.isEmpty) {
       issues.add(ImportIssue(
         path: '$coursePath.meetings',
-        message: '课程没有上课安排，将不会出现在课表中',
-        severity: ImportIssueSeverity.warning,
+        message: '课程没有上课安排，无法安全完成导入',
+        severity: ImportIssueSeverity.error,
       ));
     }
   }
