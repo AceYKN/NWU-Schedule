@@ -342,7 +342,7 @@ const experiment = realList.payload.courses.find(
   (course) => course.name === '数据结构实验',
 );
 assert.ok(experiment);
-assert.equal(experiment.code, null);
+assert.equal(experiment.code, 'CS201');
 assert.equal(experiment.teachingClass, '数据结构实验-0003');
 assert.equal(experiment.credits, 1);
 assert.equal(experiment.assessment, '考查');
@@ -434,7 +434,10 @@ assert.equal(
     .some((meeting) => /\b321\b/.test(meeting.weekText)),
   false,
 );
-assert.ok(realList.payload.courses.every((course) => course.code == null));
+assert.equal(
+  realList.payload.courses.filter((course) => course.code != null).length,
+  1,
+);
 
 const prefixed = runExtraction(
   realListFixture.replace('机器学习★', '【调】机器学习★'),

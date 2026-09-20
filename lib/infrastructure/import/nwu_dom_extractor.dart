@@ -191,6 +191,7 @@ class NwuDomExtractor {
     const selectionNote = marker(source, /选课备注\s*[:：]/);
     const hours = marker(source, /课程学时组成\s*[:：]/);
     const creditsMarker = marker(source, /学分\s*[:：]/);
+    const courseCode = marker(source, /课程(?:代码|编号|号)\s*[:：]/);
 
     if (
       week == null ||
@@ -226,6 +227,7 @@ class NwuDomExtractor {
       selectionNote,
       hours,
       creditsMarker,
+      courseCode,
     ]);
     const teacherText = normalize(
       source.slice(teacher.end, teacherEnd ?? source.length),
@@ -236,6 +238,7 @@ class NwuDomExtractor {
       selectionNote,
       hours,
       creditsMarker,
+      courseCode,
     ]);
     const teachingClassText = teachingClass == null
       ? null
@@ -249,6 +252,7 @@ class NwuDomExtractor {
       selectionNote,
       hours,
       creditsMarker,
+      courseCode,
     ]);
     const assessmentText = assessment == null
       ? null
@@ -260,6 +264,23 @@ class NwuDomExtractor {
       : normalize(source.slice(creditsMarker.end));
     const creditsMatch = creditsText.match(/^\d+(?:\.\d+)?/);
     const credits = creditsMatch == null ? null : Number(creditsMatch[0]);
+    const courseCodeEnd = firstMarkerIndexAfter(courseCode?.end ?? -1, [
+      week,
+      campus,
+      room,
+      teacher,
+      teachingClass,
+      classComposition,
+      assessment,
+      selectionNote,
+      hours,
+      creditsMarker,
+    ]);
+    const courseCodeText = courseCode == null
+      ? null
+      : normalize(
+          source.slice(courseCode.end, courseCodeEnd ?? source.length),
+        ) || null;
     if (creditsText && !Number.isFinite(credits)) {
       issue(
         path + '.credits',
@@ -279,8 +300,10 @@ class NwuDomExtractor {
 
     addMeeting({
       sourceCourseKey:
-        'dom-list|' + name + '|' + (teachingClassText || ''),
+        'dom-list|' + (courseCodeText || name) + '|' +
+        (teachingClassText || ''),
       name: name,
+      code: courseCodeText,
       teachingClass: teachingClassText,
       credits: credits,
       assessment: assessmentText,
