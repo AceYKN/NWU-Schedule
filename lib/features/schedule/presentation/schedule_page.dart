@@ -1,16 +1,19 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
-import '../../../app/theme/schedule_theme.dart';
 import '../../../core/nwu/periods.dart';
 import '../../../core/time/campus_clock.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../domain/calendar/calendar_definition.dart';
-import '../../../domain/calendar/calendar_engine.dart';
-import '../../../domain/schedule/effective_course_instance.dart';
+import '../../../domain/schedule/schedule_engine.dart';
+import '../../../domain/schedule/week_schedule_view_model.dart';
+import '../../../domain/settings/schedule_display_preferences.dart';
 import '../../shared/presentation/course_card.dart';
+import '../../shared/presentation/course_color_resolver.dart';
 
 class SchedulePage extends ConsumerStatefulWidget {
   const SchedulePage({super.key});
@@ -33,37 +36,50 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           return const Center(child: Text('当前没有可展示的课表'));
         }
         final engine = value.engine;
+        final preferences =
+            ref.watch(scheduleDisplayPreferencesProvider).asData?.value ??
+                const ScheduleDisplayPreferences.defaults();
         final currentWeek =
             engine.calendarEngine.weekOf(CampusClock.now()) ?? 1;
         final maxWeek = engine.calendarEngine.definition.totalWeeks;
         final week = (selectedWeek ?? currentWeek).clamp(1, maxWeek);
-        return _WeekContent(
-          week: week,
-          currentWeek: currentWeek,
-          maxWeek: maxWeek,
-          instances: engine.getCoursesForWeek(week),
-          calendarEngine: engine.calendarEngine,
-          onWeekChanged: (value) => setState(() => selectedWeek = value),
-          onAddCourse: () => context.go('/course/new'),
-          onAddException: () => showStandaloneAddException(
-            pageContext: context,
-            ref: ref,
-            semesterId: engine.semesterId,
-            initialDate: engine.calendarEngine.definition.weekStart(week),
+        return Scaffold(
+          body: _WeekContent(
+            week: week,
+            currentWeek: currentWeek,
+            maxWeek: maxWeek,
+            engine: engine,
+            preferences: preferences,
+            onWeekChanged: (value) => setState(() => selectedWeek = value),
+            onAddCourse: () => context.go('/course/new'),
+            onAddException: () => showStandaloneAddException(
+              pageContext: context,
+              ref: ref,
+              semesterId: engine.semesterId,
+              initialDate: engine.calendarEngine.definition.weekStart(week),
+            ),
           ),
+          floatingActionButton: preferences.showBackToCurrentWeekFab &&
+                  week != currentWeek
+              ? FloatingActionButton.extended(
+                  onPressed: () => setState(() => selectedWeek = currentWeek),
+                  icon: const Icon(Icons.my_location_outlined),
+                  label: const Text('本周'),
+                )
+              : null,
         );
       },
     );
   }
 }
 
-class _WeekContent extends StatelessWidget {
+class _WeekContent extends StatefulWidget {
   const _WeekContent({
     required this.week,
     required this.currentWeek,
     required this.maxWeek,
-    required this.instances,
-    required this.calendarEngine,
+    required this.engine,
+    required this.preferences,
     required this.onWeekChanged,
     required this.onAddCourse,
     required this.onAddException,
@@ -72,85 +88,237 @@ class _WeekContent extends StatelessWidget {
   final int week;
   final int currentWeek;
   final int maxWeek;
-  final List<EffectiveCourseInstance> instances;
-  final CalendarEngine calendarEngine;
+  final ScheduleEngine engine;
+  final ScheduleDisplayPreferences preferences;
+  final ValueChanged<int> onWeekChanged;
+  final VoidCallback onAddCourse;
+  final VoidCallback onAddException;
+
+  @override
+  State<_WeekContent> createState() => _WeekContentState();
+}
+
+class _WeekContentState extends State<_WeekContent> {
+  late final PageController _pageController;
+  bool _showWeekendTemporarily = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: widget.week - 1);
+  }
+
+  @override
+  void didUpdateWidget(covariant _WeekContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.week != widget.week) {
+      _showWeekendTemporarily = false;
+      if (_pageController.hasClients &&
+          (_pageController.page ?? 0).round() != widget.week - 1) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _pageController.hasClients) {
+            _pageController.jumpToPage(widget.week - 1);
+          }
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final viewModel = widget.engine.getWeekViewModel(
+      widget.week,
+      includeInactive: widget.preferences.showInactiveCourses,
+    );
+    final hiddenWeekendEntries = viewModel.activeEntries
+        .where((entry) => entry.weekday >= DateTime.saturday)
+        .toList(growable: false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+          child: _WeekToolbar(
+            week: widget.week,
+            maxWeek: widget.maxWeek,
+            definition: widget.engine.calendarEngine.definition,
+            onWeekChanged: widget.onWeekChanged,
+            onAddCourse: widget.onAddCourse,
+            onAddException: widget.onAddException,
+          ),
+        ),
+        if (!widget.preferences.showWeekend &&
+            hiddenWeekendEntries.isNotEmpty &&
+            !_showWeekendTemporarily)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Card(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '本周周末有 ${hiddenWeekendEntries.length} 节课',
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSecondaryContainer,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            hiddenWeekendEntries
+                                .map((entry) => entry.course.name)
+                                .join('、'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          setState(() => _showWeekendTemporarily = true),
+                      child: const Text('查看周末'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        Expanded(
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: widget.maxWeek,
+            onPageChanged: (page) {
+              final nextWeek = page + 1;
+              if (nextWeek != widget.week) widget.onWeekChanged(nextWeek);
+            },
+            itemBuilder: (context, index) {
+              final pageWeek = index + 1;
+              final pageModel = widget.engine.getWeekViewModel(
+                pageWeek,
+                includeInactive: widget.preferences.showInactiveCourses,
+              );
+              final showWeekend = widget.preferences.showWeekend ||
+                  (pageWeek == widget.week && _showWeekendTemporarily);
+              final visibleDays = showWeekend
+                  ? pageModel.days
+                  : pageModel.days.take(5).toList(growable: false);
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                child: Column(
+                  children: [
+                    _ScheduleGrid(
+                      visibleDays: visibleDays,
+                      viewModel: pageModel,
+                      preferences: widget.preferences,
+                      now: CampusClock.now(),
+                    ),
+                    if (pageModel.activeEntries.isEmpty) ...[
+                      const SizedBox(height: 24),
+                      const Text('本周没有课程'),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WeekToolbar extends StatelessWidget {
+  const _WeekToolbar({
+    required this.week,
+    required this.maxWeek,
+    required this.definition,
+    required this.onWeekChanged,
+    required this.onAddCourse,
+    required this.onAddException,
+  });
+
+  final int week;
+  final int maxWeek;
+  final CalendarDefinition definition;
   final ValueChanged<int> onWeekChanged;
   final VoidCallback onAddCourse;
   final VoidCallback onAddException;
 
   @override
   Widget build(BuildContext context) {
-    final maxWeekday = instances.fold<int>(
-      5,
-      (max, instance) =>
-          instance.date.weekday > max ? instance.date.weekday : max,
-    );
-    final weekdays = List<int>.generate(maxWeekday, (index) => index + 1);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
+    final start = definition.weekStart(week);
+    final end = start.add(const Duration(days: 6));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '周课表',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '周课表',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
+                  Text('${start.month}/${start.day} – ${end.month}/${end.day}'),
+                ],
+              ),
             ),
-            const Spacer(),
-            IconButton(
-              tooltip: '上一周',
-              onPressed: week > 1 ? () => onWeekChanged(week - 1) : null,
-              icon: const Icon(Icons.chevron_left),
-            ),
-            Text('第 $week 周'),
-            IconButton(
-              tooltip: '下一周',
-              onPressed: week < maxWeek ? () => onWeekChanged(week + 1) : null,
-              icon: const Icon(Icons.chevron_right),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: week,
+                isDense: true,
+                items: [
+                  for (var item = 1; item <= maxWeek; item++)
+                    DropdownMenuItem(
+                      value: item,
+                      child: Text('第 $item 周'),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value != null) onWeekChanged(value);
+                },
+              ),
             ),
           ],
         ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed:
-                week == currentWeek ? null : () => onWeekChanged(currentWeek),
-            child: const Text('本周'),
-          ),
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.end,
-            children: [
-              OutlinedButton.icon(
-                onPressed: onAddException,
-                icon: const Icon(Icons.event_repeat_outlined),
-                label: const Text('临时加课'),
-              ),
-              FilledButton.icon(
-                onPressed: onAddCourse,
-                icon: const Icon(Icons.add),
-                label: const Text('手动添加课程'),
-              ),
-            ],
-          ),
-        ),
         const SizedBox(height: 8),
-        _ScheduleGrid(
-          weekdays: weekdays,
-          instances: instances,
-          calendarEngine: calendarEngine,
-          week: week,
-          now: CampusClock.now(),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.end,
+          children: [
+            OutlinedButton.icon(
+              onPressed: onAddException,
+              icon: const Icon(Icons.event_repeat_outlined),
+              label: const Text('临时加课'),
+            ),
+            FilledButton.icon(
+              onPressed: onAddCourse,
+              icon: const Icon(Icons.add),
+              label: const Text('手动添加课程'),
+            ),
+          ],
         ),
-        if (instances.isEmpty) ...[
-          const SizedBox(height: 24),
-          const Center(child: Text('本周没有课程')),
-        ],
       ],
     );
   }
@@ -158,236 +326,370 @@ class _WeekContent extends StatelessWidget {
 
 class _ScheduleGrid extends StatelessWidget {
   const _ScheduleGrid({
-    required this.weekdays,
-    required this.instances,
-    required this.calendarEngine,
-    required this.week,
+    required this.visibleDays,
+    required this.viewModel,
+    required this.preferences,
     required this.now,
   });
 
-  final List<int> weekdays;
-  final List<EffectiveCourseInstance> instances;
-  final CalendarEngine calendarEngine;
-  final int week;
+  final List<WeekDayColumn> visibleDays;
+  final WeekScheduleViewModel viewModel;
+  final ScheduleDisplayPreferences preferences;
   final DateTime now;
+
+  static const _headerHeight = 44.0;
+  static const _rowHeight = 56.0;
 
   @override
   Widget build(BuildContext context) {
-    final themeTokens = scheduleThemeTokensOf(context);
-    final rows = <TableRow>[
-      TableRow(
-        children: [
-          const _GridHeader(text: '节次'),
-          ...weekdays.map(
-            (day) {
-              final date = calendarEngine.definition
-                  .weekStart(week)
-                  .add(Duration(days: day - 1));
-              final resolved = calendarEngine.resolve(date);
-              return _GridHeader(
-                text: '${weekdayName(day)}\n${date.day}',
-                marker: switch (resolved.override?.type) {
-                  CalendarOverrideType.holiday =>
-                    resolved.label?.isNotEmpty == true ? resolved.label : '放假',
-                  CalendarOverrideType.useScheduleOf =>
-                    resolved.label?.isNotEmpty == true ? resolved.label : '调课',
-                  null => null,
-                },
-                highlighted: day == now.weekday && isSameDate(date, now),
-              );
-            },
-          ),
-        ],
-      ),
-    ];
-    for (var section = 1; section <= 11; section++) {
-      rows.add(
-        TableRow(
-          children: [
-            _PeriodCell(section: section),
-            ...weekdays.map(
-              (day) => _ScheduleCell(
-                day: day,
-                section: section,
-                instance: _findInstance(day, section),
-                showCurrentTime: _isCurrentTime(day, section),
+    final periodWidth = preferences.showPeriodTimes ? 48.0 : 34.0;
+    final periodCount = NwuPeriodRepository.all.length;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final dayWidth = math.max<double>(
+          1,
+          (constraints.maxWidth - periodWidth) / visibleDays.length,
+        );
+        final height = _headerHeight + periodCount * _rowHeight;
+        final placed = _placeEntries();
+        final currentSection =
+            preferences.highlightCurrentPeriod ? _currentSection() : null;
+        return SizedBox(
+          height: height,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _ScheduleGridPainter(
+                    periodWidth: periodWidth,
+                    dayWidth: dayWidth,
+                    dayCount: visibleDays.length,
+                    periodCount: periodCount,
+                    headerHeight: _headerHeight,
+                    rowHeight: _rowHeight,
+                    lineColor: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
               ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Table(
-        defaultColumnWidth: FixedColumnWidth(themeTokens.gridColumnWidth),
-        border: TableBorder.all(
-          color: Theme.of(context).dividerColor.withAlpha(89),
-          width: themeTokens.gridBorderWidth,
-        ),
-        children: rows,
-      ),
+              for (var index = 0; index < visibleDays.length; index++)
+                Positioned(
+                  left: periodWidth + index * dayWidth,
+                  top: 0,
+                  width: dayWidth,
+                  height: _headerHeight,
+                  child: _DayHeader(day: visibleDays[index]),
+                ),
+              for (var section = 1; section <= periodCount; section++)
+                Positioned(
+                  left: 0,
+                  top: _headerHeight + (section - 1) * _rowHeight,
+                  width: periodWidth,
+                  height: _rowHeight,
+                  child: _PeriodLabel(
+                    section: section,
+                    showTime: preferences.showPeriodTimes,
+                  ),
+                ),
+              for (final item in placed)
+                Positioned(
+                  left: periodWidth +
+                      visibleDays.indexWhere(
+                            (day) => day.weekday == item.entry.weekday,
+                          ) *
+                          dayWidth +
+                      item.lane * (dayWidth / item.laneCount) +
+                      2,
+                  top: _headerHeight +
+                      (item.entry.startSection - 1) * _rowHeight +
+                      2,
+                  width: math.max<double>(8, dayWidth / item.laneCount - 4),
+                  height: math.max<double>(
+                    24,
+                    (item.entry.endSection - item.entry.startSection + 1) *
+                            _rowHeight -
+                        4,
+                  ),
+                  child: _ScheduleBlock(
+                    entry: item.entry,
+                    preferences: preferences,
+                  ),
+                ),
+              if (currentSection != null)
+                Positioned(
+                  left: periodWidth,
+                  right: 0,
+                  top: _headerHeight + (currentSection - 1) * _rowHeight,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 2,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  EffectiveCourseInstance? _findInstance(int day, int section) {
-    for (final instance in instances) {
-      if (instance.date.weekday == day &&
-          instance.startSection <= section &&
-          instance.endSection >= section) {
-        return instance;
+  List<_PlacedScheduleEntry> _placeEntries() {
+    final placed = <_PlacedScheduleEntry>[];
+    for (final day in visibleDays) {
+      final entries = viewModel.entries
+          .where((entry) => entry.weekday == day.weekday)
+          .toList()
+        ..sort((left, right) {
+          final byStart = left.startSection.compareTo(right.startSection);
+          if (byStart != 0) return byStart;
+          return right.endSection.compareTo(left.endSection);
+        });
+      final lanes = <List<ScheduleGridEntry>>[];
+      final startIndex = placed.length;
+      for (final entry in entries) {
+        var lane = 0;
+        while (lane < lanes.length &&
+            lanes[lane].any((other) => _overlaps(other, entry))) {
+          lane++;
+        }
+        if (lane == lanes.length) lanes.add([]);
+        lanes[lane].add(entry);
+        placed.add(
+          _PlacedScheduleEntry(
+            entry: entry,
+            lane: lane,
+            laneCount: lanes.length,
+          ),
+        );
+      }
+      for (var index = startIndex; index < placed.length; index++) {
+        placed[index] = placed[index].copyWith(laneCount: lanes.length);
+      }
+    }
+    return placed;
+  }
+
+  static bool _overlaps(ScheduleGridEntry left, ScheduleGridEntry right) {
+    return left.startSection <= right.endSection &&
+        right.startSection <= left.endSection;
+  }
+
+  int? _currentSection() {
+    final today = dateOnly(now);
+    final todayColumn = visibleDays
+        .where((day) => day.isToday && isSameDate(day.date, today))
+        .firstOrNull;
+    if (todayColumn == null) return null;
+    final minutes = now.hour * 60 + now.minute;
+    for (final period in NwuPeriodRepository.all) {
+      if (minutes >= period.startMinutes && minutes < period.endMinutes) {
+        return period.number;
       }
     }
     return null;
   }
-
-  bool _isCurrentTime(int day, int section) {
-    if (now.weekday != day) return false;
-    final period = const NwuPeriodRepository().byNumber(section);
-    final minutes = now.hour * 60 + now.minute;
-    return minutes >= period.startMinutes && minutes < period.endMinutes;
-  }
 }
 
-class _GridHeader extends StatelessWidget {
-  const _GridHeader({
-    required this.text,
-    this.marker,
-    this.highlighted = false,
+class _PlacedScheduleEntry {
+  const _PlacedScheduleEntry({
+    required this.entry,
+    required this.lane,
+    required this.laneCount,
   });
 
-  final String text;
-  final String? marker;
-  final bool highlighted;
+  final ScheduleGridEntry entry;
+  final int lane;
+  final int laneCount;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: marker == null ? 48 : 60,
-      alignment: Alignment.center,
-      color: highlighted
-          ? Theme.of(context).colorScheme.primaryContainer
-          : Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(text,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w700)),
-          if (marker != null)
-            Text(
-              marker!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PeriodCell extends StatelessWidget {
-  const _PeriodCell({required this.section});
-
-  final int section;
-
-  @override
-  Widget build(BuildContext context) {
-    final themeTokens = scheduleThemeTokensOf(context);
-    final period = const NwuPeriodRepository().byNumber(section);
-    return Container(
-      height: themeTokens.gridCellHeight,
-      alignment: Alignment.center,
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Text(
-        '$section\n${period.startLabel}-${period.endLabel}',
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.labelSmall,
-      ),
-    );
-  }
-}
-
-class _ScheduleCell extends StatelessWidget {
-  const _ScheduleCell({
-    required this.day,
-    required this.section,
-    required this.instance,
-    required this.showCurrentTime,
-  });
-
-  final int day;
-  final int section;
-  final EffectiveCourseInstance? instance;
-  final bool showCurrentTime;
-
-  @override
-  Widget build(BuildContext context) {
-    final themeTokens = scheduleThemeTokensOf(context);
-    final isStart = instance != null && instance!.startSection == section;
-    if (!isStart) {
-      return Container(
-        height: themeTokens.gridCellHeight,
-        decoration: showCurrentTime
-            ? BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: Theme.of(context).colorScheme.error,
-                    width: 2,
-                  ),
-                ),
-              )
-            : null,
+  _PlacedScheduleEntry copyWith({int? laneCount}) => _PlacedScheduleEntry(
+        entry: entry,
+        lane: lane,
+        laneCount: laneCount ?? this.laneCount,
       );
-    }
-    final color = Color(
-      instance!.course.colorOverride ??
-          Theme.of(context).colorScheme.primary.toARGB32(),
+}
+
+class _ScheduleGridPainter extends CustomPainter {
+  const _ScheduleGridPainter({
+    required this.periodWidth,
+    required this.dayWidth,
+    required this.dayCount,
+    required this.periodCount,
+    required this.headerHeight,
+    required this.rowHeight,
+    required this.lineColor,
+  });
+
+  final double periodWidth;
+  final double dayWidth;
+  final int dayCount;
+  final int periodCount;
+  final double headerHeight;
+  final double rowHeight;
+  final Color lineColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 0.7;
+    canvas.drawLine(
+      Offset(0, headerHeight),
+      Offset(size.width, headerHeight),
+      paint,
     );
-    return Stack(
-      children: [
-        Semantics(
-          button: true,
-          excludeSemantics: true,
-          label:
-              '${instance!.courseName}，${weekdayName(day)}，第 $section 至 ${instance!.endSection} 节，点击查看课程详情',
-          onTap: () => showCourseDetails(context, instance!),
-          child: InkWell(
-            onTap: () => showCourseDetails(context, instance!),
-            child: Container(
-              height: themeTokens.gridCellHeight,
-              padding: const EdgeInsets.all(6),
-              color: color.withAlpha(46),
-              child: Text(
-                instance!.courseName,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+    for (var day = 0; day <= dayCount; day++) {
+      final x = periodWidth + day * dayWidth;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    canvas.drawLine(const Offset(0, 0), Offset(0, size.height), paint);
+    for (var section = 0; section <= periodCount; section++) {
+      final y = headerHeight + section * rowHeight;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScheduleGridPainter oldDelegate) =>
+      oldDelegate.periodWidth != periodWidth ||
+      oldDelegate.dayWidth != dayWidth ||
+      oldDelegate.dayCount != dayCount ||
+      oldDelegate.lineColor != lineColor;
+}
+
+class _DayHeader extends StatelessWidget {
+  const _DayHeader({required this.day});
+
+  final WeekDayColumn day;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final markerColor = day.marker == '休' ? scheme.error : scheme.tertiary;
+    return Semantics(
+      container: true,
+      label:
+          '星期${day.label}，${day.date.month}月${day.date.day}日${day.marker == null ? '' : '，${day.marker}'}',
+      child: Container(
+        color: day.isToday ? scheme.primaryContainer : scheme.surfaceContainer,
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(day.label,
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(
+              '${day.date.day}',
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+            if (day.marker != null)
+              Text(
+                day.marker!,
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontSize: 12,
+                  color: markerColor,
+                  fontSize: 9,
                   fontWeight: FontWeight.w700,
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PeriodLabel extends StatelessWidget {
+  const _PeriodLabel({required this.section, required this.showTime});
+
+  final int section;
+  final bool showTime;
+
+  @override
+  Widget build(BuildContext context) {
+    final period = const NwuPeriodRepository().byNumber(section);
+    return Container(
+      color: Theme.of(context).colorScheme.surfaceContainer,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 1),
+      child: Text(
+        showTime
+            ? '$section\n${period.startLabel}\n${period.endLabel}'
+            : '$section',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 9),
+      ),
+    );
+  }
+}
+
+class _ScheduleBlock extends StatelessWidget {
+  const _ScheduleBlock({required this.entry, required this.preferences});
+
+  final ScheduleGridEntry entry;
+  final ScheduleDisplayPreferences preferences;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final colors = CourseColorResolver.resolve(entry.course, scheme);
+    final location = entry.instance.location;
+    final lines = [
+      entry.course.name,
+      if (location != null) location,
+      if (preferences.showTeacher && entry.teacher != null) entry.teacher!,
+      if (!entry.active) '非本周',
+    ];
+    final label = [
+      entry.course.name,
+      weekdayName(entry.weekday),
+      '第${entry.startSection}-${entry.endSection}节',
+      if (location != null) location,
+      if (preferences.showTeacher && entry.teacher != null) entry.teacher!,
+      if (!entry.active) '非本周课程',
+    ].join('，');
+    return Semantics(
+      button: true,
+      excludeSemantics: true,
+      label: '$label，点击查看课程详情',
+      onTap: () => showCourseDetails(context, entry.instance),
+      child: InkWell(
+        onTap: () => showCourseDetails(context, entry.instance),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: entry.active
+                ? colors.container
+                : scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: scheme.outlineVariant,
+              width: entry.active ? 0.7 : 1,
             ),
+          ),
+          child: Text(
+            lines.join('\n'),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  fontSize: _fontSize(context),
+                  height: 1.1,
+                  color: entry.active
+                      ? colors.onContainer
+                      : scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
           ),
         ),
-        if (showCurrentTime)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 2,
-              color: Theme.of(context).colorScheme.error,
-            ),
-          ),
-      ],
+      ),
     );
+  }
+
+  double _fontSize(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    return width >= 500
+        ? 11
+        : width >= 390
+            ? 10
+            : 9;
   }
 }

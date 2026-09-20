@@ -4,9 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
 import '../../../core/nwu/periods.dart';
-import '../../../core/utils/week_mask.dart';
 import '../../../domain/course/course.dart';
+import '../../../domain/course/meeting_draft.dart';
 import '../../../domain/course/meeting_rule.dart';
+import '../../../domain/course/week_pattern.dart';
 import '../../../domain/errors/app_error.dart';
 
 class ManualCoursePage extends ConsumerStatefulWidget {
@@ -21,96 +22,160 @@ class ManualCoursePage extends ConsumerStatefulWidget {
 class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
-  final _code = TextEditingController();
-  final _teachingClass = TextEditingController();
-  final _credits = TextEditingController();
-  final _assessment = TextEditingController();
-  final _teacher = TextEditingController();
-  final _campus = TextEditingController();
-  final _room = TextEditingController();
-  final _weeks = TextEditingController();
   final _note = TextEditingController();
-  int _weekday = 1;
-  int _startSection = 1;
-  int _endSection = 2;
   bool _saving = false;
   bool _initialized = false;
+  bool _snackbarDismissed = false;
   Course? _existingCourse;
   List<MeetingRule> _existingRules = const [];
-  int _selectedRuleIndex = 0;
+  List<MeetingDraft> _drafts = const [];
 
   @override
   void dispose() {
-    for (final controller in [
-      _name,
-      _code,
-      _teachingClass,
-      _credits,
-      _assessment,
-      _teacher,
-      _campus,
-      _room,
-      _weeks,
-      _note,
-    ]) {
-      controller.dispose();
-    }
+    _name.dispose();
+    _note.dispose();
     super.dispose();
   }
 
-  String? _optional(TextEditingController controller) {
-    final value = controller.text.trim();
-    return value.isEmpty ? null : value;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_snackbarDismissed) return;
+    _snackbarDismissed = true;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
   }
 
-  double? _optionalCredits() {
-    final value = _credits.text.trim();
-    return value.isEmpty ? null : double.parse(value);
-  }
-
-  void _loadRule(MeetingRule rule) {
-    _teacher.text = rule.teacher ?? '';
-    _campus.text = rule.campus ?? '';
-    _room.text = rule.room ?? '';
-    _weeks.text = formatWeekMask(rule.weekMask);
-    _weekday = rule.weekday;
-    _startSection = rule.startSection;
-    _endSection = rule.endSection;
-  }
-
-  void _initializeEdit(ScheduleReady ready) {
-    if (_initialized || widget.courseId == null) return;
-    for (final course in ready.engine.courses) {
-      if (course.id == widget.courseId) _existingCourse = course;
+  void _initialize(ScheduleReady ready, int totalWeeks) {
+    if (_initialized) return;
+    if (widget.courseId != null) {
+      for (final course in ready.engine.courses) {
+        if (course.id == widget.courseId) {
+          _existingCourse = course;
+          break;
+        }
+      }
+      if (_existingCourse == null) return;
+      _existingRules = ready.engine.meetingRules
+          .where((rule) => rule.courseId == widget.courseId)
+          .toList(growable: false);
+      _drafts = [
+        for (final rule in _existingRules)
+          MeetingDraft.fromRule(rule, totalWeeks: totalWeeks),
+      ];
+      if (_drafts.isEmpty) {
+        _drafts = [MeetingDraft.initial(totalWeeks: totalWeeks)];
+      }
+      _name.text = _existingCourse!.name;
+      _note.text = _existingCourse!.note ?? '';
+    } else {
+      _drafts = [MeetingDraft.initial(totalWeeks: totalWeeks)];
     }
-    if (_existingCourse == null) return;
-    _existingRules = ready.engine.meetingRules
-        .where((rule) => rule.courseId == widget.courseId)
-        .toList(growable: false);
-    _name.text = _existingCourse!.name;
-    _code.text = _existingCourse!.code ?? '';
-    _teachingClass.text = _existingCourse!.teachingClass ?? '';
-    _credits.text = _existingCourse!.credits?.toString() ?? '';
-    _assessment.text = _existingCourse!.assessment ?? '';
-    _note.text = _existingCourse!.note ?? '';
-    if (_existingRules.isNotEmpty) _loadRule(_existingRules.first);
     _initialized = true;
   }
 
+  void _updateDraft(MeetingDraft draft) {
+    final index = _drafts.indexWhere((item) => item.id == draft.id);
+    if (index < 0) return;
+    setState(() {
+      final next = [..._drafts];
+      next[index] = draft;
+      _drafts = next;
+    });
+  }
+
+  void _addDraft(int index, int totalWeeks) {
+    final draft = MeetingDraft.initial(
+      id: 'draft-${DateTime.now().microsecondsSinceEpoch}',
+      totalWeeks: totalWeeks,
+    );
+    setState(() {
+      final next = [..._drafts];
+      next.insert(index + 1, draft);
+      _drafts = next;
+    });
+  }
+
+  void _copyDraft(int index) {
+    final source = _drafts[index];
+    final copy = source.copyWith(
+      id: 'draft-${DateTime.now().microsecondsSinceEpoch}',
+      sourceMeetingKey: null,
+    );
+    setState(() {
+      final next = [..._drafts];
+      next.insert(index + 1, copy);
+      _drafts = next;
+    });
+  }
+
+  void _deleteDraft(int index) {
+    if (_drafts.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('课程至少需要一个上课安排')),
+      );
+      return;
+    }
+    setState(() {
+      final next = [..._drafts]..removeAt(index);
+      _drafts = next;
+    });
+  }
+
+  Future<bool> _confirmDeletedExceptions(
+    ScheduleReady ready,
+    Set<String> deletedRuleIds,
+  ) async {
+    if (deletedRuleIds.isEmpty) return true;
+    final affected = ready.engine.exceptions
+        .where(
+          (exception) =>
+              exception.courseId == widget.courseId &&
+              exception.sourceMeetingId != null &&
+              deletedRuleIds.contains(exception.sourceMeetingId),
+        )
+        .toList(growable: false);
+    if (affected.isEmpty) return true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除存在临时变更的上课安排？'),
+        content: Text(
+          '该上课安排存在 ${affected.length} 条临时变更。\n'
+          '删除后相关临时变更也将删除。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('确认删除'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   Future<void> _save(ScheduleReady ready) async {
-    if (!_formKey.currentState!.validate() || _saving) return;
+    if (_saving || !_formKey.currentState!.validate()) return;
+    if (_drafts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('课程至少需要一个上课安排')),
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
       final totalWeeks = ready.engine.calendarEngine.definition.totalWeeks;
-      final mask = WeekMask.parseManual(_weeks.text, maxWeek: totalWeeks);
+      final masks = [
+        for (final draft in _drafts) draft.weekMask(totalWeeks),
+      ];
       final id = _existingCourse?.id ??
           'manual-${DateTime.now().microsecondsSinceEpoch}';
       final course = _existingCourse?.copyWith(
             name: _name.text.trim(),
-            code: _optional(_code),
-            teachingClass: _optional(_teachingClass),
-            credits: _optionalCredits(),
-            assessment: _optional(_assessment),
             note: _optional(_note),
           ) ??
           Course(
@@ -118,46 +183,54 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
             semesterId: ready.semester.id,
             sourceType: CourseSourceType.manual,
             name: _name.text.trim(),
-            code: _optional(_code),
-            teachingClass: _optional(_teachingClass),
-            credits: _optionalCredits(),
-            assessment: _optional(_assessment),
             note: _optional(_note),
           );
-      final rules = List<MeetingRule>.of(_existingRules);
-      final existingRule = rules.isEmpty ? null : rules[_selectedRuleIndex];
-      final rule = existingRule?.copyWith(
-            weekday: _weekday,
-            startSection: _startSection,
-            endSection: _endSection,
-            teacher: _optional(_teacher),
-            campus: _optional(_campus),
-            room: _optional(_room),
-            weekMask: mask,
-          ) ??
+      final existingIds = _existingRules.map((rule) => rule.id).toSet();
+      final draftIds = _drafts.map((draft) => draft.id).toSet();
+      final deletedRuleIds = existingIds.difference(draftIds);
+      if (!await _confirmDeletedExceptions(ready, deletedRuleIds)) return;
+
+      final repository = ref.read(scheduleDataRepositoryProvider);
+      final deletedExceptionIds = ready.engine.exceptions
+          .where(
+            (exception) =>
+                exception.courseId == course.id &&
+                exception.sourceMeetingId != null &&
+                deletedRuleIds.contains(exception.sourceMeetingId),
+          )
+          .map((exception) => exception.id)
+          .toList(growable: false);
+      final savedAt = DateTime.now().microsecondsSinceEpoch;
+      final rules = <MeetingRule>[];
+      for (var index = 0; index < _drafts.length; index++) {
+        final draft = _drafts[index];
+        final ruleId = existingIds.contains(draft.id)
+            ? draft.id
+            : 'manual-$id-$savedAt-$index';
+        rules.add(
           MeetingRule(
-            id: '$id-rule',
+            id: ruleId,
             courseId: id,
-            weekday: _weekday,
-            startSection: _startSection,
-            endSection: _endSection,
-            teacher: _optional(_teacher),
-            campus: _optional(_campus),
-            room: _optional(_room),
-            weekMask: mask,
-          );
-      if (rules.isEmpty) {
-        rules.add(rule);
-      } else {
-        rules[_selectedRuleIndex] = rule;
+            sourceMeetingKey: draft.sourceMeetingKey,
+            weekday: draft.weekday,
+            startSection: draft.startSection,
+            endSection: draft.endSection,
+            teacher: _optionalText(draft.teacher),
+            campus: _optionalText(draft.campus),
+            room: _optionalText(draft.room),
+            weekMask: masks[index],
+          ),
+        );
       }
-      await ref.read(scheduleDataRepositoryProvider).saveCourse(course, rules);
+      await repository.saveCourse(
+        course,
+        rules,
+        removeExceptionIds: deletedExceptionIds,
+      );
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       context.go('/schedule');
-      messenger.showSnackBar(
-        const SnackBar(content: Text('课程已保存到本地')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('课程已保存到本地')));
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -167,6 +240,14 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  String? _optional(TextEditingController controller) =>
+      _optionalText(controller.text);
+
+  static String? _optionalText(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   @override
@@ -179,156 +260,63 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
         if (state is! ScheduleReady) {
           return const Center(child: Text('请先在设置中创建学期'));
         }
-        _initializeEdit(state);
+        final totalWeeks = state.engine.calendarEngine.definition.totalWeeks;
+        _initialize(state, totalWeeks);
         if (widget.courseId != null && _existingCourse == null) {
           return const Center(child: Text('找不到这门课程'));
         }
-        final totalWeeks = state.engine.calendarEngine.definition.totalWeeks;
-        if (_weeks.text.isEmpty) _weeks.text = '1-$totalWeeks周';
         return Form(
           key: _formKey,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 36),
             children: [
-              Text(widget.courseId == null ? '手动添加课程' : '编辑整门课程',
-                  style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                widget.courseId == null ? '手动添加课程' : '编辑整门课程',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
               const SizedBox(height: 8),
               Text(state.semester.label),
-              const SizedBox(height: 22),
+              const SizedBox(height: 24),
+              const _SectionHeading(title: '课程信息'),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _name,
                 decoration: const InputDecoration(labelText: '课程名 *'),
                 maxLength: 80,
                 validator: (value) =>
-                    value == null || value.trim().isEmpty ? '请输入课程名' : null,
-              ),
-              TextFormField(
-                controller: _code,
-                decoration: const InputDecoration(labelText: '课程代码'),
-              ),
-              TextFormField(
-                controller: _teachingClass,
-                decoration: const InputDecoration(labelText: '教学班'),
-              ),
-              TextFormField(
-                controller: _credits,
-                decoration: const InputDecoration(labelText: '学分'),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) return null;
-                  final parsed = double.tryParse(value.trim());
-                  return parsed == null || parsed < 0 ? '请输入有效学分' : null;
-                },
-              ),
-              TextFormField(
-                controller: _assessment,
-                decoration: const InputDecoration(labelText: '考核方式'),
-              ),
-              if (_existingRules.length > 1) ...[
-                DropdownButtonFormField<int>(
-                  initialValue: _selectedRuleIndex,
-                  decoration: const InputDecoration(labelText: '选择上课安排'),
-                  items: List.generate(
-                    _existingRules.length,
-                    (index) => DropdownMenuItem(
-                      value: index,
-                      child: Text('安排 ${index + 1}'),
-                    ),
-                  ),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() {
-                      _selectedRuleIndex = value;
-                      _loadRule(_existingRules[value]);
-                    });
-                  },
-                ),
-                const Text('每次保存只修改选中的上课安排，其余安排保持不变。'),
-              ],
-              TextFormField(
-                controller: _teacher,
-                decoration: const InputDecoration(labelText: '教师'),
-              ),
-              TextFormField(
-                controller: _campus,
-                decoration: const InputDecoration(labelText: '校区'),
-              ),
-              TextFormField(
-                controller: _room,
-                decoration: const InputDecoration(labelText: '教室'),
+                    value == null || value.trim().isEmpty ? '请输入课程名称' : null,
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<int>(
-                initialValue: _weekday,
-                decoration: const InputDecoration(labelText: '星期'),
-                items: List.generate(
-                    7,
-                    (index) => DropdownMenuItem(
-                          value: index + 1,
-                          child: Text('星期${'一二三四五六日'[index]}'),
-                        )),
-                onChanged: (value) => setState(() => _weekday = value ?? 1),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                      child: DropdownButtonFormField<int>(
-                    initialValue: _startSection,
-                    decoration: const InputDecoration(labelText: '开始节'),
-                    items: List.generate(
-                        NwuPeriodRepository.all.length,
-                        (index) => DropdownMenuItem(
-                              value: index + 1,
-                              child: Text('第 ${index + 1} 节'),
-                            )),
-                    onChanged: (value) => setState(() {
-                      _startSection = value ?? 1;
-                      if (_endSection < _startSection) {
-                        _endSection = _startSection;
-                      }
-                    }),
-                  )),
-                  const SizedBox(width: 12),
-                  Expanded(
-                      child: DropdownButtonFormField<int>(
-                    key: ValueKey(_endSection),
-                    initialValue: _endSection,
-                    decoration: const InputDecoration(labelText: '结束节'),
-                    items: List.generate(
-                        NwuPeriodRepository.all.length,
-                        (index) => DropdownMenuItem(
-                              value: index + 1,
-                              child: Text('第 ${index + 1} 节'),
-                            )),
-                    onChanged: (value) =>
-                        setState(() => _endSection = value ?? 1),
-                    validator: (value) => value == null || value < _startSection
-                        ? '结束节不能早于开始节'
-                        : null,
-                  )),
-                ],
-              ),
-              TextFormField(
-                controller: _weeks,
-                decoration: InputDecoration(
-                  labelText: '周次 *',
-                  helperText: '如 1-$totalWeeks周、1-15周单周、1,3,5周',
-                ),
-                validator: (value) {
-                  try {
-                    WeekMask.parseManual(value ?? '', maxWeek: totalWeeks);
-                    return null;
-                  } catch (_) {
-                    return '请输入有效周次';
-                  }
-                },
-              ),
               TextFormField(
                 controller: _note,
                 decoration: const InputDecoration(labelText: '备注'),
-                maxLines: 2,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  const Expanded(child: _SectionHeading(title: '上课安排')),
+                  Text('${_drafts.length} 条'),
+                ],
+              ),
+              const SizedBox(height: 12),
+              for (var index = 0; index < _drafts.length; index++) ...[
+                _MeetingDraftCard(
+                  key: ValueKey(_drafts[index].id),
+                  index: index,
+                  draft: _drafts[index],
+                  totalWeeks: totalWeeks,
+                  canDelete: _drafts.length > 1,
+                  onChanged: _updateDraft,
+                  onCopy: () => _copyDraft(index),
+                  onDelete: () => _deleteDraft(index),
+                ),
+                const SizedBox(height: 12),
+              ],
+              OutlinedButton.icon(
+                onPressed: () => _addDraft(_drafts.length - 1, totalWeeks),
+                icon: const Icon(Icons.add),
+                label: const Text('添加上课安排'),
               ),
               const SizedBox(height: 24),
               FilledButton(
@@ -340,5 +328,386 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
         );
       },
     );
+  }
+}
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+    );
+  }
+}
+
+class _MeetingDraftCard extends StatefulWidget {
+  const _MeetingDraftCard({
+    required this.index,
+    required this.draft,
+    required this.totalWeeks,
+    required this.canDelete,
+    required this.onChanged,
+    required this.onCopy,
+    required this.onDelete,
+    super.key,
+  });
+
+  final int index;
+  final MeetingDraft draft;
+  final int totalWeeks;
+  final bool canDelete;
+  final ValueChanged<MeetingDraft> onChanged;
+  final VoidCallback onCopy;
+  final VoidCallback onDelete;
+
+  @override
+  State<_MeetingDraftCard> createState() => _MeetingDraftCardState();
+}
+
+class _MeetingDraftCardState extends State<_MeetingDraftCard> {
+  late final TextEditingController _teacher;
+  late final TextEditingController _campus;
+  late final TextEditingController _room;
+
+  @override
+  void initState() {
+    super.initState();
+    _teacher = TextEditingController(text: widget.draft.teacher);
+    _campus = TextEditingController(text: widget.draft.campus);
+    _room = TextEditingController(text: widget.draft.room);
+  }
+
+  @override
+  void dispose() {
+    _teacher.dispose();
+    _campus.dispose();
+    _room.dispose();
+    super.dispose();
+  }
+
+  void _update(MeetingDraft next) => widget.onChanged(next);
+
+  void _updateText() {
+    _update(
+      widget.draft.copyWith(
+        teacher: _teacher.text,
+        campus: _campus.text,
+        room: _room.text,
+      ),
+    );
+  }
+
+  void _updateRegular({
+    int? startWeek,
+    int? endWeek,
+    WeekPattern? pattern,
+  }) {
+    _update(
+      widget.draft.copyWith(
+        startWeek: startWeek,
+        endWeek: endWeek,
+        pattern: pattern,
+        originalWeekMask: null,
+        isIrregular: false,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final draft = widget.draft;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '上课安排 ${widget.index + 1}',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '复制安排',
+                  onPressed: widget.onCopy,
+                  icon: const Icon(Icons.copy_outlined),
+                ),
+                IconButton(
+                  tooltip: '删除安排',
+                  onPressed: widget.canDelete ? widget.onDelete : null,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: draft.weekday,
+              decoration: const InputDecoration(labelText: '星期'),
+              items: List.generate(
+                7,
+                (index) => DropdownMenuItem(
+                  value: index + 1,
+                  child: Text('星期${'一二三四五六日'[index]}'),
+                ),
+              ),
+              onChanged: (value) =>
+                  _update(draft.copyWith(weekday: value ?? 1)),
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final startField = DropdownButtonFormField<int>(
+                  initialValue: draft.startSection,
+                  decoration: const InputDecoration(labelText: '开始节'),
+                  items: _sectionItems(),
+                  onChanged: (value) {
+                    final start = value ?? 1;
+                    _update(
+                      draft.copyWith(
+                        startSection: start,
+                        endSection:
+                            draft.endSection < start ? start : draft.endSection,
+                      ),
+                    );
+                  },
+                );
+                final endField = DropdownButtonFormField<int>(
+                  key: ValueKey(draft.endSection),
+                  initialValue: draft.endSection,
+                  decoration: const InputDecoration(labelText: '结束节'),
+                  items: _sectionItems(),
+                  onChanged: (value) =>
+                      _update(draft.copyWith(endSection: value ?? 1)),
+                  validator: (value) =>
+                      value == null || value < draft.startSection
+                          ? '结束节不能早于开始节'
+                          : null,
+                );
+                if (constraints.maxWidth >= 430) {
+                  return Row(
+                    children: [
+                      Expanded(child: startField),
+                      const SizedBox(width: 12),
+                      Expanded(child: endField),
+                    ],
+                  );
+                }
+                return Column(
+                  children: [
+                    startField,
+                    const SizedBox(height: 12),
+                    endField,
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _teacher,
+              decoration: const InputDecoration(labelText: '教师'),
+              onChanged: (_) => _updateText(),
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final campusField = TextFormField(
+                  controller: _campus,
+                  decoration: const InputDecoration(labelText: '校区'),
+                  onChanged: (_) => _updateText(),
+                );
+                final roomField = TextFormField(
+                  controller: _room,
+                  decoration: const InputDecoration(labelText: '教室'),
+                  onChanged: (_) => _updateText(),
+                );
+                if (constraints.maxWidth >= 430) {
+                  return Row(
+                    children: [
+                      Expanded(child: campusField),
+                      const SizedBox(width: 12),
+                      Expanded(child: roomField),
+                    ],
+                  );
+                }
+                return Column(
+                  children: [
+                    campusField,
+                    const SizedBox(height: 12),
+                    roomField,
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 18),
+            _WeekSelector(
+              draft: draft,
+              totalWeeks: widget.totalWeeks,
+              onRegularChanged: _updateRegular,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<DropdownMenuItem<int>> _sectionItems() => List.generate(
+        NwuPeriodRepository.all.length,
+        (index) => DropdownMenuItem(
+          value: index + 1,
+          child: Text('第 ${index + 1} 节'),
+        ),
+      );
+}
+
+class _WeekSelector extends StatelessWidget {
+  const _WeekSelector({
+    required this.draft,
+    required this.totalWeeks,
+    required this.onRegularChanged,
+  });
+
+  final MeetingDraft draft;
+  final int totalWeeks;
+  final void Function({int? startWeek, int? endWeek, WeekPattern? pattern})
+      onRegularChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final weeks = draft.isIrregular && draft.originalWeekMask != null
+        ? draft.originalWeekMask!.weeks
+        : _safeWeeks();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('周次', style: Theme.of(context).textTheme.labelLarge),
+        if (draft.isIrregular) ...[
+          const SizedBox(height: 4),
+          Text(
+            '来自教务系统的不规则周次；修改下面的范围或单双周后将转换为规则模式。',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final startField = DropdownButtonFormField<int>(
+              initialValue: draft.startWeek,
+              decoration: const InputDecoration(labelText: '起始周'),
+              items: _weekItems(),
+              onChanged: (value) =>
+                  onRegularChanged(startWeek: value ?? draft.startWeek),
+            );
+            final endField = DropdownButtonFormField<int>(
+              key: ValueKey(draft.endWeek),
+              initialValue: draft.endWeek,
+              decoration: const InputDecoration(labelText: '结束周'),
+              items: _weekItems(),
+              onChanged: (value) =>
+                  onRegularChanged(endWeek: value ?? draft.endWeek),
+              validator: (value) => value == null || value < draft.startWeek
+                  ? '结束周不能早于起始周'
+                  : null,
+            );
+            if (constraints.maxWidth >= 430) {
+              return Row(
+                children: [
+                  Expanded(child: startField),
+                  const SizedBox(width: 12),
+                  Expanded(child: endField),
+                ],
+              );
+            }
+            return Column(
+              children: [
+                startField,
+                const SizedBox(height: 12),
+                endField,
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        SegmentedButton<WeekPattern>(
+          segments: [
+            for (final pattern in WeekPattern.values)
+              ButtonSegment(value: pattern, label: Text(pattern.label)),
+          ],
+          selected: {draft.pattern},
+          onSelectionChanged: (selection) {
+            if (selection.isNotEmpty) {
+              onRegularChanged(pattern: selection.first);
+            }
+          },
+        ),
+        const SizedBox(height: 12),
+        Text(
+          '本安排覆盖 ${weeks.length} 周',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (var week = 1; week <= totalWeeks; week++)
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: weeks.contains(week)
+                      ? Theme.of(context).colorScheme.primaryContainer
+                      : Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$week',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: weeks.contains(week)
+                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight:
+                            weeks.contains(week) ? FontWeight.w700 : null,
+                      ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  List<DropdownMenuItem<int>> _weekItems() => List.generate(
+        totalWeeks,
+        (index) => DropdownMenuItem(
+          value: index + 1,
+          child: Text('${index + 1}'),
+        ),
+      );
+
+  List<int> _safeWeeks() {
+    try {
+      return buildPatternWeekMask(
+        startWeek: draft.startWeek,
+        endWeek: draft.endWeek,
+        pattern: draft.pattern,
+        totalWeeks: totalWeeks,
+      ).weeks;
+    } on Object {
+      return const [];
+    }
   }
 }

@@ -154,6 +154,42 @@ void main() {
     );
   });
 
+  test('builds a week view model with active and inactive entries', () {
+    final engine = makeEngine(
+      rules: [
+        makeRule(
+          weekday: DateTime.sunday,
+          weekMask: WeekMask.all(20),
+        ),
+        makeRule(
+          weekday: DateTime.monday,
+          startSection: 1,
+          endSection: 2,
+          weekMask: WeekMask.fromWeeks([1]),
+        ),
+      ],
+    );
+
+    final view = engine.getWeekViewModel(2, includeInactive: true);
+
+    expect(view.days, hasLength(7));
+    expect(
+      view.activeEntries.any(
+        (entry) => entry.weekday == DateTime.sunday && entry.active,
+      ),
+      isTrue,
+    );
+    expect(
+      view.entries.any(
+        (entry) =>
+            !entry.active &&
+            entry.weekday == DateTime.monday &&
+            entry.startSection == 1,
+      ),
+      isTrue,
+    );
+  });
+
   test('MOVE removes source, adds target, and keeps later recurrence', () {
     final engine = makeEngine(
       exceptions: [

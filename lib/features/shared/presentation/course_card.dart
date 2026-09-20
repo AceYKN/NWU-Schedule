@@ -10,6 +10,7 @@ import '../../../core/utils/week_mask.dart';
 import '../../../domain/course/course_exception.dart';
 import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
+import 'course_color_resolver.dart';
 
 class CourseCard extends StatelessWidget {
   const CourseCard({
@@ -27,9 +28,7 @@ class CourseCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final themeTokens = scheduleThemeTokensOf(context);
-    final accent = Color(
-      instance.course.colorOverride ?? scheme.primary.toARGB32(),
-    );
+    final colors = CourseColorResolver.resolve(instance.course, scheme);
     final label = [
       if (status != null) status!,
       instance.courseName,
@@ -52,7 +51,10 @@ class CourseCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(width: themeTokens.courseAccentWidth, color: accent),
+                Container(
+                  width: themeTokens.courseAccentWidth,
+                  color: colors.container,
+                ),
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.all(

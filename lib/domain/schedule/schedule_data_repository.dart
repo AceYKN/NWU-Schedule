@@ -41,7 +41,11 @@ abstract interface class ScheduleDataRepository {
 
   Future<void> deleteSemester(String semesterId);
 
-  Future<void> saveCourse(Course course, List<MeetingRule> rules);
+  Future<void> saveCourse(
+    Course course,
+    List<MeetingRule> rules, {
+    Iterable<String> removeExceptionIds = const [],
+  });
 
   Future<void> saveException(CourseException exception);
 

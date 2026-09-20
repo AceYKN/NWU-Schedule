@@ -9,6 +9,8 @@ import '../../../core/nwu/constants.dart';
 import '../../../domain/errors/app_error.dart';
 import '../../../domain/backup/schedule_backup.dart';
 import '../../../domain/semester/semester.dart';
+import '../../../domain/settings/appearance_preferences.dart';
+import '../../../domain/settings/schedule_display_preferences.dart';
 import '../../../infrastructure/backup/backup_file_service.dart';
 import '../../../infrastructure/import/webview_session_service.dart';
 
@@ -33,6 +35,8 @@ class SettingsPage extends ConsumerWidget {
       (theme) => theme.id == selectedThemeId,
       orElse: () => officialThemes.first,
     );
+    final selectedThemeMode =
+        ref.watch(themeModeProvider).asData?.value ?? AppThemeMode.system;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
       children: [
@@ -81,6 +85,16 @@ class SettingsPage extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 20),
+        _SectionTitle(title: '课表显示'),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.view_week_outlined),
+            title: const Text('课表显示'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.go('/settings/schedule-display'),
+          ),
+        ),
+        const SizedBox(height: 20),
         _SectionTitle(title: '提醒'),
         Card(
           child: Column(
@@ -113,8 +127,27 @@ class SettingsPage extends ConsumerWidget {
             children: [
               ListTile(
                 leading: const Icon(Icons.palette_outlined),
-                title: Text('主题'),
-                subtitle: Text('当前：${selectedTheme.name} · 跟随系统明暗'),
+                title: const Text('模式'),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: SegmentedButton<AppThemeMode>(
+                  segments: [
+                    for (final mode in AppThemeMode.values)
+                      ButtonSegment(value: mode, label: Text(mode.label)),
+                  ],
+                  selected: {selectedThemeMode},
+                  onSelectionChanged: (selection) {
+                    if (selection.isNotEmpty) {
+                      _selectThemeMode(context, ref, selection.first);
+                    }
+                  },
+                ),
+              ),
+              const Divider(height: 1),
+              const ListTile(
+                leading: Icon(Icons.color_lens_outlined),
+                title: Text('主题色'),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -374,8 +407,24 @@ Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
   try {
     final themeId =
         ref.read(themeIdProvider).asData?.value ?? officialThemes.first.id;
+    final themeMode =
+        ref.read(themeModeProvider).asData?.value ?? AppThemeMode.system;
+    final display =
+        ref.read(scheduleDisplayPreferencesProvider).asData?.value ??
+            const ScheduleDisplayPreferences.defaults();
     final backup = await ref.read(scheduleDataRepositoryProvider).createBackup(
-      appearance: {'themeId': themeId},
+      appearance: {
+        'themeId': themeId,
+        'themeMode': themeMode.name,
+        'scheduleDisplay': {
+          'showWeekend': display.showWeekend,
+          'showTeacher': display.showTeacher,
+          'showInactiveCourses': display.showInactiveCourses,
+          'showPeriodTimes': display.showPeriodTimes,
+          'highlightCurrentPeriod': display.highlightCurrentPeriod,
+          'showBackToCurrentWeekFab': display.showBackToCurrentWeekFab,
+        },
+      },
     );
     final saved = await const BackupFileService().save(
       backup.encode(),
@@ -425,7 +474,23 @@ Future<void> _restoreBackup(BuildContext context, WidgetRef ref) async {
         officialThemes.any((theme) => theme.id == themeId)) {
       await repository.setSetting('appearance.themeId', themeId);
     }
+    final themeMode = backup.appearance['themeMode'];
+    if (themeMode is String &&
+        AppThemeMode.values.any((mode) => mode.name == themeMode)) {
+      await repository.setSetting('appearance.themeMode', themeMode);
+    }
+    final rawDisplay = backup.appearance['scheduleDisplay'];
+    if (rawDisplay is Map) {
+      for (final entry in scheduleDisplaySettingKeys.entries) {
+        final value = rawDisplay[entry.key];
+        if (value is bool) {
+          await repository.setSetting(entry.value, value.toString());
+        }
+      }
+    }
     ref.invalidate(themeIdProvider);
+    ref.invalidate(themeModeProvider);
+    ref.invalidate(scheduleDisplayPreferencesProvider);
     ref.invalidate(onboardingCompletedProvider);
     ref.invalidate(notificationEnabledProvider);
     ref.invalidate(notificationLeadMinutesProvider);
@@ -469,6 +534,8 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
     });
     await _bestEffort(const WebViewSessionService().clear);
     ref.invalidate(themeIdProvider);
+    ref.invalidate(themeModeProvider);
+    ref.invalidate(scheduleDisplayPreferencesProvider);
     ref.invalidate(onboardingCompletedProvider);
     ref.invalidate(notificationEnabledProvider);
     ref.invalidate(notificationLeadMinutesProvider);
@@ -503,6 +570,24 @@ Future<void> _selectTheme(
   } catch (error) {
     if (context.mounted) {
       _showMessage(context, nwuUserMessage(error, action: '主题切换失败'));
+    }
+  }
+}
+
+Future<void> _selectThemeMode(
+  BuildContext context,
+  WidgetRef ref,
+  AppThemeMode mode,
+) async {
+  try {
+    await ref
+        .read(scheduleDataRepositoryProvider)
+        .setSetting('appearance.themeMode', mode.name);
+    ref.invalidate(themeModeProvider);
+    if (context.mounted) _showMessage(context, '外观模式已更新');
+  } catch (error) {
+    if (context.mounted) {
+      _showMessage(context, nwuUserMessage(error, action: '更新外观模式失败'));
     }
   }
 }

@@ -12,6 +12,8 @@ import '../domain/schedule/schedule_data_repository.dart';
 import '../domain/schedule/schedule_engine.dart';
 import '../domain/semester/semester.dart';
 import '../domain/semester/semester_selector.dart';
+import '../domain/settings/appearance_preferences.dart';
+import '../domain/settings/schedule_display_preferences.dart';
 import '../domain/widget/widget_snapshot.dart';
 import '../infrastructure/calendar/bundled_calendar_repository.dart';
 import '../infrastructure/notifications/notification_service.dart';
@@ -94,6 +96,46 @@ final themeIdProvider = FutureProvider<String>((ref) async {
       .getSetting('appearance.themeId');
   if (officialThemes.any((theme) => theme.id == value)) return value!;
   return officialThemes.first.id;
+});
+
+const scheduleDisplaySettingKeys = {
+  'showWeekend': 'schedule.weekView.showWeekend',
+  'showTeacher': 'schedule.weekView.showTeacher',
+  'showInactiveCourses': 'schedule.weekView.showInactiveCourses',
+  'showPeriodTimes': 'schedule.weekView.showPeriodTimes',
+  'highlightCurrentPeriod': 'schedule.weekView.highlightCurrentPeriod',
+  'showBackToCurrentWeekFab': 'schedule.weekView.showBackToCurrentWeekFab',
+};
+
+final scheduleDisplayPreferencesProvider =
+    FutureProvider<ScheduleDisplayPreferences>((ref) async {
+  final repository = ref.watch(scheduleDataRepositoryProvider);
+
+  Future<bool> read(String name, bool fallback) async {
+    final value =
+        await repository.getSetting(scheduleDisplaySettingKeys[name]!);
+    return value == null ? fallback : value == 'true';
+  }
+
+  return ScheduleDisplayPreferences(
+    showWeekend: await read('showWeekend', false),
+    showTeacher: await read('showTeacher', true),
+    showInactiveCourses: await read('showInactiveCourses', false),
+    showPeriodTimes: await read('showPeriodTimes', true),
+    highlightCurrentPeriod: await read('highlightCurrentPeriod', true),
+    showBackToCurrentWeekFab: await read('showBackToCurrentWeekFab', true),
+  );
+});
+
+final themeModeProvider = FutureProvider<AppThemeMode>((ref) async {
+  final value = await ref
+      .watch(scheduleDataRepositoryProvider)
+      .getSetting('appearance.themeMode');
+  return switch (value) {
+    'light' => AppThemeMode.light,
+    'dark' => AppThemeMode.dark,
+    _ => AppThemeMode.system,
+  };
 });
 
 final bundledCalendarRepositoryProvider = Provider<BundledCalendarRepository>(

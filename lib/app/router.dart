@@ -10,6 +10,7 @@ import '../features/schedule/presentation/schedule_page.dart';
 import '../features/schedule/presentation/manual_course_page.dart';
 import '../features/schedule/presentation/course_detail_page.dart';
 import '../features/settings/presentation/settings_page.dart';
+import '../features/settings/presentation/schedule_display_settings_page.dart';
 import '../features/settings/presentation/course_management_page.dart';
 
 final appRouter = GoRouter(
@@ -51,6 +52,10 @@ final appRouter = GoRouter(
         GoRoute(
           path: '/settings',
           builder: (context, state) => const SettingsPage(),
+        ),
+        GoRoute(
+          path: '/settings/schedule-display',
+          builder: (context, state) => const ScheduleDisplaySettingsPage(),
         ),
         GoRoute(
           path: '/courses/manage',

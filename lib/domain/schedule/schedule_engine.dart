@@ -2,12 +2,14 @@ import '../../core/nwu/periods.dart';
 import '../../core/time/campus_clock.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/week_mask.dart';
+import '../calendar/calendar_definition.dart';
 import '../calendar/calendar_engine.dart';
 import '../course/course.dart';
 import '../course/course_exception.dart';
 import '../course/meeting_rule.dart';
 import 'effective_course_instance.dart';
 import 'schedule_now_state.dart';
+import 'week_schedule_view_model.dart';
 
 /// The single source of truth for effective course instances.
 ///
@@ -118,6 +120,120 @@ class ScheduleEngine {
     result.sort(_compareInstances);
     return result;
   }
+
+  WeekScheduleViewModel getWeekViewModel(
+    int teachingWeek, {
+    bool includeInactive = false,
+  }) {
+    if (teachingWeek < 1 ||
+        teachingWeek > calendarEngine.definition.totalWeeks) {
+      throw RangeError.range(
+        teachingWeek,
+        1,
+        calendarEngine.definition.totalWeeks,
+        'teachingWeek',
+      );
+    }
+    final weekStart = calendarEngine.definition.weekStart(teachingWeek);
+    final days = <WeekDayColumn>[];
+    final entries = <ScheduleGridEntry>[];
+    final now = CampusClock.now();
+    for (var offset = 0; offset < 7; offset++) {
+      final date = weekStart.add(Duration(days: offset));
+      final resolved = calendarEngine.resolve(date);
+      days.add(
+        WeekDayColumn(
+          weekday: date.weekday,
+          date: date,
+          label: _weekdayLabel(date.weekday),
+          marker: switch (resolved.override?.type) {
+            CalendarOverrideType.holiday => '休',
+            CalendarOverrideType.useScheduleOf => '调',
+            null => null,
+          },
+          isToday: isSameDate(date, now),
+        ),
+      );
+      for (final instance in _getCoursesForDate(date)) {
+        entries.add(ScheduleGridEntry(instance: instance, active: true));
+      }
+      if (includeInactive) {
+        for (final instance in _inactiveInstancesForDate(date)) {
+          entries.add(ScheduleGridEntry(instance: instance, active: false));
+        }
+      }
+    }
+    entries.sort((left, right) {
+      final byDay = left.weekday.compareTo(right.weekday);
+      if (byDay != 0) return byDay;
+      final bySection = left.startSection.compareTo(right.startSection);
+      if (bySection != 0) return bySection;
+      if (left.active != right.active) return left.active ? -1 : 1;
+      return left.course.name.compareTo(right.course.name);
+    });
+    return WeekScheduleViewModel(
+      week: teachingWeek,
+      days: List.unmodifiable(days),
+      entries: List.unmodifiable(entries),
+    );
+  }
+
+  List<EffectiveCourseInstance> _inactiveInstancesForDate(DateTime date) {
+    final actualDate = dateOnly(date);
+    final resolved = calendarEngine.resolve(actualDate);
+    if (!resolved.isTeachingDay || resolved.templateDate == null) {
+      return const [];
+    }
+    final templateDate = resolved.templateDate!;
+    final templateWeek = calendarEngine.weekOf(templateDate);
+    if (templateWeek == null) return const [];
+    final result = <EffectiveCourseInstance>[];
+    for (final course in courses) {
+      if (course.deleted || course.hidden) continue;
+      for (final rule in meetingRules) {
+        if (rule.courseId != course.id ||
+            rule.weekday != templateDate.weekday ||
+            rule.includesWeek(templateWeek) ||
+            _hasSourceMoveOrCancel(actualDate, course.id, rule.id)) {
+          continue;
+        }
+        result.add(
+          _createInstance(
+            course: course,
+            rule: rule,
+            actualDate: actualDate,
+            templateDate: templateDate,
+            startSection: rule.startSection,
+            endSection: rule.endSection,
+            teacher: rule.teacher,
+            campus: rule.campus,
+            room: rule.room,
+          ),
+        );
+      }
+    }
+    return result;
+  }
+
+  bool _hasSourceMoveOrCancel(
+    DateTime date,
+    String courseId,
+    String ruleId,
+  ) {
+    return exceptions.any(
+      (exception) =>
+          (exception.type == CourseExceptionType.move ||
+              exception.type == CourseExceptionType.cancel) &&
+          exception.sourceDate != null &&
+          isSameDate(exception.sourceDate!, date) &&
+          (exception.courseId == null || exception.courseId == courseId) &&
+          (exception.sourceMeetingId == null ||
+              exception.sourceMeetingId == ruleId),
+    );
+  }
+
+  static String _weekdayLabel(int weekday) =>
+      const ['一', '二', '三', '四', '五', '六', '日'][weekday - 1];
 
   List<EffectiveCourseInstance> _getCoursesForDate(DateTime date) {
     final actualDate = dateOnly(date);

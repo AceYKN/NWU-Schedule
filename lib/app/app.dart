@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
 import 'bootstrap.dart';
+import '../domain/settings/appearance_preferences.dart';
 import 'router.dart';
 import 'theme/schedule_theme.dart';
 
@@ -40,11 +41,18 @@ class _NwuScheduleAppState extends ConsumerState<NwuScheduleApp> {
       (item) => item.id == selectedId,
       orElse: () => officialThemes.first,
     );
+    final selectedThemeMode =
+        ref.watch(themeModeProvider).asData?.value ?? AppThemeMode.system;
     return MaterialApp.router(
       title: '西北大学课程表',
       debugShowCheckedModeBanner: false,
       theme: theme.light(),
       darkTheme: theme.dark(),
+      themeMode: switch (selectedThemeMode) {
+        AppThemeMode.system => ThemeMode.system,
+        AppThemeMode.light => ThemeMode.light,
+        AppThemeMode.dark => ThemeMode.dark,
+      },
       routerConfig: appRouter,
     );
   }
