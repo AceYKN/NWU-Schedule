@@ -324,6 +324,16 @@ void main() {
     expect(diff.changes.single.kind, ImportChangeKind.locallyDeleted);
   });
 
+  test('a stale tombstone cannot override an active local course', () {
+    final diff = const ImportDiffEngine().build(
+      incoming: timetable([course()]),
+      local: local(),
+      previousImport: timetable([course()]),
+      deletedSourceCourseKeys: {'course-1'},
+    );
+    expect(diff.changes.single.kind, ImportChangeKind.unchanged);
+  });
+
   test('explicitly restoring a tombstone turns it into an added course', () {
     final diff = const ImportDiffEngine().build(
       incoming: timetable([course(name: '已恢复课程')]),

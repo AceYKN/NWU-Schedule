@@ -422,6 +422,71 @@ void main() {
     expect(loaded.meetingRules.single.room, '3508');
   });
 
+  test('removes stale tombstones when a deleted course key rotates', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    RemoteTimetable timetable(String key) => RemoteTimetable(
+          semester: const RemoteSemester(
+            remoteTermKey: '2026-2027-1',
+            academicYear: '2026-2027',
+            term: 1,
+            label: '2026-2027 第一学期',
+          ),
+          totalWeeks: 20,
+          courses: [
+            ImportedCourse(
+              sourceCourseKey: key,
+              name: '软件测试',
+              code: 'CS301',
+              teachingClass: '软件工程2401',
+              credits: null,
+              assessment: null,
+              meetings: [
+                ImportedMeeting(
+                  sourceMeetingKey: '$key-meeting',
+                  weekday: 1,
+                  startSection: 3,
+                  endSection: 4,
+                  teacher: null,
+                  campus: null,
+                  room: '3406',
+                  weekMask: WeekMask.all(20),
+                ),
+              ],
+            ),
+          ],
+        );
+
+    await repository.commitImportedTimetable(timetable('old-key'));
+    var loaded = await repository.loadSemester('nwu-2026-2027-1');
+    await repository.deleteCourse(loaded.courses.single.id);
+
+    await repository.commitImportedTimetable(timetable('new-key'));
+    loaded = await repository.loadSemester('nwu-2026-2027-1');
+    expect(loaded.courses.single.deleted, isTrue);
+    expect(
+      (await database.select(database.deletedSourceItems).get())
+          .map((row) => row.sourceCourseKey),
+      contains('old-key'),
+    );
+
+    await repository.commitImportedTimetable(
+      timetable('new-key'),
+      resolution: ImportConflictResolution.copy(
+        const {},
+        restoreDeletedCourseKeys: {'new-key'},
+      ),
+    );
+    loaded = await repository.loadSemester('nwu-2026-2027-1');
+    expect(loaded.courses.single.deleted, isFalse);
+    expect(await database.select(database.deletedSourceItems).get(), isEmpty);
+
+    await repository.commitImportedTimetable(timetable('old-key'));
+    loaded = await repository.loadSemester('nwu-2026-2027-1');
+    expect(loaded.courses.single.deleted, isFalse);
+  });
+
   test('conflicting import rolls back without adding a snapshot', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);

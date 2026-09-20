@@ -662,21 +662,28 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         }
         if (change.kind == ImportChangeKind.locallyDeleted) continue;
         if (change.kind == ImportChangeKind.unchanged) continue;
+        // A remote adapter may rotate an opaque course key while retaining
+        // the same course identity. Remove tombstones for both keys when a
+        // restored or otherwise active course is reconciled, otherwise a
+        // stale old key could delete the course again if it rotates back.
+        final existing =
+            localCourses[remote.sourceCourseKey] ?? change.localCourse;
         final restoreDeleted = resolution.shouldRestore(
           remote.sourceCourseKey,
         );
-        if (restoreDeleted) {
-          await (database.delete(database.deletedSourceItems)
-                ..where((table) => table.id
-                    .equals('course:${semester.id}:${remote.sourceCourseKey}')))
-              .go();
+        if (restoreDeleted || (existing != null && !existing.deleted)) {
+          await _removeCourseTombstones(
+            semesterId: semester.id,
+            sourceCourseKeys: {
+              remote.sourceCourseKey,
+              existing?.sourceCourseKey,
+            },
+          );
         }
         // A Zhengfang adapter may rotate an opaque source key while retaining
         // the unique course code + teaching-class identity. ImportDiffEngine
         // has already matched that course conservatively; keep its database
         // id and local fields while adopting the new remote key.
-        final existing =
-            localCourses[remote.sourceCourseKey] ?? change.localCourse;
         final course = _courseFromRemote(
           semester: semester,
           remote: remote,
@@ -833,6 +840,23 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             deletedAt: DateTime.now(),
           ),
         );
+  }
+
+  Future<void> _removeCourseTombstones({
+    required String semesterId,
+    required Set<String?> sourceCourseKeys,
+  }) async {
+    final keys = sourceCourseKeys
+        .whereType<String>()
+        .where((key) => key.trim().isNotEmpty)
+        .toSet();
+    if (keys.isEmpty) return;
+    await (database.delete(database.deletedSourceItems)
+          ..where((table) => Expression.and([
+                table.semesterId.equals(semesterId),
+                table.sourceCourseKey.isIn(keys),
+              ])))
+        .go();
   }
 
   domain.Course _courseFromRemote({

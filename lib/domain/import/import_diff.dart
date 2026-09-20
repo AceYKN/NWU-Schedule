@@ -220,8 +220,10 @@ class ImportDiffEngine {
         continue;
       }
       matchedLocalKeys.add(localCourse.sourceCourseKey!);
-      if (deletedSourceCourseKeys.contains(remote.sourceCourseKey) ||
-          localCourse.deleted) {
+      // A tombstone without a matching local course is handled above. Once a
+      // live course has been matched, its deleted flag is authoritative; a
+      // stale tombstone must not silently delete the live row again.
+      if (localCourse.deleted) {
         changes.add(ImportChange(
           kind: ImportChangeKind.locallyDeleted,
           sourceCourseKey: remote.sourceCourseKey,
