@@ -46,6 +46,8 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   String? _currentUrl;
   int? _lastHttpStatus;
   bool _bridgeEnabled = false;
+  int _navigationGeneration = 0;
+  String? _latestStartedUrl;
   bool _reading = false;
   bool _saving = false;
 
@@ -65,9 +67,15 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
             return NavigationDecision.navigate;
           },
           onPageStarted: (url) {
+            _latestStartedUrl = url;
+            _navigationGeneration++;
+            unawaited(_disableBridge());
             if (mounted) setState(() => _currentUrl = url);
           },
-          onPageFinished: (url) => _onPageFinished(url),
+          onPageFinished: (url) => _onPageFinished(
+            url,
+            generation: _navigationGeneration,
+          ),
           onWebResourceError: (error) {
             if (error.isForMainFrame == false) return;
             unawaited(_recordWebResourceError(error));
@@ -84,7 +92,13 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     super.dispose();
   }
 
-  Future<void> _onPageFinished(String url) async {
+  Future<void> _onPageFinished(
+    String url, {
+    required int generation,
+  }) async {
+    if (generation != _navigationGeneration || url != _latestStartedUrl) {
+      return;
+    }
     final uri = Uri.tryParse(url);
     if (uri == null || !NwuZhengfangV9Importer.isAllowedUri(uri)) {
       await _disableBridge();
@@ -93,11 +107,16 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     if (mounted) setState(() => _currentUrl = url);
     if (NwuZhengfangV9Importer.isLoginUri(uri) ||
         !await _hasTimetableContext()) {
+      if (generation != _navigationGeneration || url != _latestStartedUrl) {
+        return;
+      }
       await _disableBridge();
       return;
     }
-    if (_bridgeEnabled) return;
-    if (!mounted) return;
+    if (generation != _navigationGeneration || url != _latestStartedUrl) {
+      return;
+    }
+    if (_bridgeEnabled || !mounted) return;
     await _controller.addJavaScriptChannel(
       _bridgeName,
       onMessageReceived: (message) => _handleBridgeMessage(message.message),
@@ -911,16 +930,16 @@ const _payloadExtractionScript = r'''(() => {
     const numbers = String(value).match(/\d+/g) || [];
     if (!numbers.length) return null;
     const start = Number(numbers[0]);
-    const end = Number(numbers[1] || numbers[0]);
+    const end = Number(numbers[numbers.length - 1]);
     return { startSection: Math.min(start, end), endSection: Math.max(start, end) };
   };
   const courses = [];
   const issues = [];
   let maxWeek = 20;
-  const warn = (path, message) => issues.push({
+  const issue = (path, message, severity = 'warning') => issues.push({
     path: path,
     message: message,
-    severity: 'warning',
+    severity: severity,
   });
   for (const [tableIndex, table] of Array.from(document.querySelectorAll('table')).entries()) {
     const rows = Array.from(table.querySelectorAll('tr'));
@@ -945,19 +964,19 @@ const _payloadExtractionScript = r'''(() => {
       const range = sectionRange(cells[sectionIndex]);
       const weekText = normalize(cells[weekIndex]);
       if (!name) {
-        warn(rowPath + '.courseName', '课程名为空，已跳过该行');
+        issue(rowPath + '.courseName', '课程名为空，已跳过该行', 'error');
         continue;
       }
       if (!weekday) {
-        warn(rowPath + '.weekday', '星期无法识别，已跳过该行');
+        issue(rowPath + '.weekday', '星期无法识别，已跳过该行', 'error');
         continue;
       }
       if (!range) {
-        warn(rowPath + '.sections', '节次无法识别，已跳过该行');
+        issue(rowPath + '.sections', '节次无法识别，已跳过该行', 'error');
         continue;
       }
       if (!weekText) {
-        warn(rowPath + '.weeks', '周次为空，已跳过该行');
+        issue(rowPath + '.weeks', '周次为空，已跳过该行', 'error');
         continue;
       }
       for (const match of weekText.matchAll(/\d+/g)) maxWeek = Math.max(maxWeek, Number(match[0]));
@@ -965,7 +984,9 @@ const _payloadExtractionScript = r'''(() => {
       const teachingClass = classIndex >= 0 ? normalize(cells[classIndex]) || null : null;
       const teacher = teacherIndex >= 0 ? normalize(cells[teacherIndex]) || null : null;
       const room = roomIndex >= 0 ? normalize(cells[roomIndex]) || null : null;
-      const key = code || (name + '|' + (teachingClass || ''));
+      const key = code
+        ? code + '|' + (teachingClass || '')
+        : name + '|' + (teachingClass || '');
       let course = courses.find((item) => item.sourceCourseKey === key);
       if (!course) {
         course = {
@@ -988,7 +1009,7 @@ const _payloadExtractionScript = r'''(() => {
         weekText,
       ].join('|');
       if (course.meetings.some((item) => item.sourceMeetingKey === key + '|meeting|' + meetingKey)) {
-        warn(rowPath, '重复的上课安排已忽略');
+        issue(rowPath, '重复的上课安排已忽略');
         continue;
       }
       course.meetings.push({

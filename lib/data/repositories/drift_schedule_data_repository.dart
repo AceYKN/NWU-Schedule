@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:drift/drift.dart' show OrderingTerm, Value;
+import 'package:drift/drift.dart';
 
 import '../../core/utils/week_mask.dart';
 import '../../domain/backup/schedule_backup.dart';
@@ -672,13 +672,17 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         final existingRules = existing == null
             ? const <domain.MeetingRule>[]
             : localRules[existing.id] ?? const <domain.MeetingRule>[];
-        final rules = _rulesFromRemote(
+        final reconciledRules = _rulesFromRemote(
           remote: remote,
           courseId: course.id,
           existing: existingRules,
           fields: change.fields,
         );
-        await _upsertCourse(course, rules);
+        await _upsertCourse(course, reconciledRules.rules);
+        await _remapExceptionMeetingIds(
+          courseId: course.id,
+          idRemap: reconciledRules.idRemap,
+        );
       }
       final normalizedJson = jsonEncode(timetable.toJson());
       final hash = sha256.convert(utf8.encode(normalizedJson)).toString();
@@ -853,7 +857,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     );
   }
 
-  List<domain.MeetingRule> _rulesFromRemote({
+  _ReconciledRules _rulesFromRemote({
     required ImportedCourse remote,
     required String courseId,
     required List<domain.MeetingRule> existing,
@@ -866,11 +870,41 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         break;
       }
     }
-    if (meetingsField?.decision == MergeDecision.local) return existing;
-    return [
-      for (final meeting in remote.meetings)
+    if (meetingsField?.decision == MergeDecision.local) {
+      return _ReconciledRules(
+        rules: existing,
+        idRemap: const {},
+      );
+    }
+
+    final unmatched = [...existing];
+    final usedIds = <String>{};
+    final idRemap = <String, String>{};
+    final rules = <domain.MeetingRule>[];
+    for (final meeting in remote.meetings) {
+      domain.MeetingRule? matched;
+      for (final candidate in unmatched) {
+        if (candidate.sourceMeetingKey == meeting.sourceMeetingKey) {
+          matched = candidate;
+          break;
+        }
+      }
+      matched ??= _bestMeetingMatch(meeting, unmatched);
+      if (matched != null) unmatched.remove(matched);
+
+      var id = matched?.id ?? '$courseId:${meeting.sourceMeetingKey}';
+      if (!usedIds.add(id)) {
+        var suffix = 2;
+        final base = id;
+        do {
+          id = '$base-$suffix';
+          suffix++;
+        } while (!usedIds.add(id));
+        if (matched != null) idRemap[matched.id] = id;
+      }
+      rules.add(
         domain.MeetingRule(
-          id: '$courseId:${meeting.sourceMeetingKey}',
+          id: id,
           courseId: courseId,
           sourceMeetingKey: meeting.sourceMeetingKey,
           weekday: meeting.weekday,
@@ -881,8 +915,89 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
           room: meeting.room,
           weekMask: meeting.weekMask,
         ),
-    ];
+      );
+    }
+    return _ReconciledRules(
+      rules: List.unmodifiable(rules),
+      idRemap: Map.unmodifiable(idRemap),
+    );
   }
+
+  Future<void> _remapExceptionMeetingIds({
+    required String courseId,
+    required Map<String, String> idRemap,
+  }) async {
+    for (final entry in idRemap.entries) {
+      await (database.update(database.courseExceptions)
+            ..where((table) => Expression.and([
+                  table.courseId.equals(courseId),
+                  table.sourceMeetingId.equals(entry.key),
+                ])))
+          .write(
+        db.CourseExceptionsCompanion(
+          sourceMeetingId: Value(entry.value),
+        ),
+      );
+    }
+  }
+
+  domain.MeetingRule? _bestMeetingMatch(
+    ImportedMeeting meeting,
+    List<domain.MeetingRule> candidates,
+  ) {
+    final scored = <({domain.MeetingRule rule, int score, int anchors})>[];
+    for (final candidate in candidates) {
+      final sameWeekday = candidate.weekday == meeting.weekday;
+      final sameSections = candidate.startSection == meeting.startSection &&
+          candidate.endSection == meeting.endSection;
+      final sameWeeks = candidate.weekMask.value == meeting.weekMask.value;
+      final sameTeacher = _sameMeetingText(candidate.teacher, meeting.teacher);
+      final sameCampus = _sameMeetingText(candidate.campus, meeting.campus);
+      final sameRoom = _sameMeetingText(candidate.room, meeting.room);
+      final anchors = [
+        sameWeekday,
+        sameSections,
+        sameWeeks,
+        sameTeacher,
+        sameCampus,
+        sameRoom,
+      ].where((value) => value).length;
+      if (anchors < 2) continue;
+
+      var score = 0;
+      if (sameWeekday) score += 8;
+      if (sameSections) {
+        score += 6;
+      } else if (candidate.startSection == meeting.startSection ||
+          candidate.endSection == meeting.endSection) {
+        score += 2;
+      }
+      if (sameWeeks) {
+        score += 5;
+      } else if (_weekMasksOverlap(candidate.weekMask, meeting.weekMask)) {
+        score += 1;
+      }
+      if (sameTeacher) score += 3;
+      if (sameCampus) score += 2;
+      if (sameRoom) score += 3;
+      scored.add((rule: candidate, score: score, anchors: anchors));
+    }
+    scored.sort((left, right) => right.score.compareTo(left.score));
+    if (scored.isEmpty) return null;
+    if (scored.length > 1 && scored[0].score == scored[1].score) {
+      return null;
+    }
+    return scored.first.rule;
+  }
+
+  static bool _sameMeetingText(String? left, String? right) =>
+      (left ?? '').trim() == (right ?? '').trim();
+
+  static bool _weekMasksOverlap(
+    WeekMask left,
+    WeekMask right,
+  ) =>
+      (left.value & right.value) != 0;
 
   static String _importedCourseId(String semesterId, String sourceKey) {
     final digest =
@@ -901,4 +1016,14 @@ class _ImportDiffContext {
   final domain.Semester? existingSemester;
   final ScheduleDataSnapshot? local;
   final ImportDiff diff;
+}
+
+class _ReconciledRules {
+  const _ReconciledRules({
+    required this.rules,
+    required this.idRemap,
+  });
+
+  final List<domain.MeetingRule> rules;
+  final Map<String, String> idRemap;
 }
