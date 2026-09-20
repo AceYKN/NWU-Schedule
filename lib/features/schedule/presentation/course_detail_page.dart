@@ -124,11 +124,12 @@ class _CourseDetail extends StatelessWidget {
                     ),
               ),
             ),
-            IconButton(
-              tooltip: '编辑课程',
-              onPressed: () => context.go('/course/${course.id}/edit'),
-              icon: const Icon(Icons.edit_outlined),
-            ),
+            if (exception == null)
+              IconButton(
+                tooltip: '编辑课程',
+                onPressed: () => context.go('/course/${course.id}/edit'),
+                icon: const Icon(Icons.edit_outlined),
+              ),
           ],
         ),
         Card(
