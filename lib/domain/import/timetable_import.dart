@@ -119,6 +119,18 @@ class RemoteTimetable {
 enum ImportIssueSeverity { warning, error }
 
 class ImportIssue {
+  static const _safeDetailKeys = {
+    'tableIndex',
+    'rowIndex',
+    'headerRow',
+    'columnCount',
+    'rawLength',
+    'rawShape',
+    'parsedNumbers',
+    'detectedRequiredColumns',
+    'invalidColumns',
+  };
+
   const ImportIssue({
     required this.path,
     required this.message,
@@ -168,7 +180,15 @@ class ImportIssue {
   }
 
   @override
-  String toString() => '$path: $message';
+  String toString() {
+    final safeDetails = details.entries
+        .where((entry) => _safeDetailKeys.contains(entry.key))
+        .map((entry) => '${entry.key}=${entry.value}')
+        .join(', ');
+    return safeDetails.isEmpty
+        ? '$path: $message'
+        : '$path: $message [$safeDetails]';
+  }
 }
 
 class ImportValidationReport {

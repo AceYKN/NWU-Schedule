@@ -74,6 +74,19 @@ void main() {
     expect(restored, isNotNull);
     expect(restored!.details['rawShape'], 'mixed');
     expect(restored.details['parsedNumbers'], [321]);
+    expect(restored.toString(), contains('parsedNumbers=[321]'));
+    expect(
+      const ImportIssue(
+        path: 'tables[0].rows[2].weeks',
+        message: '周次格式无效',
+        severity: ImportIssueSeverity.error,
+        details: {
+          'courseName': '不得输出',
+          'parsedNumbers': [321]
+        },
+      ).toString(),
+      isNot(contains('不得输出')),
+    );
   });
 
   test('validates empty IDs, bad weekday, section and duplicate rules', () {
