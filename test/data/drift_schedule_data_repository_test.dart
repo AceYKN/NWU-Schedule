@@ -324,10 +324,10 @@ void main() {
     await repository.commitImportedTimetable(timetable());
     var loaded = await repository.loadSemester('nwu-2026-2027-1');
     expect(loaded.courses.single.sourceType, domain.CourseSourceType.imported);
-    expect(loaded.courses.single.code, 'CS301');
-    expect(loaded.courses.single.teachingClass, '软件工程2401');
-    expect(loaded.courses.single.credits, 2);
-    expect(loaded.courses.single.assessment, '考查');
+    expect(loaded.courses.single.code, isNull);
+    expect(loaded.courses.single.teachingClass, isNull);
+    expect(loaded.courses.single.credits, isNull);
+    expect(loaded.courses.single.assessment, isNull);
     expect(loaded.meetingRules.single.room, '3406');
     expect(await repository.loadLatestImport('nwu-2026-2027-1'), isNotNull);
 

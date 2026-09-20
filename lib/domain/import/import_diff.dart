@@ -274,26 +274,14 @@ class ImportDiffEngine {
   }) {
     final localValues = <String, Object?>{
       'name': localCourse.name,
-      'code': localCourse.code,
-      'teachingClass': localCourse.teachingClass,
-      'credits': localCourse.credits,
-      'assessment': localCourse.assessment,
       'meetings': localRules.map(_meetingToJson).toList(),
     };
     final remoteValues = <String, Object?>{
       'name': remote.name,
-      'code': remote.code,
-      'teachingClass': remote.teachingClass,
-      'credits': remote.credits,
-      'assessment': remote.assessment,
       'meetings': remote.meetings.map((item) => item.toJson()).toList(),
     };
     final previousValues = <String, Object?>{
       'name': previous?.name,
-      'code': previous?.code,
-      'teachingClass': previous?.teachingClass,
-      'credits': previous?.credits,
-      'assessment': previous?.assessment,
       'meetings': previous?.meetings.map((item) => item.toJson()).toList(),
     };
     return [

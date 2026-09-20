@@ -559,16 +559,13 @@ class NwuDomExtractor {
       uniqueHeaderIndex(headers, ['节次', '上课节次']);
     const weekIndex =
       uniqueHeaderIndex(headers, ['周次', '上课周次']);
-    const codeIndex = headerIndex(headers, ['课程代码', '课程编号', '课程号']);
     const teacherIndex =
       headerIndex(headers, ['教师', '任课教师', '上课教师']);
     const campusIndex =
       headerIndex(headers, ['校区', '校区名称']);
     const roomIndex =
       headerIndex(headers, ['教室', '上课地点', '地点']);
-    const classIndex = headerIndex(headers, ['教学班', '班级']);
-    const creditIndex = headerIndex(headers, ['学分']);
-    const assessmentIndex = headerIndex(headers, ['考核方式', '考试性质']);
+
     for (let rowIndex = headerEnd + 1; rowIndex < grid.length; rowIndex++) {
       const rowPath = 'tables[' + tableIndex + '].rows[' + rowIndex + ']';
       const cells = grid[rowIndex] || [];
@@ -622,31 +619,10 @@ class NwuDomExtractor {
         continue;
       }
 
-      const code = codeIndex >= 0 ? cellAt(codeIndex) || null : null;
-      const teachingClass = classIndex >= 0 ? cellAt(classIndex) || null : null;
-      const rawCredits = creditIndex >= 0 ? cellAt(creditIndex) : '';
-      const parsedCredits = rawCredits ? Number(rawCredits) : NaN;
-      const credits = Number.isFinite(parsedCredits) && parsedCredits >= 0
-        ? parsedCredits
-        : null;
-      if (rawCredits && credits == null) {
-        issue(
-          rowPath + '.credits',
-          '学分格式无法识别，已按空值处理',
-          'warning',
-          rowDetails,
-        );
-      }
-
       addMeeting({
         sourceCourseKey:
-          'dom-grid|' + (code || name) + '|' + (teachingClass || ''),
+          'dom-grid|' + name + '|' + (roomIndex >= 0 ? cellAt(roomIndex) : ''),
         name: name,
-        code: code,
-        teachingClass: teachingClass,
-        credits: credits,
-        assessment:
-          assessmentIndex >= 0 ? cellAt(assessmentIndex) || null : null,
         weekday: weekday,
         startSection: range.startSection,
         endSection: range.endSection,

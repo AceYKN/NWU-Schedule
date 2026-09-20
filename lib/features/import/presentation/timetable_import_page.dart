@@ -898,10 +898,6 @@ class _ConflictResolutionSheetState extends State<_ConflictResolutionSheet> {
 
 String _fieldLabel(String field) => switch (field) {
       'name' => '课程名',
-      'code' => '课程代码',
-      'teachingClass' => '教学班',
-      'credits' => '学分',
-      'assessment' => '考核方式',
       'meetings' => '上课安排',
       _ => field,
     };

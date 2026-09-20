@@ -132,7 +132,7 @@ void main() {
         MergeDecision.local);
   });
 
-  test('includes academic metadata changes in the import diff', () {
+  test('ignores legacy academic metadata changes in the import diff', () {
     final diff = const ImportDiffEngine().build(
       incoming: timetable(
         [
@@ -148,23 +148,13 @@ void main() {
       previousImport: timetable([course()]),
     );
 
-    expect(diff.changes.single.kind, ImportChangeKind.modified);
+    expect(diff.changes.single.kind, ImportChangeKind.unchanged);
     expect(
       diff.changes.single.fields.map((field) => field.field),
       [
         'name',
-        'code',
-        'teachingClass',
-        'credits',
-        'assessment',
         'meetings',
       ],
-    );
-    expect(
-      diff.changes.single.fields
-          .firstWhere((field) => field.field == 'code')
-          .decision,
-      MergeDecision.remote,
     );
   });
 

@@ -848,13 +848,12 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
       sourceType: domain.CourseSourceType.imported,
       sourceCourseKey: remote.sourceCourseKey,
       name: value('name', remote.name, existing?.name) as String,
-      code: value('code', remote.code, existing?.code) as String?,
-      teachingClass:
-          value('teachingClass', remote.teachingClass, existing?.teachingClass)
-              as String?,
-      credits: value('credits', remote.credits, existing?.credits) as double?,
-      assessment: value('assessment', remote.assessment, existing?.assessment)
-          as String?,
+      // Legacy columns remain readable for old databases, but imports do not
+      // populate or merge this retired product metadata.
+      code: existing?.code,
+      teachingClass: existing?.teachingClass,
+      credits: existing?.credits,
+      assessment: existing?.assessment,
       note: existing?.note,
       colorOverride: existing?.colorOverride,
       hidden: existing?.hidden ?? false,
