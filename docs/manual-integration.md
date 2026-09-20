@@ -10,6 +10,8 @@
 - 能访问 `https://jwgl.nwu.edu.cn/jwglxt/`；
 - 记录设备型号、Android 版本、WebView 版本和 APK commit，不记录账号信息。
 
+公开入口 `https://jwgl.nwu.edu.cn/jwglxt/` 当前展示的是登录页；因此入口页和登录路径不应注入课表 Bridge，只有进入课表上下文后才允许读取页面数据。公开页面可见的登录入口为 [`/jwglxt/`](https://jwgl.nwu.edu.cn/jwglxt/) 和 [`/jwglxt/xtgl/login_slogin.html`](https://jwgl.nwu.edu.cn/jwglxt/xtgl/login_slogin.html)。
+
 ## 首次导入
 
 1. 从“设置 → 从教务系统导入”进入。
@@ -53,6 +55,11 @@
 - 当前校历的教学周、单双周、节假日、调休和补课与已核实的 NWU 资源一致；
 - 修改 bundled calendar 的 revision 后重新安装/启动，确认出现非阻断的“西北大学校历已更新”提示，课表、提醒和 Widget 已按新 revision 计算；
 - 导入尚未收录校历的学期，确认课程仍保存，并明确提示教学周、放假和调休可能不完整。
+
+## 发布前外部确认
+
+- 正方真实认证后的 endpoint、`gnmkdm`、POST 参数和响应 schema 仍必须通过本清单的真实学生账号流程确认；当前代码不会把其他学校的参数当作 NWU 事实。
+- SPEC 暂定第 11 节为 `21:00–21:50`。西北大学公开作息 PDF 当前列出第 1–10 节，教务通知允许排课到第 11 节但没有给出第 11 节时间；发布前须由项目 Owner 根据校方最新作息确认。参考：[公开作息 PDF](https://www.nwu.edu.cn/__local/A/1C/E3/5C1FC71F3FD6DD7D62660973AEB_437A7D4A_2517.pdf?e=.pdf)、[教务排课通知](https://jwc.nwu.edu.cn/info/1034/10591.htm)。
 
 ## 记录结果
 
