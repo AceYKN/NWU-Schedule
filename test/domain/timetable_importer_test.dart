@@ -27,7 +27,7 @@ void main() {
     expect(importer.runtimeType.toString(), contains('NwuZhengfangV9Importer'));
     expect(
       NwuZhengfangV9Importer.adapterVersion,
-      'nwu-zhengfang-v9-dom-v2',
+      'nwu-zhengfang-v9-dom-v3',
     );
   });
 
