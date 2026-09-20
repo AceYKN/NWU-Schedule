@@ -5,7 +5,9 @@ import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
 import 'package:nwu_schedule/domain/calendar/calendar_definition.dart';
 import 'package:nwu_schedule/domain/calendar/calendar_engine.dart';
+import 'package:nwu_schedule/domain/course/course.dart' as domain;
 import 'package:nwu_schedule/domain/course/course_exception.dart' as domain;
+import 'package:nwu_schedule/domain/course/meeting_rule.dart' as domain;
 import 'package:nwu_schedule/domain/import/timetable_import.dart';
 import 'package:nwu_schedule/domain/schedule/schedule_engine.dart';
 import 'package:nwu_schedule/domain/semester/semester.dart' as domain;
@@ -137,5 +139,70 @@ void main() {
       ),
       isEmpty,
     );
+  });
+
+  test('restores manual course, exception, settings, and appearance data',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final semester = domain.Semester(
+      id: 'manual-backup-semester',
+      academicYear: '2026-2027',
+      term: domain.SemesterTerm.first,
+      label: '2026-2027 第一学期',
+      createdAt: DateTime(2026, 9, 1),
+    );
+    final course = domain.Course(
+      id: 'manual-backup-course',
+      semesterId: semester.id,
+      sourceType: domain.CourseSourceType.manual,
+      name: '手工课程',
+      note: '本地备注',
+      colorOverride: 0xff123456,
+    );
+    final rule = domain.MeetingRule(
+      id: 'manual-backup-rule',
+      courseId: course.id,
+      weekday: 3,
+      startSection: 5,
+      endSection: 6,
+      teacher: '教师 B',
+      campus: '长安校区',
+      room: '1310',
+      weekMask: WeekMask.all(16),
+    );
+    final exception = domain.CourseException(
+      id: 'manual-backup-exception',
+      semesterId: semester.id,
+      type: domain.CourseExceptionType.add,
+      targetDate: DateTime(2026, 9, 16),
+      targetStartSection: 1,
+      targetEndSection: 2,
+      addedCourseName: '备份临时课',
+    );
+    await repository.saveSemester(semester);
+    await repository.saveCourse(course, [rule]);
+    await repository.saveException(exception);
+    await repository.setSetting('notifications.enabled', 'true');
+    await repository.setSetting('notifications.leadMinutes', '10');
+
+    final backup = await repository.createBackup(
+      appearance: const {'themeId': 'cedar-green'},
+    );
+    await repository.clearAllData();
+    await repository.restoreBackup(backup);
+
+    final restored = await repository.loadSemester(semester.id);
+    final restoredCourse = restored.courses.single;
+    expect(restoredCourse.id, course.id);
+    expect(restoredCourse.name, course.name);
+    expect(restoredCourse.note, course.note);
+    expect(restoredCourse.colorOverride, course.colorOverride);
+    expect(restored.meetingRules.single.room, '1310');
+    expect(restored.exceptions.single.addedCourseName, '备份临时课');
+    expect(await repository.getSetting('notifications.enabled'), 'true');
+    expect(await repository.getSetting('notifications.leadMinutes'), '10');
+    expect(backup.appearance['themeId'], 'cedar-green');
   });
 }

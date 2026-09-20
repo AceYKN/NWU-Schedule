@@ -85,6 +85,44 @@ void main() {
       isTrue,
     );
   });
+
+  test('moves a reminder from the source occurrence to the target occurrence',
+      () {
+    final engine = ScheduleEngine(
+      semesterId: 'semester-1',
+      calendarEngine: CalendarEngine(definition),
+      courses: [course],
+      meetingRules: [rule],
+      exceptions: [
+        CourseException(
+          id: 'move-1',
+          semesterId: 'semester-1',
+          courseId: course.id,
+          sourceMeetingId: rule.id,
+          sourceDate: DateTime(2026, 9, 14),
+          type: CourseExceptionType.move,
+          targetDate: DateTime(2026, 9, 15),
+          targetStartSection: 5,
+          targetEndSection: 6,
+        ),
+      ],
+    );
+    final plan = const NotificationPlanner().build(
+      engine: engine,
+      now: DateTime.utc(2026, 9, 13),
+      leadMinutes: 15,
+      until: DateTime.utc(2026, 9, 16, 23),
+    );
+
+    expect(
+      plan.where((item) => item.payload.contains('2026-09-14')),
+      isEmpty,
+    );
+    final moved =
+        plan.where((item) => item.payload.contains('2026-09-15')).toList();
+    expect(moved, hasLength(1));
+    expect(moved.single.fireAtUtc, DateTime.utc(2026, 9, 15, 5, 45));
+  });
 }
 
 // Kept outside the test body to make the exception shape explicit in the
