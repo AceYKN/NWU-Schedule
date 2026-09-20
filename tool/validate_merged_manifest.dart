@@ -1,7 +1,8 @@
 import 'dart:io';
 
 void main(List<String> args) {
-  if (args.isEmpty || args.length > 2 ||
+  if (args.isEmpty ||
+      args.length > 2 ||
       (args.length == 2 && args[1] != '--release')) {
     throw StateError(
       'Usage: dart run tool/validate_merged_manifest.dart '
