@@ -536,6 +536,9 @@ void main() {
       required String teacher,
       required String room,
       required WeekMask weekMask,
+      int weekday = 1,
+      int startSection = 3,
+      int endSection = 4,
     }) =>
         RemoteTimetable(
           semester: const RemoteSemester(
@@ -556,9 +559,9 @@ void main() {
               meetings: [
                 ImportedMeeting(
                   sourceMeetingKey: meetingKey,
-                  weekday: 1,
-                  startSection: 3,
-                  endSection: 4,
+                  weekday: weekday,
+                  startSection: startSection,
+                  endSection: endSection,
                   teacher: teacher,
                   campus: '长安校区',
                   room: room,
@@ -589,6 +592,19 @@ void main() {
         type: domain.CourseExceptionType.cancel,
       ),
     );
+    await repository.saveException(
+      domain.CourseException(
+        id: 'move-identity',
+        semesterId: loaded.semester.id,
+        courseId: loaded.courses.single.id,
+        sourceMeetingId: originalRule.id,
+        sourceDate: DateTime(2026, 9, 14),
+        type: domain.CourseExceptionType.move,
+        targetDate: DateTime(2026, 9, 15),
+        targetStartSection: 7,
+        targetEndSection: 8,
+      ),
+    );
 
     await repository.commitImportedTimetable(
       timetable(
@@ -606,7 +622,34 @@ void main() {
     expect(loaded.meetingRules.single.id, originalRule.id);
     expect(loaded.meetingRules.single.teacher, '教师 B');
     expect(loaded.meetingRules.single.room, '3508');
-    expect(loaded.exceptions.single.sourceMeetingId, originalRule.id);
+    expect(
+      loaded.exceptions.map((exception) => exception.sourceMeetingId),
+      everyElement(originalRule.id),
+    );
+
+    await repository.commitImportedTimetable(
+      timetable(
+        meetingKey: 'dom|2|5|6|教师 B|3508|1-20周单周',
+        teacher: '教师 B',
+        room: '3508',
+        weekMask: WeekMask.fromWeeks(
+          [1, 3, 5, 7, 9, 11, 13, 15, 17, 19],
+          rawText: '1-20周单周',
+        ),
+        weekday: 2,
+        startSection: 5,
+        endSection: 6,
+      ),
+    );
+
+    loaded = await repository.loadSemester('nwu-2026-2027-1');
+    expect(loaded.meetingRules.single.id, originalRule.id);
+    expect(loaded.meetingRules.single.startSection, 5);
+    expect(loaded.meetingRules.single.endSection, 6);
+    expect(
+      loaded.exceptions.map((exception) => exception.sourceMeetingId),
+      everyElement(originalRule.id),
+    );
 
     final definition = CalendarDefinition.fromJson({
       'id': 'nwu-2026-2027-1',
