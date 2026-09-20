@@ -26,6 +26,7 @@ class NwuDomExtractor {
   const termMap = { '一': 1, '二': 2, '三': 3, '1': 1, '2': 2, '3': 3 };
   const term = termMap[termText[1]];
   if (!term) return JSON.stringify(null);
+  const academicYear = year[1] + '-' + year[2];
 
   const normalize = (value) => String(value == null ? '' : value)
     .replace(/\s+/g, ' ').trim();
@@ -60,15 +61,16 @@ class NwuDomExtractor {
     identityHint = '',
   ) => {
     const normalizedIdentityHint = normalize(identityHint);
-    // A verified NWU list row exposes the teaching-class identity. Use it as
-    // the course-level anchor so one teaching class with several meeting
-    // rules remains one Course. Generic tables use a structural/time fallback
-    // when they do not expose such an anchor.
+    // Only structural grouping evidence may become an identity hint. Display
+    // metadata such as teaching class, course code, teacher, or room is
+    // intentionally excluded because those values can change remotely.
     const identity = normalizedIdentityHint
       ? 'identity|' + normalizedIdentityHint
       : 'shape|' + [weekday, startSection, endSection].join('|');
     const value = [
       'nwu-v3',
+      academicYear,
+      term,
       normalize(name),
       identity,
     ].join('|');
@@ -213,6 +215,7 @@ class NwuDomExtractor {
     endSection,
     path,
     details,
+    identityHint,
   }) => {
     const week = marker(source, /周数\s*[:：]/);
     const campus = marker(source, /校区\s*[:：]/);
@@ -297,17 +300,6 @@ class NwuDomExtractor {
     const teacherText = normalize(
       source.slice(teacher.end, teacherEnd ?? source.length),
     );
-    const teachingClassEnd = firstMarkerIndexAfter(teachingClass?.end ?? -1, [
-      classComposition,
-      assessment,
-      selectionNote,
-      hours,
-      creditsMarker,
-      courseCode,
-    ]);
-    const teachingClassText = teachingClass == null
-      ? ''
-      : normalize(source.slice(teachingClass.end, teachingClassEnd ?? source.length));
     if (!name) {
       issue(path + '.courseName', '课程名为空，已跳过该行', 'error', details);
       return;
@@ -323,7 +315,7 @@ class NwuDomExtractor {
         weekday,
         startSection,
         endSection,
-        teachingClassText,
+        identityHint,
       ),
       name: name,
       weekday: weekday,
@@ -335,9 +327,10 @@ class NwuDomExtractor {
       weekText: weekText,
       path: path,
       details: details,
-      // The class label is used only as a hashed identity hint. It is not
-      // exposed as product metadata or persisted in the normalized payload.
-      identityHint: teachingClassText,
+      // Keep only the structural grouping token supplied by the table walker.
+      // The text of obsolete metadata labels is used above solely as a
+      // delimiter for teacher/room fields.
+      identityHint: identityHint,
     });
   };
 
@@ -351,6 +344,7 @@ class NwuDomExtractor {
     const rows = Array.from(table.rows || table.querySelectorAll('tr'));
     let currentWeekday = null;
     let currentRange = null;
+    let currentGroupKey = null;
     let sawCourseInfo = false;
 
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
@@ -365,6 +359,7 @@ class NwuDomExtractor {
         const match = /^xq_rowspan_([1-7])$/.exec(weekdayCell.id || '');
         currentWeekday = match ? Number(match[1]) : null;
         currentRange = null;
+        currentGroupKey = null;
       }
 
       const sectionCell = cells.find((cell) =>
@@ -381,6 +376,17 @@ class NwuDomExtractor {
             startSection: Math.min(start, end),
             endSection: Math.max(start, end),
           };
+          const declaredRowSpan = Number(sectionCell.rowSpan);
+          const rowGroup = row.parentElement && row.parentElement.rows
+            ? Array.from(row.parentElement.rows)
+            : rows;
+          const rowGroupIndex = rowGroup.indexOf(row);
+          const span = declaredRowSpan === 0
+            ? Math.max(1, rowGroup.length - Math.max(0, rowGroupIndex))
+            : Math.max(1, declaredRowSpan || 1);
+          currentGroupKey = span > 1
+            ? 'span-' + rowIndex + '-' + sectionCell.id
+            : 'row-' + rowIndex;
         }
       }
 
@@ -437,6 +443,7 @@ class NwuDomExtractor {
           endSection: currentRange.endSection,
           path: path,
           details: details,
+          identityHint: currentGroupKey || 'row-' + rowIndex,
         });
       }
     }
@@ -454,7 +461,6 @@ class NwuDomExtractor {
 
   const buildPayload = () => {
     const totalWeeks = maxWeek > 0 ? maxWeek : 20;
-    const academicYear = year[1] + '-' + year[2];
     const fingerprints = new Map();
     const normalizedCourses = courses.map((course) => {
       const shapes = course.meetings.map((meeting) => [
@@ -464,6 +470,8 @@ class NwuDomExtractor {
         normalize(meeting.weekText),
       ].join('|')).sort();
       const fingerprint = 'nwu-v3|course|' + hashIdentity([
+        academicYear,
+        term,
         normalize(course.name),
         normalize(course.identityHint || ''),
         ...shapes,
@@ -748,10 +756,6 @@ class NwuDomExtractor {
       headerIndex(headers, ['校区', '校区名称']);
     const roomIndex =
       headerIndex(headers, ['教室', '上课地点', '地点']);
-    const teachingClassIndex =
-      headerIndex(headers, ['教学班', '教学班名称', '教学班号']);
-    const courseCodeIndex =
-      headerIndex(headers, ['课程代码', '课程编号', '课程号']);
     for (let rowIndex = headerEnd + 1; rowIndex < grid.length; rowIndex++) {
       const rowPath = 'tables[' + tableIndex + '].rows[' + rowIndex + ']';
       const cells = grid[rowIndex] || [];
@@ -829,10 +833,6 @@ class NwuDomExtractor {
         break;
       }
       const identityHint = spanStart == null ? 'row-' + rowIndex : 'span-' + spanStart;
-      const columnIdentityHint = [
-        teachingClassIndex >= 0 ? cellAt(teachingClassIndex) : '',
-        courseCodeIndex >= 0 ? cellAt(courseCodeIndex) : '',
-      ].filter((value) => value).join('|');
       const identityDay = spanStart == null
         ? weekday
         : dayNumber((grid[spanStart] || [])[dayIndex] || '') || weekday;
@@ -846,7 +846,7 @@ class NwuDomExtractor {
           identityDay,
           identityRange.startSection,
           identityRange.endSection,
-          columnIdentityHint || identityHint,
+          identityHint,
         ),
         name: name,
         weekday: weekday,
@@ -858,6 +858,7 @@ class NwuDomExtractor {
         weekText: weekText,
         path: rowPath,
         details: rowDetails,
+        identityHint: identityHint,
       });
     }
   }

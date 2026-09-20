@@ -19,7 +19,7 @@
 /jwglxt/kbcx/xskbcx_cxXsgrkb.html
 ```
 
-其余仍在官方域名下的页面可以继续导航，但不会获得课表 JavaScript Bridge；即使路径匹配，页面仍必须实际暴露 `#kblist_table` 或明确的课表 payload 才会启用 Bridge。页面路径或 DOM 结构变化时应导出诊断后再更新适配器。当前诊断版本为 `nwu-zhengfang-v9-dom-v5`。这项路径验证不等同于真实 API endpoint、`gnmkdm` 或响应 schema 已验证。
+其余仍在官方域名下的页面可以继续导航，但不会获得课表 JavaScript Bridge；即使路径匹配，页面仍必须实际暴露 `#kblist_table` 或明确的课表 payload 才会启用 Bridge。页面路径或 DOM 结构变化时应导出诊断后再更新适配器。当前诊断版本为 `nwu-zhengfang-v9-dom-v6`。这项路径验证不等同于真实 API endpoint、`gnmkdm` 或响应 schema 已验证。
 
 真实页面 DOM 已验证存在列表课表 `#kblist_table`。当前主 DOM 适配器只依赖以下已观察结构：
 

@@ -439,12 +439,11 @@ const sameTeachingClassDifferentMeetingsFixture = `
     <tr><td>星期</td><td>节次</td><td>课表信息</td></tr>
     <tr><td id="xq_rowspan_1">星期一</td></tr>
     <tr>
-      <td id="jc_1-1-2">1-2</td>
+      <td id="jc_1-1-2" rowspan="2">1-2</td>
       <td>组合课程★周数：1-16周校区:长安校区上课地点：101教师：教师甲教学班：组合课程-A教学班组成：软件工程202401</td>
     </tr>
     <tr>
-      <td id="jc_1-3-4">3-4</td>
-      <td>组合课程★周数：1-16周校区:长安校区上课地点：102教师：教师甲教学班：组合课程-A教学班组成：软件工程202401</td>
+      <td>组合课程★周数：10-16周校区:长安校区上课地点：102教师：教师甲教学班：组合课程-A教学班组成：软件工程202401</td>
     </tr>
   </table>
 </body></html>`;
@@ -462,9 +461,14 @@ assert.equal(
 );
 assert.deepEqual(
   sameTeachingClassDifferentMeetings.payload.courses[0].meetings.map(
-    (meeting) => [meeting.startSection, meeting.endSection, meeting.room],
+    (meeting) => [
+      meeting.startSection,
+      meeting.endSection,
+      meeting.room,
+      meeting.weekText,
+    ],
   ),
-  [[1, 2, '101'], [3, 4, '102']],
+  [[1, 2, '101', '1-16周'], [1, 2, '102', '10-16周']],
 );
 
 const realList = runExtraction(realListFixture);
@@ -473,6 +477,16 @@ assert.equal(realList.payload.courses.length, 6);
 assert.equal(
   realList.payload.issues.filter((issue) => issue.severity === 'error').length,
   0,
+);
+
+const obsoleteIdentityChanged = runExtraction(
+  realListFixture.replace(/数据结构实验-0003/g, '数据结构实验-9999'),
+);
+assert.deepEqual(
+  realList.payload.courses.map((course) => course.sourceCourseKey).sort(),
+  obsoleteIdentityChanged.payload.courses
+    .map((course) => course.sourceCourseKey)
+    .sort(),
 );
 
 const experiment = realList.payload.courses.find(
