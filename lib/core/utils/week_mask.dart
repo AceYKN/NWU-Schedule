@@ -52,6 +52,9 @@ class WeekMask {
     if (source.isEmpty) {
       throw const FormatException('Teaching week text is empty');
     }
+    if (RegExp(r'(^|[^\d])-\d').hasMatch(source)) {
+      throw FormatException('Invalid teaching week text: $text');
+    }
 
     final isOdd = source.contains('单');
     final isEven = source.contains('双');

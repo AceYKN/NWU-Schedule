@@ -103,6 +103,40 @@ void main() {
     );
   });
 
+  test('reports the exact week field when a DOM row has an invalid week', () {
+    expect(
+      () => const TimetableImportParser().parse({
+        ...fixture,
+        'courses': [
+          {
+            'sourceCourseKey': 'room-regression',
+            'name': '软件测试',
+            'meetings': [
+              {
+                'sourceMeetingKey': 'room-regression-meeting',
+                'weekday': 1,
+                'startSection': 1,
+                'endSection': 2,
+                'weekText': '321',
+              },
+            ],
+          },
+        ],
+      }),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          allOf(
+            contains('courses[0].meetings[0].weekText'),
+            contains('raw="321"'),
+            contains('Teaching week out of range: 321'),
+          ),
+        ),
+      ),
+    );
+  });
+
   test('round-trips canonical week masks from an import snapshot', () {
     final original = const TimetableImportParser().parse(fixture);
     final restored = const TimetableImportParser().parse(original.toJson());

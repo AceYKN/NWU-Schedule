@@ -43,6 +43,15 @@ void main() {
         () => WeekMask.parseManual('第1周', maxWeek: 20), throwsFormatException);
   });
 
+  test('rejects negative and out-of-range teaching week tokens', () {
+    expect(() => WeekMask.parse('-1'), throwsFormatException);
+    expect(() => WeekMask.parse('0周'), throwsRangeError);
+    expect(() => WeekMask.parse('65周'), throwsRangeError);
+    expect(() => WeekMask.parse('321'), throwsRangeError);
+    expect(() => WeekMask.parse('321教室'), throwsRangeError);
+    expect(() => WeekMask.parse('abc'), throwsFormatException);
+  });
+
   test('formats week masks without inventing missing weeks', () {
     expect(formatWeekMask(WeekMask.fromWeeks([1, 2, 3, 4])), '1-4周');
     expect(formatWeekMask(WeekMask.fromWeeks([1, 3, 5, 7])), '1-7周单周');

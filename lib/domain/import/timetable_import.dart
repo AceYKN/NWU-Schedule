@@ -331,18 +331,20 @@ class TimetableImportParser {
     );
     final sectionRange = _sectionRange(json);
     final rawWeekMask = json['weekMask'];
+    final rawWeekText = (json['weekText'] ??
+            json['weeks'] ??
+            json['weekRule'] ??
+            json['zcd'] ??
+            '1-$totalWeeks周')
+        .toString();
     final weekMask = rawWeekMask is num
         ? WeekMask(
             rawWeekMask.toInt(),
-            rawText: json['rawWeekText']?.toString() ?? '',
+            rawText: json['rawWeekText']?.toString() ?? rawWeekText,
           )
-        : WeekMask.parse(
-            (json['weekText'] ??
-                    json['weeks'] ??
-                    json['weekRule'] ??
-                    json['zcd'] ??
-                    '1-$totalWeeks周')
-                .toString(),
+        : _parseWeekMask(
+            rawWeekText,
+            path: '$path.weekText',
             maxWeek: totalWeeks,
           );
     return ImportedMeeting(
@@ -357,6 +359,20 @@ class TimetableImportParser {
       room: _optionalString(json['room'] ?? json['roomName'] ?? json['jxcd']),
       weekMask: weekMask,
     );
+  }
+
+  WeekMask _parseWeekMask(
+    String rawText, {
+    required String path,
+    required int maxWeek,
+  }) {
+    try {
+      return WeekMask.parse(rawText, maxWeek: maxWeek);
+    } on Object catch (error) {
+      throw FormatException(
+        '$path 无法解析：raw="$rawText"；$error',
+      );
+    }
   }
 
   (int, int) _sectionRange(Map<String, dynamic> json) {
