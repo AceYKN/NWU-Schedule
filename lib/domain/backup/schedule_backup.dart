@@ -205,6 +205,7 @@ class ScheduleBackup {
         required: false,
       ),
     );
+    _assertNoSensitiveKeys(backup.appearance, 'appearance');
     _validateReferences(backup);
     return backup;
   }
@@ -466,6 +467,10 @@ class ScheduleBackup {
         if (normalized is! Map) {
           throw const FormatException('normalizedJson 不是对象');
         }
+        _assertNoSensitiveKeys(
+          normalized,
+          '导入快照 ${snapshot.id}.normalizedJson',
+        );
       } on Object catch (error) {
         throw BackupValidationException(
           '导入快照 ${snapshot.id} 的 normalizedJson 无效：$error',
@@ -494,6 +499,24 @@ class ScheduleBackup {
     r'(cookie|password|passwd|username|account|session|token|sso|webview|storage)',
     caseSensitive: false,
   );
+
+  static void _assertNoSensitiveKeys(Object? value, String path) {
+    if (value is Map) {
+      for (final entry in value.entries) {
+        final key = entry.key.toString();
+        if (_sensitiveKey.hasMatch(key)) {
+          throw BackupValidationException('$path 包含禁止字段：$key');
+        }
+        _assertNoSensitiveKeys(entry.value, '$path.$key');
+      }
+      return;
+    }
+    if (value is List) {
+      for (var index = 0; index < value.length; index++) {
+        _assertNoSensitiveKeys(value[index], '$path[$index]');
+      }
+    }
+  }
 
   static String _requiredString(Map<String, dynamic> json, String key) {
     final value = json[key];

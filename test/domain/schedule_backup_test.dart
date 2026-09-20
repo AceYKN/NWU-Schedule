@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nwu_schedule/core/utils/week_mask.dart';
 import 'package:nwu_schedule/domain/backup/schedule_backup.dart';
@@ -132,6 +134,33 @@ void main() {
       () => ScheduleBackup.fromJson({
         ...source,
         'settings': {'password': 'x'}
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'appearance': {'webViewStorage': 'x'},
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
+    final snapshot = {
+      'id': 'snapshot-1',
+      'semesterId': semester.id,
+      'importedAt': '2026-09-17T00:00:00Z',
+      'adapterVersion': 'test',
+      'schemaVersion': 1,
+      'normalizedJson': jsonEncode({
+        'semester': source['semesters'],
+        'courses': [],
+        'session': 'must not persist',
+      }),
+      'hash': 'hash',
+    };
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'importSnapshots': [snapshot],
       }),
       throwsA(isA<BackupValidationException>()),
     );
