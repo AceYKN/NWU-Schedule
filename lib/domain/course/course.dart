@@ -57,7 +57,7 @@ class Course {
           : colorOverride as int?,
       hidden: hidden ?? this.hidden,
       deleted: deleted ?? this.deleted,
-      createdAt: this.createdAt,
+      createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );
   }
