@@ -23,7 +23,7 @@
 | UI、Golden、无障碍 | `test/widget`、`test/golden`、`accessibility_test.dart` | PASS（自动化） |
 | Android 构建 | [GitHub Actions Run #193](https://github.com/AceYKN/NWU-Schedule/actions/runs/35533569743)：debug/release APK 与 merged manifest 校验 | PASS |
 
-最近一次本地全量检查：校历校验、隐私校验、DOM fixture、`flutter analyze`、174 项 `flutter test` 均通过；本次诊断脱敏回归也已通过。Run #193 以当前 `main` 提交 `fe889e3` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
+最近一次本地全量检查：校历校验、隐私校验、DOM fixture、`flutter analyze`、174 项 `flutter test` 均通过；本次诊断脱敏回归和 Widget 空地点设备复核也已通过。[GitHub Actions Run #197](https://github.com/AceYKN/NWU-Schedule/actions/runs/35535348266) 以 `main` 提交 `2b68171` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
 
 ## 设备上已核对但不等同于真实集成通过
 
