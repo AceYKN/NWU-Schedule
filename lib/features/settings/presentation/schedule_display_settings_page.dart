@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../core/nwu/periods.dart';
 import '../../../domain/settings/schedule_display_preferences.dart';
 
 class ScheduleDisplaySettingsPage extends ConsumerWidget {
@@ -180,7 +181,7 @@ class _SchedulePreview extends StatelessWidget {
                                 child: Center(
                                   child: Text(
                                     preferences.showPeriodTimes
-                                        ? '${row + 1}\n08:${row}0'
+                                        ? '${row + 1}\n${const NwuPeriodRepository().byNumber(row + 1).startLabel}'
                                         : '${row + 1}',
                                     textAlign: TextAlign.center,
                                     style:
@@ -233,6 +234,24 @@ class _SchedulePreview extends StatelessWidget {
                           right: 0,
                           top: 69,
                           child: Container(height: 2, color: scheme.error),
+                        ),
+                      if (preferences.showBackToCurrentWeekFab)
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: scheme.tertiaryContainer,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.my_location,
+                              size: 14,
+                              color: scheme.onTertiaryContainer,
+                            ),
+                          ),
                         ),
                     ],
                   ),
