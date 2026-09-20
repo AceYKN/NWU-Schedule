@@ -34,22 +34,23 @@ void main() {
     expect(network.meetings.single.endSection, 6);
   });
 
-  test('preserves parser warnings for rows skipped by the DOM fallback', () {
+  test('preserves parser errors for rows skipped by the DOM fallback', () {
     final timetable = const TimetableImportParser().parse({
       ...fixture,
       'issues': [
         {
           'path': 'tables[0].rows[3].sections',
           'message': '节次无法识别，已跳过该行',
-          'severity': 'warning',
+          'severity': 'error',
         },
       ],
     });
 
     final report = validateTimetable(timetable);
     expect(timetable.issues, hasLength(1));
-    expect(report.isValid, isTrue);
-    expect(report.warningCount, 1);
+    expect(report.isValid, isFalse);
+    expect(report.errorCount, 1);
+    expect(report.warningCount, 0);
 
     final restored = const TimetableImportParser().parse(timetable.toJson());
     expect(restored.issues.single.path, 'tables[0].rows[3].sections');
