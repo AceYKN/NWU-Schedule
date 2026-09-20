@@ -242,17 +242,36 @@ class MainActivity : FlutterActivity() {
                     intent,
                     PendingIntent.FLAG_UPDATE_CURRENT or pendingIntentFlags(),
                 )
-                alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    fireAt,
-                    pendingIntent,
-                )
+                scheduleNotificationAlarm(alarmManager, fireAt, pendingIntent)
                 newIds.add(id.toString())
             }
             preferences.edit().putStringSet(SCHEDULED_IDS, newIds).apply()
             result.success(null)
         } catch (error: Exception) {
             result.error("schedule_failed", error.message, null)
+        }
+    }
+
+    private fun scheduleNotificationAlarm(
+        alarmManager: AlarmManager,
+        fireAt: Long,
+        pendingIntent: PendingIntent,
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                fireAt,
+                pendingIntent,
+            )
+        } else {
+            // setAndAllowWhileIdle was introduced in API 23. Keep the
+            // notification feature available on the lower V1 minSdk without
+            // requesting exact-alarm privileges.
+            alarmManager.set(
+                AlarmManager.RTC_WAKEUP,
+                fireAt,
+                pendingIntent,
+            )
         }
     }
 
