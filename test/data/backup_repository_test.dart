@@ -262,4 +262,69 @@ void main() {
       contains(semester.id),
     );
   });
+
+  test('rejects a late invalid reference before replacing the local dataset',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final semester = domain.Semester(
+      id: 'late-reference-semester',
+      academicYear: '2026-2027',
+      term: domain.SemesterTerm.first,
+      label: '2026-2027 第一学期',
+      createdAt: DateTime(2026, 9, 1),
+    );
+    await repository.saveSemester(semester);
+    final course = domain.Course(
+      id: 'late-reference-course',
+      semesterId: semester.id,
+      sourceType: domain.CourseSourceType.manual,
+      name: '保留课程',
+    );
+    await repository.saveCourse(
+      course,
+      [
+        domain.MeetingRule(
+          id: 'late-reference-rule',
+          courseId: course.id,
+          weekday: 1,
+          startSection: 1,
+          endSection: 2,
+          weekMask: WeekMask.fromWeeks([1]),
+        ),
+      ],
+    );
+    final backup = await repository.createBackup();
+    final invalid = ScheduleBackup(
+      createdAt: backup.createdAt,
+      semesters: backup.semesters,
+      courses: backup.courses,
+      meetingRules: backup.meetingRules,
+      exceptions: [
+        ...backup.exceptions,
+        domain.CourseException(
+          id: 'late-invalid-exception',
+          semesterId: semester.id,
+          courseId: course.id,
+          sourceMeetingId: 'missing-rule',
+          sourceDate: DateTime(2026, 9, 7),
+          type: domain.CourseExceptionType.cancel,
+        ),
+      ],
+      settings: backup.settings,
+      appearance: backup.appearance,
+      importSnapshots: backup.importSnapshots,
+      deletedSourceItems: backup.deletedSourceItems,
+    );
+
+    await expectLater(
+      repository.restoreBackup(invalid),
+      throwsA(isA<BackupValidationException>()),
+    );
+    final loaded = await repository.loadSemester(semester.id);
+    expect(loaded.courses.single.name, course.name);
+    expect(loaded.meetingRules.single.id, 'late-reference-rule');
+    expect(loaded.exceptions, isEmpty);
+  });
 }
