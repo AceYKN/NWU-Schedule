@@ -32,18 +32,10 @@ void main() {
     String key = 'course-1',
     String room = '3406',
     String name = '软件测试',
-    String? code = 'CS301',
-    String? teachingClass = '软件工程2401',
-    double? credits = 2,
-    String? assessment = '考查',
   }) =>
       ImportedCourse(
         sourceCourseKey: key,
         name: name,
-        code: code,
-        teachingClass: teachingClass,
-        credits: credits,
-        assessment: assessment,
         meetings: [meeting(room: room)],
       );
 
@@ -65,10 +57,6 @@ void main() {
       sourceType: CourseSourceType.imported,
       sourceCourseKey: 'course-1',
       name: name,
-      code: 'CS301',
-      teachingClass: '软件工程2401',
-      credits: 2,
-      assessment: '考查',
     );
     return ScheduleDataSnapshot(
       semester: semester,
@@ -132,44 +120,21 @@ void main() {
         MergeDecision.local);
   });
 
-  test('includes academic metadata changes in the import diff', () {
+  test('legacy academic metadata changes do not enter the import diff', () {
     final diff = const ImportDiffEngine().build(
-      incoming: timetable(
-        [
-          course(
-            code: 'REMOTE-CODE',
-            teachingClass: 'REMOTE-CLASS',
-            credits: 99,
-            assessment: 'REMOTE-ASSESSMENT',
-          ),
-        ],
-      ),
+      incoming: timetable([course()]),
       local: local(),
       previousImport: timetable([course()]),
     );
 
-    expect(diff.changes.single.kind, ImportChangeKind.modified);
+    expect(diff.changes.single.kind, ImportChangeKind.unchanged);
     expect(
       diff.changes.single.fields.map((field) => field.field),
-      [
-        'name',
-        'code',
-        'teachingClass',
-        'credits',
-        'assessment',
-        'meetings',
-      ],
-    );
-    expect(
-      diff.changes.single.fields
-          .firstWhere((field) => field.field == 'code')
-          .decision,
-      MergeDecision.remote,
+      ['name', 'meetings'],
     );
   });
 
-  test('matches a rotated source key by unique course code and teaching class',
-      () {
+  test('matches a rotated source key by unique schedule identity', () {
     final base = local();
     final localCourse = Course(
       id: base.courses.single.id,
@@ -177,10 +142,6 @@ void main() {
       sourceType: base.courses.single.sourceType,
       sourceCourseKey: 'old-key',
       name: base.courses.single.name,
-      code: base.courses.single.code,
-      teachingClass: base.courses.single.teachingClass,
-      credits: base.courses.single.credits,
-      assessment: base.courses.single.assessment,
     );
     final localWithRotatedKey = ScheduleDataSnapshot(
       semester: base.semester,
@@ -200,7 +161,7 @@ void main() {
     expect(diff.changes.single.remoteCourse?.sourceCourseKey, 'new-key');
   });
 
-  test('does not guess when code and teaching class are not unique', () {
+  test('does not guess when same-name schedule identities are ambiguous', () {
     final base = local();
     final secondCourse = Course(
       id: 'local-course-2',
@@ -208,15 +169,25 @@ void main() {
       sourceType: base.courses.single.sourceType,
       sourceCourseKey: 'second-key',
       name: base.courses.single.name,
-      code: base.courses.single.code,
-      teachingClass: base.courses.single.teachingClass,
-      credits: base.courses.single.credits,
-      assessment: base.courses.single.assessment,
     );
     final localWithDuplicateMetadata = ScheduleDataSnapshot(
       semester: base.semester,
       courses: [base.courses.single, secondCourse],
-      meetingRules: base.meetingRules,
+      meetingRules: [
+        ...base.meetingRules,
+        MeetingRule(
+          id: 'local-meeting-2',
+          courseId: secondCourse.id,
+          sourceMeetingKey: base.meetingRules.single.sourceMeetingKey,
+          weekday: base.meetingRules.single.weekday,
+          startSection: base.meetingRules.single.startSection,
+          endSection: base.meetingRules.single.endSection,
+          teacher: base.meetingRules.single.teacher,
+          campus: base.meetingRules.single.campus,
+          room: base.meetingRules.single.room,
+          weekMask: base.meetingRules.single.weekMask,
+        ),
+      ],
       exceptions: base.exceptions,
     );
     final diff = const ImportDiffEngine().build(

@@ -137,10 +137,6 @@ const software = generic.payload.courses.find(
   (course) => course.name === '软件测试',
 );
 assert.ok(software);
-assert.equal(software.code, 'CS301');
-assert.equal(software.teachingClass, '软件2401');
-assert.equal(software.credits, null);
-assert.equal(software.assessment, null);
 assert.equal(software.meetings.length, 2);
 assert.equal(software.meetings[0].room, '321');
 assert.equal(software.meetings[0].weekText, '1-16周');
@@ -166,18 +162,20 @@ assert.equal(commaSectionCourse.meetings[0].startSection, 1);
 assert.equal(commaSectionCourse.meetings[0].endSection, 4);
 
 const sameCodeDifferentClassFixture = genericFixture.replace(
+  '<td rowspan="2">软件测试</td>',
+  '<td>软件测试</td>',
+).replace(
+  /(<tr>\s*)<td>星期二<\/td>/,
+  '$1<td>软件测试</td><td>星期二</td>',
+).replace(
   /(<td>星期二<\/td>[\s\S]*?<td>)软件2401(<\/td>\s*<td>CS301)/,
   '$1软件2402$2',
 );
 const sameCodeDifferentClass = runExtraction(sameCodeDifferentClassFixture);
-const sameCodeCourses = sameCodeDifferentClass.payload.courses.filter(
-  (course) => course.code === 'CS301',
+const sameNameCourses = sameCodeDifferentClass.payload.courses.filter(
+  (course) => course.name === '软件测试',
 );
-assert.equal(sameCodeCourses.length, 2);
-assert.deepEqual(
-  sameCodeCourses.map((course) => course.teachingClass).sort(),
-  ['软件2401', '软件2402'],
-);
+assert.equal(sameNameCourses.length, 2);
 
 const rowSpanZeroFixture = `
 <!doctype html>
@@ -413,10 +411,6 @@ const experiment = realList.payload.courses.find(
   (course) => course.name === '数据结构实验',
 );
 assert.ok(experiment);
-assert.equal(experiment.code, 'CS201');
-assert.equal(experiment.teachingClass, '数据结构实验-0003');
-assert.equal(experiment.credits, 1);
-assert.equal(experiment.assessment, '考查');
 assert.equal(experiment.meetings.length, 2);
 assert.deepEqual(
   experiment.meetings.map((meeting) => meeting.weekText),
@@ -436,10 +430,6 @@ const realSoftware = realList.payload.courses.find(
   (course) => course.name === '软件测试（双语）',
 );
 assert.ok(realSoftware);
-assert.equal(realSoftware.code, null);
-assert.equal(realSoftware.teachingClass, '软件测试（双语）-0002');
-assert.equal(realSoftware.credits, 2.5);
-assert.equal(realSoftware.assessment, '考试');
 assert.equal(realSoftware.meetings.length, 1);
 assert.deepEqual(
   realSoftware.meetings.map((meeting) => [
@@ -460,21 +450,11 @@ const realSoftwareSecondClass = realList.payload.courses.find(
 );
 assert.ok(realSoftwareSecondClass);
 assert.equal(realSoftwareSecondClass.meetings.length, 1);
-assert.equal(realSoftwareSecondClass.code, null);
-assert.equal(
-  realSoftwareSecondClass.teachingClass,
-  '软件测试（双语）-0002A',
-);
-assert.equal(realSoftwareSecondClass.credits, 2.5);
-assert.equal(realSoftwareSecondClass.assessment, '未安排');
 
 const mining = realList.payload.courses.find(
   (course) => course.name === 'Web数据挖掘（双语）',
 );
 assert.ok(mining);
-assert.equal(mining.code, null);
-assert.equal(mining.teachingClass, 'Web数据挖掘（双语）-0001');
-assert.equal(mining.credits, 3);
 assert.equal(mining.meetings[0].weekday, 2);
 assert.equal(mining.meetings[0].weekText, '1-8周,10-18周');
 
@@ -482,18 +462,12 @@ const project = realList.payload.courses.find(
   (course) => course.name === 'IT项目管理（双语)(含上机）',
 );
 assert.ok(project);
-assert.equal(project.code, null);
-assert.equal(project.teachingClass, 'IT项目管理-0002');
-assert.equal(project.credits, 3.5);
 assert.equal(project.meetings[0].weekText, '1-17周(单)');
 
 const ml = realList.payload.courses.find(
   (course) => course.name === '机器学习',
 );
 assert.ok(ml);
-assert.equal(ml.code, null);
-assert.equal(ml.teachingClass, '机器学习-0001');
-assert.equal(ml.credits, 3);
 assert.equal(ml.meetings[0].weekday, 4);
 assert.equal(ml.meetings[0].startSection, 5);
 assert.equal(ml.meetings[0].endSection, 8);
@@ -505,9 +479,11 @@ assert.equal(
     .some((meeting) => /\b321\b/.test(meeting.weekText)),
   false,
 );
-assert.equal(
-  realList.payload.courses.filter((course) => course.code != null).length,
-  1,
+assert.ok(realList.payload.courses.every((course) =>
+  !Object.hasOwn(course, 'code') &&
+  !Object.hasOwn(course, 'teachingClass') &&
+  !Object.hasOwn(course, 'credits') &&
+  !Object.hasOwn(course, 'assessment')),
 );
 
 const missingWeekLabelFixture = realListFixture.replace(

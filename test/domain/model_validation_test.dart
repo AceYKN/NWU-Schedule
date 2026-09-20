@@ -5,12 +5,11 @@ import 'package:nwu_schedule/domain/course/course_exception.dart';
 import 'package:nwu_schedule/domain/course/meeting_rule.dart';
 
 void main() {
-  Course makeCourse({String name = '软件测试', double? credits}) => Course(
+  Course makeCourse({String name = '软件测试'}) => Course(
         id: 'course-1',
         semesterId: 'semester-1',
         sourceType: CourseSourceType.manual,
         name: name,
-        credits: credits,
         note: '原备注',
         colorOverride: 0xff123456,
       );
@@ -26,9 +25,8 @@ void main() {
         weekMask: WeekMask.all(16),
       );
 
-  test('course fields reject invalid values and nullable fields can clear', () {
+  test('course names validate and nullable fields can clear', () {
     expect(() => makeCourse(name: '  '), throwsArgumentError);
-    expect(() => makeCourse(credits: -1), throwsArgumentError);
     final course = makeCourse();
     expect(course.copyWith(note: null, colorOverride: null).note, isNull);
     expect(

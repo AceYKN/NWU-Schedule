@@ -241,10 +241,6 @@ class ScheduleBackup {
         'sourceType': course.sourceType.name,
         'sourceCourseKey': course.sourceCourseKey,
         'name': course.name,
-        'code': course.code,
-        'teachingClass': course.teachingClass,
-        'credits': course.credits,
-        'assessment': course.assessment,
         'note': course.note,
         'colorOverride': course.colorOverride,
         'hidden': course.hidden,
@@ -316,10 +312,6 @@ class ScheduleBackup {
       ),
       sourceCourseKey: _optionalString(json['sourceCourseKey']),
       name: _requiredString(json, 'name'),
-      code: _optionalString(json['code']),
-      teachingClass: _optionalString(json['teachingClass']),
-      credits: _optionalDouble(json['credits']),
-      assessment: _optionalString(json['assessment']),
       note: _optionalString(json['note']),
       colorOverride: _optionalInt(json['colorOverride']),
       hidden: _bool(json, 'hidden'),
@@ -651,12 +643,6 @@ class ScheduleBackup {
       return value.toInt();
     }
     throw BackupValidationException('字段必须是整数');
-  }
-
-  static double? _optionalDouble(Object? value) {
-    if (value == null) return null;
-    if (value is num && value.isFinite) return value.toDouble();
-    throw BackupValidationException('credits 必须是数字');
   }
 
   static bool _bool(Map<String, dynamic> json, String key) {

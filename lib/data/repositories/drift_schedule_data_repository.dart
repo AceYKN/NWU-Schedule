@@ -80,10 +80,6 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
               sourceType: domain.CourseSourceType.values.byName(row.sourceType),
               sourceCourseKey: row.sourceCourseKey,
               name: row.name,
-              code: row.code,
-              teachingClass: row.teachingClass,
-              credits: row.credits,
-              assessment: row.assessment,
               note: row.note,
               colorOverride: row.colorOverride,
               hidden: row.hidden,
@@ -258,10 +254,6 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
               sourceType: course.sourceType.name,
               sourceCourseKey: Value(course.sourceCourseKey),
               name: course.name,
-              code: Value(course.code),
-              teachingClass: Value(course.teachingClass),
-              credits: Value(course.credits),
-              assessment: Value(course.assessment),
               note: Value(course.note),
               colorOverride: Value(course.colorOverride),
               hidden: Value(course.hidden),
@@ -483,10 +475,6 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
                 sourceType: course.sourceType.name,
                 sourceCourseKey: Value(course.sourceCourseKey),
                 name: course.name,
-                code: Value(course.code),
-                teachingClass: Value(course.teachingClass),
-                credits: Value(course.credits),
-                assessment: Value(course.assessment),
                 note: Value(course.note),
                 colorOverride: Value(course.colorOverride),
                 hidden: Value(course.hidden),
@@ -710,10 +698,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             },
           );
         }
-        // A Zhengfang adapter may rotate an opaque source key while retaining
-        // the unique course code + teaching-class identity. ImportDiffEngine
-        // has already matched that course conservatively; keep its database
-        // id and local fields while adopting the new remote key.
+        // A Zhengfang adapter may rotate a source key while retaining the
+        // same conservative schedule identity. ImportDiffEngine has already
+        // matched that course; keep its database id while adopting the key.
         final course = _courseFromRemote(
           semester: semester,
           remote: remote,
@@ -819,10 +806,6 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             sourceType: course.sourceType.name,
             sourceCourseKey: Value(course.sourceCourseKey),
             name: course.name,
-            code: Value(course.code),
-            teachingClass: Value(course.teachingClass),
-            credits: Value(course.credits),
-            assessment: Value(course.assessment),
             note: Value(course.note),
             colorOverride: Value(course.colorOverride),
             hidden: Value(course.hidden),
@@ -917,13 +900,6 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
       sourceType: domain.CourseSourceType.imported,
       sourceCourseKey: remote.sourceCourseKey,
       name: value('name', remote.name, existing?.name) as String,
-      code: value('code', remote.code, existing?.code) as String?,
-      teachingClass:
-          value('teachingClass', remote.teachingClass, existing?.teachingClass)
-              as String?,
-      credits: value('credits', remote.credits, existing?.credits) as double?,
-      assessment: value('assessment', remote.assessment, existing?.assessment)
-          as String?,
       note: existing?.note,
       colorOverride: existing?.colorOverride,
       hidden: existing?.hidden ?? false,

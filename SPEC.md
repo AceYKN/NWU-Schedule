@@ -482,10 +482,6 @@ Month 负责：
 时间
 
 周次
-课程代码
-教学班
-学分
-考核方式
 
 备注
 ```
@@ -533,11 +529,6 @@ Course {
     sourceCourseKey?
 
     name
-    code?
-    teachingClass?
-
-    credits?
-    assessment?
 
     note?
     colorOverride?
@@ -1633,11 +1624,10 @@ NwuZhengfangV10Importer
 
 # 47. Normalized Imported Fields
 
-只提取：
+只提取以下产品课表字段：
 
 ```text
 课程名
-课程代码
 教师
 校区
 教室
@@ -1646,9 +1636,6 @@ NwuZhengfangV10Importer
 结束节
 周次
 单双周
-学分
-考核方式
-教学班
 ```
 
 允许内部额外保存：
@@ -1670,10 +1657,9 @@ fingerprint
 
 ```text
 1 Remote Stable ID
-2 Course Code + Teaching Class
-3 Stable Composite Key
-4 Conservative Similarity Matching
-5 Add / Remove
+2 Versioned synthetic fingerprint from semester, normalized name and schedule shape
+3 Conservative similarity matching across complete meeting sets
+4 Add / Remove
 ```
 
 如果无法安全确定：
@@ -2802,15 +2788,7 @@ JavaScript Channel 数据必须：
 辅助信息
 ```
 
-不要让：
-
-```text
-学分
-课程代码
-教学班
-```
-
-占主要视觉空间。
+课程代码、教学班、学分和考核方式不是产品级课程字段，不进入课程卡片、详情、导入 Diff、备份或普通课表逻辑。
 
 ---
 

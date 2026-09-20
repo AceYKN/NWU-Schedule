@@ -23,7 +23,6 @@ void main() {
     semesterId: semester.id,
     sourceType: CourseSourceType.manual,
     name: '软件测试',
-    code: 'CS301',
     note: '带自己的备注',
     colorOverride: 0xff123456,
     createdAt: DateTime.utc(2026, 9, 1, 8),
@@ -129,6 +128,40 @@ void main() {
     });
 
     expect(restored.exceptions.single.sourceDate, DateTime(2026, 9, 21));
+  });
+
+  test('accepts and ignores legacy course metadata fields', () {
+    final source = ScheduleBackup(
+      createdAt: DateTime.utc(2026, 9, 17),
+      semesters: [semester],
+      courses: [course],
+      meetingRules: [rule],
+      exceptions: const [],
+      settings: const {},
+      appearance: const {},
+    ).toJson();
+    final legacyCourse = Map<String, dynamic>.from(
+      (source['courses'] as List).single as Map,
+    )
+      ..['code'] = 'LEGACY-CODE'
+      ..['teachingClass'] = 'LEGACY-CLASS'
+      ..['credits'] = 3.5
+      ..['assessment'] = 'LEGACY-ASSESSMENT';
+    final restored = ScheduleBackup.fromJson({
+      ...source,
+      'courses': [legacyCourse],
+    });
+
+    expect(restored.courses.single.name, course.name);
+    expect(
+      (restored.toJson()['courses'] as List).single,
+      isNot(anyOf(
+        contains('code'),
+        contains('teachingClass'),
+        contains('credits'),
+        contains('assessment'),
+      )),
+    );
   });
 
   test('rejects credentials and broken references', () {
@@ -261,17 +294,6 @@ void main() {
       () => ScheduleBackup.fromJson({
         ...source,
         'meetingRules': [fractionalRule],
-      }),
-      throwsA(isA<BackupValidationException>()),
-    );
-
-    final nonFiniteCourse = Map<String, dynamic>.from(
-      (source['courses'] as List).single as Map,
-    )..['credits'] = double.nan;
-    expect(
-      () => ScheduleBackup.fromJson({
-        ...source,
-        'courses': [nonFiniteCourse],
       }),
       throwsA(isA<BackupValidationException>()),
     );

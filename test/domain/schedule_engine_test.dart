@@ -31,7 +31,6 @@ Course makeCourse() {
     semesterId: 'nwu-test-2026-1',
     sourceType: CourseSourceType.imported,
     name: '软件测试',
-    code: 'SE301',
     createdAt: DateTime(2026, 8, 1),
     updatedAt: DateTime(2026, 8, 1),
   );

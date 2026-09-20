@@ -145,24 +145,11 @@ class _CourseDetail extends StatelessWidget {
                       ),
                 ),
                 const SizedBox(height: 8),
-                Text('${course.code ?? '无课程代码'} · ${semester.label}'),
+                Text(semester.label),
                 if (exception != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     '临时加课 · ${_formatDate(exception!.targetDate)}',
-                  ),
-                ],
-                if (course.teachingClass != null) ...[
-                  const SizedBox(height: 4),
-                  Text('教学班：${course.teachingClass}'),
-                ],
-                if (course.credits != null || course.assessment != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    [
-                      if (course.credits != null) '${course.credits} 学分',
-                      if (course.assessment != null) course.assessment!,
-                    ].join(' · '),
                   ),
                 ],
                 if (course.note != null && course.note!.isNotEmpty) ...[

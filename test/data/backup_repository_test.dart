@@ -30,10 +30,6 @@ void main() {
         ImportedCourse(
           sourceCourseKey: 'course-1',
           name: '软件测试',
-          code: 'CS301',
-          teachingClass: '软件工程2401',
-          credits: 2,
-          assessment: '考查',
           meetings: [
             ImportedMeeting(
               sourceMeetingKey: 'rule-1',

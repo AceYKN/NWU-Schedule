@@ -52,7 +52,6 @@ void main() {
       semesterId: semester.id,
       sourceType: CourseSourceType.manual,
       name: '软件测试',
-      code: 'CS301',
     );
     final rule = MeetingRule(
       id: 'widget-pages-rule',

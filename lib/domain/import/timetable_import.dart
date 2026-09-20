@@ -70,28 +70,16 @@ class ImportedCourse {
   const ImportedCourse({
     required this.sourceCourseKey,
     required this.name,
-    required this.code,
-    required this.teachingClass,
-    required this.credits,
-    required this.assessment,
     required this.meetings,
   });
 
   final String sourceCourseKey;
   final String name;
-  final String? code;
-  final String? teachingClass;
-  final double? credits;
-  final String? assessment;
   final List<ImportedMeeting> meetings;
 
   Map<String, Object?> toJson() => {
         'sourceCourseKey': sourceCourseKey,
         'name': name,
-        'code': code,
-        'teachingClass': teachingClass,
-        'credits': credits,
-        'assessment': assessment,
         'meetings': meetings.map((item) => item.toJson()).toList(),
       };
 }
@@ -347,14 +335,6 @@ class TimetableImportParser {
         json['name'] ?? json['courseName'] ?? json['kcmc'],
         'courses[$index].name',
       ),
-      code: _optionalString(json['code'] ?? json['courseCode'] ?? json['kch']),
-      teachingClass: _optionalString(
-        json['teachingClass'] ?? json['className'] ?? json['jxbmc'],
-      ),
-      credits: _optionalDouble(json['credits'] ?? json['credit'] ?? json['xf']),
-      assessment: _optionalString(
-        json['assessment'] ?? json['assessmentType'] ?? json['ksxz'],
-      ),
       meetings: List.unmodifiable([
         for (var meetingIndex = 0;
             meetingIndex < rawMeetings.length;
@@ -499,13 +479,6 @@ class TimetableImportParser {
     if (parsed != null) return parsed;
     throw FormatException('$path must be an integer');
   }
-
-  static double? _optionalDouble(Object? value) {
-    if (value == null) return null;
-    if (value is num) return value.isFinite ? value.toDouble() : null;
-    final parsed = double.tryParse(value.toString().trim());
-    return parsed?.isFinite == true ? parsed : null;
-  }
 }
 
 ImportValidationReport validateTimetable(RemoteTimetable timetable) {
@@ -570,14 +543,6 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
       issues.add(ImportIssue(
         path: '$coursePath.name',
         message: '课程名不能为空',
-        severity: ImportIssueSeverity.error,
-      ));
-    }
-    if (course.credits != null &&
-        (!course.credits!.isFinite || course.credits! < 0)) {
-      issues.add(ImportIssue(
-        path: '$coursePath.credits',
-        message: '学分必须是非负有限数字',
         severity: ImportIssueSeverity.error,
       ));
     }

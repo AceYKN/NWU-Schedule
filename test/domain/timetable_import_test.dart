@@ -21,13 +21,11 @@ void main() {
 
     final software = timetable.courses.first;
     expect(software.name, '软件测试');
-    expect(software.code, 'CS301');
     expect(software.meetings.single.room, '3508');
     expect(software.meetings.single.weekMask.weeks.length, 16);
 
     final network = timetable.courses.last;
     expect(network.name, '计算机网络');
-    expect(network.teachingClass, '软件工程2401');
     expect(network.meetings.single.teacher, '李老师');
     expect(network.meetings.single.weekMask.weeks, [2, 4, 6, 8]);
     expect(network.meetings.single.startSection, 5);
@@ -164,10 +162,6 @@ void main() {
         ImportedCourse(
           sourceCourseKey: ' ',
           name: '重复安排课程',
-          code: null,
-          teachingClass: null,
-          credits: null,
-          assessment: null,
           meetings: [
             ImportedMeeting(
               sourceMeetingKey: 'meeting-a',

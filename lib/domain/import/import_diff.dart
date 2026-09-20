@@ -201,13 +201,14 @@ class ImportDiffEngine {
           matchedLocalKeys.contains(localCourse.sourceCourseKey)) {
         localCourse = null;
       }
-      localCourse ??= _uniqueLocalMetadataMatch(
+      localCourse ??= _uniqueLocalStructuralMatch(
         remote,
         localImported.values.where(
           (course) =>
               course.sourceCourseKey != null &&
               !matchedLocalKeys.contains(course.sourceCourseKey),
         ),
+        localRules,
       );
       if (localCourse == null) {
         changes.add(ImportChange(
@@ -237,7 +238,7 @@ class ImportDiffEngine {
           matchedPreviousKeys.contains(previous.sourceCourseKey)) {
         previous = null;
       }
-      previous ??= _uniquePreviousMetadataMatch(
+      previous ??= _uniquePreviousStructuralMatch(
         remote,
         (previousImport?.courses ?? const <ImportedCourse>[]).where(
           (course) => !matchedPreviousKeys.contains(course.sourceCourseKey),
@@ -294,63 +295,104 @@ class ImportDiffEngine {
     );
   }
 
-  Course? _uniqueLocalMetadataMatch(
+  Course? _uniqueLocalStructuralMatch(
     ImportedCourse remote,
     Iterable<Course> candidates,
+    Map<String, List<MeetingRule>> localRules,
   ) {
-    final matches = candidates
-        .where(
-          (candidate) => _sameCourseMetadata(
-            remoteCode: remote.code,
-            remoteTeachingClass: remote.teachingClass,
-            candidateCode: candidate.code,
-            candidateTeachingClass: candidate.teachingClass,
+    final matches = [
+      for (final candidate in candidates)
+        if (_sameCourseName(candidate.name, remote.name))
+          (
+            course: candidate,
+            score: _courseShapeScore(
+              remote.meetings,
+              localRules[candidate.id] ?? const [],
+            ),
           ),
-        )
-        .toList(growable: false);
-    return matches.length == 1 ? matches.single : null;
+    ];
+    return _uniqueBest(matches);
   }
 
-  ImportedCourse? _uniquePreviousMetadataMatch(
+  ImportedCourse? _uniquePreviousStructuralMatch(
     ImportedCourse remote,
     Iterable<ImportedCourse> candidates,
   ) {
-    final matches = candidates
-        .where(
-          (candidate) => _sameCourseMetadata(
-            remoteCode: remote.code,
-            remoteTeachingClass: remote.teachingClass,
-            candidateCode: candidate.code,
-            candidateTeachingClass: candidate.teachingClass,
+    final matches = [
+      for (final candidate in candidates)
+        if (_sameCourseName(candidate.name, remote.name))
+          (
+            course: candidate,
+            score: _courseShapeScore(
+              remote.meetings,
+              candidate.meetings,
+            ),
           ),
-        )
-        .toList(growable: false);
-    return matches.length == 1 ? matches.single : null;
+    ];
+    return _uniqueBest(matches);
   }
 
-  static bool _sameCourseMetadata({
-    required String? remoteCode,
-    required String? remoteTeachingClass,
-    required String? candidateCode,
-    required String? candidateTeachingClass,
-  }) {
-    final normalizedRemoteCode = remoteCode?.trim();
-    final normalizedRemoteClass = remoteTeachingClass?.trim();
-    final normalizedCandidateCode = candidateCode?.trim();
-    final normalizedCandidateClass = candidateTeachingClass?.trim();
-    if (normalizedRemoteCode == null ||
-        normalizedRemoteCode.isEmpty ||
-        normalizedRemoteClass == null ||
-        normalizedRemoteClass.isEmpty ||
-        normalizedCandidateCode == null ||
-        normalizedCandidateCode.isEmpty ||
-        normalizedCandidateClass == null ||
-        normalizedCandidateClass.isEmpty) {
-      return false;
+  static T? _uniqueBest<T extends Object>(
+    List<({T course, int score})> matches,
+  ) {
+    if (matches.isEmpty) return null;
+    matches.sort((left, right) => right.score.compareTo(left.score));
+    if (matches.length > 1 && matches[0].score == matches[1].score) {
+      return null;
     }
-    return normalizedRemoteCode == normalizedCandidateCode &&
-        normalizedRemoteClass == normalizedCandidateClass;
+    // A name-only match is safe only when it is the sole local candidate.
+    // If several same-name courses exist, require a structural anchor.
+    if (matches.length > 1 && matches.first.score == 0) return null;
+    return matches.first.course;
   }
+
+  static bool _sameCourseName(String left, String right) =>
+      _normalizeText(left) == _normalizeText(right);
+
+  static int _courseShapeScore(
+    List<ImportedMeeting> remote,
+    List<Object> local,
+  ) {
+    final remoteShapes = remote.map(_remoteShape).toSet();
+    final localShapes = local.map(_shape).toSet();
+    final overlap = remoteShapes.intersection(localShapes).length;
+    final sameWeekdays = remote
+        .map((item) => item.weekday)
+        .toSet()
+        .intersection(
+          local.map(_weekday).toSet(),
+        )
+        .length;
+    final sameCount = remote.length == local.length ? 1 : 0;
+    return overlap * 100 + sameWeekdays * 10 + sameCount;
+  }
+
+  static String _remoteShape(ImportedMeeting meeting) => jsonEncode([
+        meeting.weekday,
+        meeting.startSection,
+        meeting.endSection,
+        meeting.weekMask.value,
+      ]);
+
+  static String _shape(Object meeting) => switch (meeting) {
+        MeetingRule value => jsonEncode([
+            value.weekday,
+            value.startSection,
+            value.endSection,
+            value.weekMask.value,
+          ]),
+        ImportedMeeting value => _remoteShape(value),
+        _ => throw ArgumentError('Unsupported meeting shape'),
+      };
+
+  static int _weekday(Object meeting) => switch (meeting) {
+        MeetingRule value => value.weekday,
+        ImportedMeeting value => value.weekday,
+        _ => throw ArgumentError('Unsupported meeting weekday'),
+      };
+
+  static String _normalizeText(String value) =>
+      value.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
 
   List<ImportFieldChange> _fields({
     required Course localCourse,
@@ -360,26 +402,14 @@ class ImportDiffEngine {
   }) {
     final localValues = <String, Object?>{
       'name': localCourse.name,
-      'code': localCourse.code,
-      'teachingClass': localCourse.teachingClass,
-      'credits': localCourse.credits,
-      'assessment': localCourse.assessment,
       'meetings': localRules.map(_meetingToJson).toList(),
     };
     final remoteValues = <String, Object?>{
       'name': remote.name,
-      'code': remote.code,
-      'teachingClass': remote.teachingClass,
-      'credits': remote.credits,
-      'assessment': remote.assessment,
       'meetings': remote.meetings.map((item) => item.toJson()).toList(),
     };
     final previousValues = <String, Object?>{
       'name': previous?.name,
-      'code': previous?.code,
-      'teachingClass': previous?.teachingClass,
-      'credits': previous?.credits,
-      'assessment': previous?.assessment,
       'meetings': previous?.meetings.map((item) => item.toJson()).toList(),
     };
     return [

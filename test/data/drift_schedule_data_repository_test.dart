@@ -301,10 +301,6 @@ void main() {
             ImportedCourse(
               sourceCourseKey: 'remote-course-1',
               name: name,
-              code: 'CS301',
-              teachingClass: '软件工程2401',
-              credits: 2,
-              assessment: '考查',
               meetings: [
                 ImportedMeeting(
                   sourceMeetingKey: 'remote-rule-1',
@@ -324,10 +320,6 @@ void main() {
     await repository.commitImportedTimetable(timetable());
     var loaded = await repository.loadSemester('nwu-2026-2027-1');
     expect(loaded.courses.single.sourceType, domain.CourseSourceType.imported);
-    expect(loaded.courses.single.code, 'CS301');
-    expect(loaded.courses.single.teachingClass, '软件工程2401');
-    expect(loaded.courses.single.credits, 2);
-    expect(loaded.courses.single.assessment, '考查');
     expect(loaded.meetingRules.single.room, '3406');
     expect(await repository.loadLatestImport('nwu-2026-2027-1'), isNotNull);
 
@@ -374,10 +366,6 @@ void main() {
             ImportedCourse(
               sourceCourseKey: key,
               name: '软件测试',
-              code: 'CS301',
-              teachingClass: '软件工程2401',
-              credits: 2,
-              assessment: '考查',
               meetings: [
                 ImportedMeeting(
                   sourceMeetingKey: '$key-meeting',
@@ -448,10 +436,6 @@ void main() {
           ImportedCourse(
             sourceCourseKey: 'course-identity-regression',
             name: '软件测试',
-            code: 'CS301',
-            teachingClass: '软件工程2401',
-            credits: 2,
-            assessment: '考查',
             meetings: [
               ImportedMeeting(
                 sourceMeetingKey: meetingKey,
@@ -575,10 +559,6 @@ void main() {
             ImportedCourse(
               sourceCourseKey: key,
               name: '软件测试',
-              code: 'CS301',
-              teachingClass: '软件工程2401',
-              credits: null,
-              assessment: null,
               meetings: [
                 ImportedMeeting(
                   sourceMeetingKey: '$key-meeting',
@@ -640,10 +620,6 @@ void main() {
         ImportedCourse(
           sourceCourseKey: 'c1',
           name: '软件测试',
-          code: null,
-          teachingClass: null,
-          credits: null,
-          assessment: null,
           meetings: [
             ImportedMeeting(
               sourceMeetingKey: 'r1',
@@ -672,10 +648,6 @@ void main() {
         ImportedCourse(
           sourceCourseKey: 'c1',
           name: '软件测试',
-          code: null,
-          teachingClass: null,
-          credits: null,
-          assessment: null,
           meetings: [
             ImportedMeeting(
               sourceMeetingKey: 'r1',
@@ -735,10 +707,6 @@ void main() {
         ImportedCourse(
           sourceCourseKey: 'course-1',
           name: '已删除课程',
-          code: null,
-          teachingClass: null,
-          credits: null,
-          assessment: null,
           meetings: [
             ImportedMeeting(
               sourceMeetingKey: 'rule-1',
@@ -809,10 +777,6 @@ void main() {
                 ImportedCourse(
                   sourceCourseKey: entry.$1,
                   name: entry.$2,
-                  code: null,
-                  teachingClass: null,
-                  credits: null,
-                  assessment: null,
                   meetings: [
                     ImportedMeeting(
                       sourceMeetingKey: 'rule-${entry.$1}',
@@ -869,10 +833,6 @@ void main() {
         ImportedCourse(
           sourceCourseKey: 'course-a',
           name: '课程 A',
-          code: null,
-          teachingClass: null,
-          credits: null,
-          assessment: null,
           meetings: [
             ImportedMeeting(
               sourceMeetingKey: 'rule-a',
@@ -933,10 +893,6 @@ void main() {
             ImportedCourse(
               sourceCourseKey: 'course-identity',
               name: '软件测试',
-              code: 'CS301',
-              teachingClass: '软件工程2401',
-              credits: 2,
-              assessment: '考查',
               meetings: omitMeeting
                   ? const <ImportedMeeting>[]
                   : [
@@ -1094,10 +1050,6 @@ void main() {
             ImportedCourse(
               sourceCourseKey: 'course-structural-identity',
               name: '软件测试',
-              code: 'CS301',
-              teachingClass: '软件工程2401',
-              credits: 2,
-              assessment: '考查',
               meetings: [
                 ImportedMeeting(
                   sourceMeetingKey: meetingKey,

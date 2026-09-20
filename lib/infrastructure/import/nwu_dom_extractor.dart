@@ -43,6 +43,33 @@ class NwuDomExtractor {
   // of waiting for the Dart validator to reject them later.
   const maxSupportedSections = 11;
 
+  const hashIdentity = (value) => {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index++) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0');
+  };
+
+  const syntheticCourseKey = (
+    name,
+    weekday,
+    startSection,
+    endSection,
+    identityHint = '',
+  ) => {
+    const value = [
+      'nwu-v2',
+      normalize(name),
+      identityHint,
+      weekday,
+      startSection,
+      endSection,
+    ].join('|');
+    return 'nwu-v2|course|' + hashIdentity(value);
+  };
+
   const issue = (path, message, severity = 'warning', details = null) => {
     const item = { path: path, message: message, severity: severity };
     if (details && typeof details === 'object') item.details = details;
@@ -98,10 +125,6 @@ class NwuDomExtractor {
   const addMeeting = ({
     sourceCourseKey,
     name,
-    code = null,
-    teachingClass = null,
-    credits = null,
-    assessment = null,
     weekday,
     startSection,
     endSection,
@@ -121,22 +144,9 @@ class NwuDomExtractor {
       course = {
         sourceCourseKey: sourceCourseKey,
         name: name,
-        code: code,
-        teachingClass: teachingClass,
-        credits: credits,
-        assessment: assessment,
         meetings: [],
       };
       courses.push(course);
-    } else {
-      if (course.code == null && code != null) course.code = code;
-      if (course.teachingClass == null && teachingClass != null) {
-        course.teachingClass = teachingClass;
-      }
-      if (course.credits == null && credits != null) course.credits = credits;
-      if (course.assessment == null && assessment != null) {
-        course.assessment = assessment;
-      }
     }
 
     // Keep identity tied to the recurring time pattern, not mutable display
@@ -280,63 +290,6 @@ class NwuDomExtractor {
     const teacherText = normalize(
       source.slice(teacher.end, teacherEnd ?? source.length),
     );
-    const teachingClassEnd = firstMarkerIndexAfter(teachingClass?.end ?? -1, [
-      classComposition,
-      assessment,
-      selectionNote,
-      hours,
-      creditsMarker,
-      courseCode,
-    ]);
-    const teachingClassText = teachingClass == null
-      ? null
-      : normalize(
-          source.slice(
-            teachingClass.end,
-            teachingClassEnd ?? source.length,
-          ),
-        ) || null;
-    const assessmentEnd = firstMarkerIndexAfter(assessment?.end ?? -1, [
-      selectionNote,
-      hours,
-      creditsMarker,
-      courseCode,
-    ]);
-    const assessmentText = assessment == null
-      ? null
-      : normalize(
-          source.slice(assessment.end, assessmentEnd ?? source.length),
-        ) || null;
-    const creditsText = creditsMarker == null
-      ? ''
-      : normalize(source.slice(creditsMarker.end));
-    const creditsMatch = creditsText.match(/^\d+(?:\.\d+)?/);
-    const credits = creditsMatch == null ? null : Number(creditsMatch[0]);
-    const courseCodeEnd = firstMarkerIndexAfter(courseCode?.end ?? -1, [
-      week,
-      campus,
-      room,
-      teacher,
-      teachingClass,
-      classComposition,
-      assessment,
-      selectionNote,
-      hours,
-      creditsMarker,
-    ]);
-    const courseCodeText = courseCode == null
-      ? null
-      : normalize(
-          source.slice(courseCode.end, courseCodeEnd ?? source.length),
-        ) || null;
-    if (creditsText && !Number.isFinite(credits)) {
-      issue(
-        path + '.credits',
-        '学分格式无法识别，已按空值处理',
-        'warning',
-        details,
-      );
-    }
     if (!name) {
       issue(path + '.courseName', '课程名为空，已跳过该行', 'error', details);
       return;
@@ -347,14 +300,13 @@ class NwuDomExtractor {
     }
 
     addMeeting({
-      sourceCourseKey:
-        'dom-list|' + (courseCodeText || name) + '|' +
-        (teachingClassText || ''),
+      sourceCourseKey: syntheticCourseKey(
+        name,
+        weekday,
+        startSection,
+        endSection,
+      ),
       name: name,
-      code: courseCodeText,
-      teachingClass: teachingClassText,
-      credits: credits,
-      assessment: assessmentText,
       weekday: weekday,
       startSection: startSection,
       endSection: endSection,
@@ -481,6 +433,37 @@ class NwuDomExtractor {
   const buildPayload = () => {
     const totalWeeks = maxWeek > 0 ? maxWeek : 20;
     const academicYear = year[1] + '-' + year[2];
+    const fingerprints = new Map();
+    const normalizedCourses = courses.map((course) => {
+      const shapes = course.meetings.map((meeting) => [
+        meeting.weekday,
+        meeting.startSection,
+        meeting.endSection,
+        normalize(meeting.weekText),
+      ].join('|')).sort();
+      const fingerprint = 'nwu-v2|course|' + hashIdentity([
+        normalize(course.name),
+        ...shapes,
+      ].join('|'));
+      const ordinal = fingerprints.get(fingerprint) || 0;
+      fingerprints.set(fingerprint, ordinal + 1);
+      const sourceCourseKey = ordinal === 0
+        ? fingerprint
+        : fingerprint + '|duplicate-' + ordinal;
+      return {
+        sourceCourseKey: sourceCourseKey,
+        name: course.name,
+        meetings: course.meetings.map((meeting) => ({
+          ...meeting,
+          sourceMeetingKey: sourceCourseKey + '|meeting|' + [
+            meeting.weekday,
+            meeting.startSection,
+            meeting.endSection,
+            normalize(meeting.weekText),
+          ].join('|'),
+        })),
+      };
+    });
     return {
       semester: {
         remoteTermKey: academicYear + '-' + term,
@@ -490,7 +473,7 @@ class NwuDomExtractor {
         totalWeeks: totalWeeks,
       },
       totalWeeks: totalWeeks,
-      courses: courses,
+      courses: normalizedCourses,
       issues: issues,
     };
   };
@@ -736,16 +719,12 @@ class NwuDomExtractor {
       uniqueHeaderIndex(headers, ['节次', '上课节次']);
     const weekIndex =
       uniqueHeaderIndex(headers, ['周次', '上课周次']);
-    const codeIndex = headerIndex(headers, ['课程代码', '课程编号', '课程号']);
     const teacherIndex =
       headerIndex(headers, ['教师', '任课教师', '上课教师']);
     const campusIndex =
       headerIndex(headers, ['校区', '校区名称']);
     const roomIndex =
       headerIndex(headers, ['教室', '上课地点', '地点']);
-    const classIndex = headerIndex(headers, ['教学班', '班级']);
-    const creditIndex = headerIndex(headers, ['学分']);
-    const assessmentIndex = headerIndex(headers, ['考核方式', '考试性质']);
     for (let rowIndex = headerEnd + 1; rowIndex < grid.length; rowIndex++) {
       const rowPath = 'tables[' + tableIndex + '].rows[' + rowIndex + ']';
       const cells = grid[rowIndex] || [];
@@ -799,31 +778,46 @@ class NwuDomExtractor {
         continue;
       }
 
-      const code = codeIndex >= 0 ? cellAt(codeIndex) || null : null;
-      const teachingClass = classIndex >= 0 ? cellAt(classIndex) || null : null;
-      const rawCredits = creditIndex >= 0 ? cellAt(creditIndex) : '';
-      const parsedCredits = rawCredits ? Number(rawCredits) : NaN;
-      const credits = Number.isFinite(parsedCredits) && parsedCredits >= 0
-        ? parsedCredits
-        : null;
-      if (rawCredits && credits == null) {
-        issue(
-          rowPath + '.credits',
-          '学分格式无法识别，已按空值处理',
-          'warning',
-          rowDetails,
-        );
+      // A rowspan on the course-name cell is the only structural grouping
+      // signal available in a metadata-free generic table. Preserve that
+      // group; when no rowspan exists, keep rows separate so two same-name
+      // offerings are never silently merged.
+      let spanStart = null;
+      for (let candidate = rowIndex; candidate > headerEnd; candidate--) {
+        const candidateRow = table.rows[candidate];
+        if (!candidateRow) continue;
+        const candidateNameCell = Array.from(
+          candidateRow.cells || candidateRow.querySelectorAll('td,th'),
+        ).find((cell) => text(cell) === name);
+        if (!candidateNameCell) continue;
+        const declaredSpan = Number(candidateNameCell.rowSpan);
+        const groupRows = candidateRow.parentElement && candidateRow.parentElement.rows
+          ? Array.from(candidateRow.parentElement.rows)
+          : table.rows;
+        const groupIndex = groupRows.indexOf(candidateRow);
+        const span = declaredSpan === 0
+          ? Math.max(1, groupRows.length - Math.max(0, groupIndex))
+          : Math.max(1, declaredSpan || 1);
+        if (candidate + span > rowIndex) spanStart = candidate;
+        break;
       }
+      const identityHint = spanStart == null ? 'row-' + rowIndex : 'span-' + spanStart;
+      const identityDay = spanStart == null
+        ? weekday
+        : dayNumber((grid[spanStart] || [])[dayIndex] || '') || weekday;
+      const identityRange = spanStart == null
+        ? range
+        : sectionRange((grid[spanStart] || [])[sectionIndex] || '') || range;
 
       addMeeting({
-        sourceCourseKey:
-          'dom-grid|' + (code || name) + '|' + (teachingClass || ''),
+        sourceCourseKey: syntheticCourseKey(
+          name,
+          identityDay,
+          identityRange.startSection,
+          identityRange.endSection,
+          identityHint,
+        ),
         name: name,
-        code: code,
-        teachingClass: teachingClass,
-        credits: credits,
-        assessment:
-          assessmentIndex >= 0 ? cellAt(assessmentIndex) || null : null,
         weekday: weekday,
         startSection: range.startSection,
         endSection: range.endSection,

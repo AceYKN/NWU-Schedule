@@ -92,7 +92,6 @@ EffectiveCourseInstance _fixtureInstance() {
     semesterId: 'golden-semester',
     sourceType: CourseSourceType.manual,
     name: '软件测试',
-    code: 'CS301',
     note: 'Golden fixture',
     colorOverride: 0xff526579,
     createdAt: DateTime(2026, 9, 1),

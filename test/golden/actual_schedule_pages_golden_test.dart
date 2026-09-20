@@ -253,10 +253,6 @@ Future<_GoldenFixture> _createFixture() async {
     semesterId: semester.id,
     sourceType: CourseSourceType.manual,
     name: '软件测试',
-    code: 'CS301',
-    teachingClass: '软件工程2401',
-    credits: 2,
-    assessment: '考查',
     note: 'Golden fixture',
     createdAt: week1,
     updatedAt: week1,
@@ -315,10 +311,6 @@ RemoteTimetable _diffTimetable() {
       ImportedCourse(
         sourceCourseKey: 'new-course',
         name: '软件测试',
-        code: 'CS301',
-        teachingClass: '软件工程2401',
-        credits: 2,
-        assessment: '考查',
         meetings: [
           ImportedMeeting(
             sourceMeetingKey: 'new-meeting',

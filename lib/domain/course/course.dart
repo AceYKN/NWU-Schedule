@@ -7,10 +7,6 @@ class Course {
     required this.sourceType,
     this.sourceCourseKey,
     required this.name,
-    this.code,
-    this.teachingClass,
-    this.credits,
-    this.assessment,
     this.note,
     this.colorOverride,
     this.hidden = false,
@@ -22,9 +18,6 @@ class Course {
     if (id.trim().isEmpty || semesterId.trim().isEmpty || name.trim().isEmpty) {
       throw ArgumentError('Course id, semesterId and name must be non-empty');
     }
-    if (credits != null && (!credits!.isFinite || credits! < 0)) {
-      throw ArgumentError.value(credits, 'credits');
-    }
   }
 
   static const Object _unset = Object();
@@ -35,13 +28,6 @@ class Course {
   final String? sourceCourseKey;
   final String name;
 
-  final String? code;
-
-  final String? teachingClass;
-
-  final double? credits;
-
-  final String? assessment;
   final String? note;
 
   /// ARGB color value. Domain stays independent from Flutter's Color class.
@@ -53,10 +39,6 @@ class Course {
 
   Course copyWith({
     String? name,
-    Object? code = _unset,
-    Object? teachingClass = _unset,
-    Object? credits = _unset,
-    Object? assessment = _unset,
     Object? note = _unset,
     Object? colorOverride = _unset,
     bool? hidden,
@@ -69,14 +51,6 @@ class Course {
       sourceType: sourceType,
       sourceCourseKey: sourceCourseKey,
       name: name ?? this.name,
-      code: identical(code, _unset) ? this.code : code as String?,
-      teachingClass: identical(teachingClass, _unset)
-          ? this.teachingClass
-          : teachingClass as String?,
-      credits: identical(credits, _unset) ? this.credits : credits as double?,
-      assessment: identical(assessment, _unset)
-          ? this.assessment
-          : assessment as String?,
       note: identical(note, _unset) ? this.note : note as String?,
       colorOverride: identical(colorOverride, _unset)
           ? this.colorOverride
