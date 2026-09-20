@@ -252,6 +252,14 @@ void main() {
     expect(redacted, contains('raw="321"'));
     expect(redacted, isNot(contains('教师张三')));
     expect(redacted, isNot(contains('教室')));
+
+    final hanWeekWord = redactImportError(
+      const FormatException(
+        'courses[0].meetings[0].weekText 无法解析：raw="周老师 1-18周 教室"',
+      ),
+    );
+    expect(hanWeekWord, contains('raw="1-18"'));
+    expect(hanWeekWord, isNot(contains('周老师')));
   });
 
   test('invalid week diagnostics retain the payload schema and field path',

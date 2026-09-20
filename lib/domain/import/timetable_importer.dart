@@ -8,7 +8,7 @@ String redactImportError(Object error) {
       // DOM columns are shifted. Keep only structural teaching-week
       // characters in an exported diagnostic.
       final raw = match.group(1) ?? '';
-      final safe = raw.replaceAll(RegExp(r'[^0-9单双全周,，、\-~～—至\s]'), '').trim();
+      final safe = raw.replaceAll(RegExp(r'[^0-9,，、\-~～—至\s]'), '').trim();
       return 'raw="$safe"';
     },
   ).replaceAll(
