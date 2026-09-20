@@ -32,6 +32,18 @@ void main() {
 
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
+    final scheduleDisplayTile = find.widgetWithText(ListTile, '课表显示');
+    expect(scheduleDisplayTile, findsOneWidget);
+    await tester.tap(scheduleDisplayTile);
+    await tester.pumpAndSettle();
+    expect(find.text('预览'), findsOneWidget);
+    expect(find.textContaining('A101 · 张老师'), findsOneWidget);
+    await tester.tap(find.widgetWithText(SwitchListTile, '显示教师'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('A101 · 张老师'), findsNothing);
+    expect(find.textContaining('A101'), findsOneWidget);
+    appRouter.go('/settings');
+    await tester.pumpAndSettle();
     await tester.tap(find.text('新建本地学期'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
