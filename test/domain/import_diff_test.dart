@@ -32,14 +32,18 @@ void main() {
     String key = 'course-1',
     String room = '3406',
     String name = '软件测试',
+    String? code = 'CS301',
+    String? teachingClass = '软件工程2401',
+    double? credits = 2,
+    String? assessment = '考查',
   }) =>
       ImportedCourse(
         sourceCourseKey: key,
         name: name,
-        code: 'CS301',
-        teachingClass: '软件工程2401',
-        credits: 2,
-        assessment: '考查',
+        code: code,
+        teachingClass: teachingClass,
+        credits: credits,
+        assessment: assessment,
         meetings: [meeting(room: room)],
       );
 
@@ -126,6 +130,42 @@ void main() {
             .firstWhere((field) => field.field == 'meetings')
             .decision,
         MergeDecision.local);
+  });
+
+  test('includes academic metadata changes in the import diff', () {
+    final diff = const ImportDiffEngine().build(
+      incoming: timetable(
+        [
+          course(
+            code: 'REMOTE-CODE',
+            teachingClass: 'REMOTE-CLASS',
+            credits: 99,
+            assessment: 'REMOTE-ASSESSMENT',
+          ),
+        ],
+      ),
+      local: local(),
+      previousImport: timetable([course()]),
+    );
+
+    expect(diff.changes.single.kind, ImportChangeKind.modified);
+    expect(
+      diff.changes.single.fields.map((field) => field.field),
+      [
+        'name',
+        'code',
+        'teachingClass',
+        'credits',
+        'assessment',
+        'meetings',
+      ],
+    );
+    expect(
+      diff.changes.single.fields
+          .firstWhere((field) => field.field == 'code')
+          .decision,
+      MergeDecision.remote,
+    );
   });
 
   test('divergent local and remote changes produce a conflict', () {

@@ -109,6 +109,59 @@ void main() {
     expect((await repository.loadSemester(semester.id)).courses, isEmpty);
   });
 
+  test('saves a course and removes deleted-rule exceptions atomically',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    const semesterId = 's1';
+    await repository.saveSemester(
+      domain.Semester(
+        id: semesterId,
+        academicYear: '2026-2027',
+        term: domain.SemesterTerm.first,
+        label: '第一学期',
+        createdAt: DateTime(2026, 9, 1),
+      ),
+    );
+    final course = domain.Course(
+      id: 'course-1',
+      semesterId: semesterId,
+      sourceType: domain.CourseSourceType.manual,
+      name: '软件测试',
+    );
+    final oldRule = domain.MeetingRule(
+      id: 'rule-old',
+      courseId: course.id,
+      weekday: 1,
+      startSection: 1,
+      endSection: 2,
+      weekMask: WeekMask.all(20),
+    );
+    await repository.saveCourse(course, [oldRule]);
+    await repository.saveException(
+      domain.CourseException(
+        id: 'exception-old',
+        semesterId: semesterId,
+        courseId: course.id,
+        sourceMeetingId: oldRule.id,
+        sourceDate: DateTime(2026, 9, 7),
+        type: domain.CourseExceptionType.cancel,
+      ),
+    );
+
+    final newRule = oldRule.copyWith(weekday: 2);
+    await repository.saveCourse(
+      course,
+      [newRule],
+      removeExceptionIds: const ['exception-old'],
+    );
+
+    final snapshot = await repository.loadSemester(semesterId);
+    expect(snapshot.meetingRules.single.weekday, 2);
+    expect(snapshot.exceptions, isEmpty);
+  });
+
   test('manual deletion removes course; imported deletion creates tombstone',
       () async {
     final database = AppDatabase(NativeDatabase.memory());
@@ -271,6 +324,10 @@ void main() {
     await repository.commitImportedTimetable(timetable());
     var loaded = await repository.loadSemester('nwu-2026-2027-1');
     expect(loaded.courses.single.sourceType, domain.CourseSourceType.imported);
+    expect(loaded.courses.single.code, 'CS301');
+    expect(loaded.courses.single.teachingClass, '软件工程2401');
+    expect(loaded.courses.single.credits, 2);
+    expect(loaded.courses.single.assessment, '考查');
     expect(loaded.meetingRules.single.room, '3406');
     expect(await repository.loadLatestImport('nwu-2026-2027-1'), isNotNull);
 

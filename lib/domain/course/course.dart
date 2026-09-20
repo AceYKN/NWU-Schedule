@@ -34,9 +34,13 @@ class Course {
   final CourseSourceType sourceType;
   final String? sourceCourseKey;
   final String name;
+
   final String? code;
+
   final String? teachingClass;
+
   final double? credits;
+
   final String? assessment;
   final String? note;
 

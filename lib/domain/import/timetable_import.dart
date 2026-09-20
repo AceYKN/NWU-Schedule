@@ -324,7 +324,9 @@ class TimetableImportParser {
           json['courseKey'] ??
           json['courseId'] ??
           json['id'] ??
-          json['kch'],
+          json['name'] ??
+          json['courseName'] ??
+          json['kcmc'],
       'courses[$index].sourceCourseKey',
     );
     final rawMeetings = json['meetings'] ?? json['rules'] ?? json['schedule'];

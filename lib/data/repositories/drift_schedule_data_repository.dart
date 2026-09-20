@@ -243,11 +243,13 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   @override
   Future<void> saveCourse(
     domain.Course course,
-    List<domain.MeetingRule> rules,
-  ) async {
+    List<domain.MeetingRule> rules, {
+    Iterable<String> removeExceptionIds = const [],
+  }) async {
     if (rules.any((rule) => rule.courseId != course.id)) {
       throw ArgumentError('MeetingRule courseId does not match Course id');
     }
+    final exceptionIds = removeExceptionIds.toSet();
     await database.transaction(() async {
       await database.into(database.courses).insertOnConflictUpdate(
             db.CoursesCompanion.insert(
@@ -287,6 +289,11 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
                 rawWeekText: rule.weekMask.rawText,
               ),
             );
+      }
+      if (exceptionIds.isNotEmpty) {
+        await (database.delete(database.courseExceptions)
+              ..where((table) => table.id.isIn(exceptionIds)))
+            .go();
       }
     });
   }
