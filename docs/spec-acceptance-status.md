@@ -42,6 +42,7 @@
 - 同一 Provider 的实例已在模拟器上覆盖 Small、Medium、Large：Small 显示 `NEXT / 123 / 08:00–09:50`，拉宽后显示 `TODAY` 列表，拉高后显示 `TODAY + TOMORROW`；Medium/Large 的课程行点击进入“课程详情”，空白区域点击回到 Home。
 - 将模拟器时间推进到当天 09:00 后，Small 不再把已结束的 08:00 课程作为 NEXT；推进到下一天 09:00 后，Large 的 TODAY/TOMORROW 均为 `No Class`，Small 选择下一个未来实例。
 - 设备复核发现无地点课程曾在 Native Widget 中显示为字面量 `null`；已修复为 `地点待补充`，重新安装 debug APK 后 `widget_small_meta` 已显示 `08:00  地点待补充`。
+- 通过系统权限控制器完成了通知权限拒绝/重新允许流程：拒绝后权限为 `granted=false`，设置页显示“未获得通知权限，提醒未开启”，已排程 ID 清空；重新允许后权限为 `granted=true`，课程提醒恢复排程。随后重复关闭/开启一次，排程 ID 数量仍为 16，未产生重复 Alarm；`dumpsys alarm` 中的历史取消记录属于系统审计记录，不是活动 Alarm。
 
 以上证据只覆盖设备烟测的子集，仍不等同于真实 NWU 账号导入或完整 Widget 验收。
 
