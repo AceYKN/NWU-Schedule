@@ -292,6 +292,25 @@ assert.equal(
   false,
 );
 
+const invalidSectionDocument = parseFixtureDocument(genericFixture);
+const invalidSectionCell = invalidSectionDocument.tables[0].rows[2].cells[2];
+invalidSectionCell.innerText = '1-12节';
+invalidSectionCell.textContent = '1-12节';
+const invalidSectionPayload = JSON.parse(vm.runInNewContext(extractionScript, {
+  window: {},
+  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+  document: invalidSectionDocument.document,
+}));
+const invalidSectionIssue = invalidSectionPayload.issues.find((issue) =>
+  issue.path.endsWith('.sections') && issue.severity === 'error');
+assert.ok(invalidSectionIssue);
+assert.equal(
+  invalidSectionPayload.courses
+    .flatMap((course) => course.meetings)
+    .some((meeting) => meeting.endSection > 11),
+  false,
+);
+
 const shiftedWeekDocument = parseFixtureDocument(genericFixture);
 const shiftedWeekCell = shiftedWeekDocument.tables[0].rows[2].cells[3];
 shiftedWeekCell.innerText = '1-18周 教室32';

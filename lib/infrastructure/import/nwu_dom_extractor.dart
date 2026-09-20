@@ -38,6 +38,10 @@ class NwuDomExtractor {
   const courses = [];
   const issues = [];
   let maxWeek = 0;
+  // NWU's current undergraduate timetable has eleven schedulable periods.
+  // Keep malformed DOM section values out of the normalized payload instead
+  // of waiting for the Dart validator to reject them later.
+  const maxSupportedSections = 11;
 
   const issue = (path, message, severity = 'warning', details = null) => {
     const item = { path: path, message: message, severity: severity };
@@ -403,6 +407,7 @@ class NwuDomExtractor {
         if (
           currentRange == null ||
           currentRange.startSection < 1 ||
+          currentRange.endSection > maxSupportedSections ||
           currentRange.endSection < currentRange.startSection
         ) {
           issue(path + '.sections', '节次上下文无法识别，已跳过该行', 'error', details);
@@ -562,7 +567,9 @@ class NwuDomExtractor {
       !Number.isInteger(start) ||
       !Number.isInteger(end) ||
       start < 1 ||
-      end < 1
+      end < 1 ||
+      start > maxSupportedSections ||
+      end > maxSupportedSections
     ) {
       return null;
     }
