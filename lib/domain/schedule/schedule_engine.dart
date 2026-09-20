@@ -46,6 +46,13 @@ class ScheduleEngine {
     return _getCoursesForDate(date);
   }
 
+  /// Resolves the teaching week for an absolute instant using the NWU campus
+  /// timezone. Presentation code should use this boundary instead of asking
+  /// [CalendarEngine] to interpret a device-local clock directly.
+  int? teachingWeekAt(DateTime instant) {
+    return calendarEngine.weekOf(CampusClock.toCampusWallTime(instant));
+  }
+
   ScheduleNowState getStateAt(DateTime instant) {
     final now = CampusClock.toCampusWallTime(instant);
     final todayCourses = _getCoursesForDate(now);

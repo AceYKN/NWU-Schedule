@@ -42,8 +42,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         final preferences =
             ref.watch(scheduleDisplayPreferencesProvider).asData?.value ??
                 const ScheduleDisplayPreferences.defaults();
-        final currentWeek =
-            engine.calendarEngine.weekOf(CampusClock.now()) ?? 1;
+        final currentWeek = engine.teachingWeekAt(DateTime.now().toUtc()) ?? 1;
         final maxWeek = engine.calendarEngine.definition.totalWeeks;
         final week = (selectedWeek ?? currentWeek).clamp(1, maxWeek);
         return Scaffold(

@@ -72,6 +72,19 @@ ScheduleEngine makeEngine({
 }
 
 void main() {
+  test('resolves teaching week at the NWU campus timezone boundary', () {
+    final engine = makeEngine();
+
+    expect(
+      engine.teachingWeekAt(DateTime.utc(2026, 9, 13, 15, 59)),
+      1,
+    );
+    expect(
+      engine.teachingWeekAt(DateTime.utc(2026, 9, 13, 16)),
+      2,
+    );
+  });
+
   test('matches a course by template weekday and teaching week', () {
     final engine = makeEngine();
 
