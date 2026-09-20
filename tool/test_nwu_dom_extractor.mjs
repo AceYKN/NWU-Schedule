@@ -597,6 +597,22 @@ assert.equal(
   false,
 );
 
+const missingSectionContextFixture = realListFixture.replace(
+  '<td id="jc_1-3-4">3-4</td>',
+  '<td>3-4</td>',
+);
+const missingSectionContext = runExtraction(missingSectionContextFixture);
+const missingSectionIssue = missingSectionContext.payload.issues.find((issue) =>
+  issue.path.endsWith('.sections') && issue.severity === 'error');
+assert.ok(missingSectionIssue);
+assert.equal(
+  missingSectionContext.payload.courses
+    .filter((course) => course.name === '软件测试（双语）')
+    .flatMap((course) => course.meetings)
+    .some((meeting) => meeting.startSection === 3),
+  false,
+);
+
 const prefixed = runExtraction(
   realListFixture.replace('机器学习★', '【调】机器学习★'),
 );

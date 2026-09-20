@@ -345,6 +345,7 @@ class NwuDomExtractor {
     let currentWeekday = null;
     let currentRange = null;
     let currentGroupKey = null;
+    let currentRangeRowsRemaining = 0;
     let sawCourseInfo = false;
 
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
@@ -360,6 +361,7 @@ class NwuDomExtractor {
         currentWeekday = match ? Number(match[1]) : null;
         currentRange = null;
         currentGroupKey = null;
+        currentRangeRowsRemaining = 0;
       }
 
       const sectionCell = cells.find((cell) =>
@@ -387,7 +389,13 @@ class NwuDomExtractor {
           currentGroupKey = span > 1
             ? 'span-' + rowIndex + '-' + sectionCell.id
             : 'row-' + rowIndex;
+          currentRangeRowsRemaining = span;
         }
+      }
+
+      if (!sectionCell && currentRangeRowsRemaining <= 0) {
+        currentRange = null;
+        currentGroupKey = null;
       }
 
       // Once a section context is present, every non-empty non-key cell is a
@@ -445,6 +453,10 @@ class NwuDomExtractor {
           details: details,
           identityHint: currentGroupKey || 'row-' + rowIndex,
         });
+      }
+
+      if (currentRangeRowsRemaining > 0) {
+        currentRangeRowsRemaining -= 1;
       }
     }
 
