@@ -62,8 +62,11 @@ void main() {
       message: '周次格式无效，已跳过该行',
       severity: ImportIssueSeverity.error,
       details: {
+        'tableId': 'kblist_table',
         'tableIndex': 0,
         'rowIndex': 2,
+        'courseIndex': 1,
+        'rowCount': 9,
         'columnCount': 8,
         'rawLength': 3,
         'rawShape': 'mixed',
@@ -73,7 +76,10 @@ void main() {
     final restored = ImportIssue.fromJson(original.toJson());
 
     expect(restored, isNotNull);
-    expect(restored!.details['rawShape'], 'mixed');
+    expect(restored!.details['tableId'], 'kblist_table');
+    expect(restored.details['courseIndex'], 1);
+    expect(restored.details['rowCount'], 9);
+    expect(restored.details['rawShape'], 'mixed');
     expect(restored.details['parsedNumbers'], [321]);
     expect(restored.toString(), contains('parsedNumbers=[321]'));
     expect(

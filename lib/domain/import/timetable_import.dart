@@ -122,8 +122,11 @@ enum ImportIssueSeverity { warning, error }
 
 class ImportIssue {
   static const _safeDetailKeys = {
+    'tableId',
     'tableIndex',
     'rowIndex',
+    'courseIndex',
+    'rowCount',
     'headerRow',
     'columnCount',
     'rawLength',
