@@ -42,6 +42,28 @@ void main() {
     }
   });
 
+  test('rejects fractional calendar numeric fields instead of truncating', () {
+    for (final invalid in [
+      {'term': 1.5},
+      {'totalWeeks': 20.5},
+      {'revision': 1.5},
+      {
+        'followingBreak': {
+          'kind': 'winter',
+          'label': '寒假',
+          'startDate': '2027-01-16',
+          'endDate': '2027-01-20',
+          'reportedDays': 5.5,
+        },
+      },
+    ]) {
+      expect(
+        () => CalendarDefinition.fromJson({...validCalendar(), ...invalid}),
+        throwsFormatException,
+      );
+    }
+  });
+
   test('catalog rejects duplicate ids, assets and unsafe file names', () {
     final catalog = CalendarCatalog.fromJson({
       'school': 'NWU',

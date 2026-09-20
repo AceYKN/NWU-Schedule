@@ -1,5 +1,21 @@
 import '../../core/utils/date_utils.dart';
 
+int _requiredIntegral(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is num && value.isFinite && value == value.toInt()) {
+    return value.toInt();
+  }
+  throw FormatException('$key must be an integer');
+}
+
+int? _optionalIntegral(Object? value, String key) {
+  if (value == null) return null;
+  if (value is num && value.isFinite && value == value.toInt()) {
+    return value.toInt();
+  }
+  throw FormatException('$key must be an integer');
+}
+
 enum CalendarOverrideType { holiday, useScheduleOf }
 
 enum SchoolBreakKind { winter, summer }
@@ -30,8 +46,8 @@ class SchoolBreak {
       label: json['label'] as String,
       startDate: parseDateOnly(json['startDate'] as String),
       endDate: parseDateOnly(json['endDate'] as String),
-      reportedWeeks: (json['reportedWeeks'] as num?)?.toInt(),
-      reportedDays: (json['reportedDays'] as num?)?.toInt(),
+      reportedWeeks: _optionalIntegral(json['reportedWeeks'], 'reportedWeeks'),
+      reportedDays: _optionalIntegral(json['reportedDays'], 'reportedDays'),
     );
   }
 
@@ -132,7 +148,7 @@ class CalendarDefinition {
       id: json['id'] as String,
       school: json['school'] as String,
       academicYear: json['academicYear'] as String,
-      term: (json['term'] as num).toInt(),
+      term: _requiredIntegral(json, 'term'),
       semesterStartDate: dateOnly(
         parseDateOnly(
           (json['semesterStartDate'] ?? json['startDate']) as String,
@@ -150,8 +166,8 @@ class CalendarDefinition {
           (json['semesterEndDate'] ?? json['endDate']) as String,
         ),
       ),
-      totalWeeks: (json['totalWeeks'] as num).toInt(),
-      revision: (json['revision'] as num).toInt(),
+      totalWeeks: _requiredIntegral(json, 'totalWeeks'),
+      revision: _requiredIntegral(json, 'revision'),
       dateOverrides: List.unmodifiable(overrides),
       followingBreak: json['followingBreak'] == null
           ? null
