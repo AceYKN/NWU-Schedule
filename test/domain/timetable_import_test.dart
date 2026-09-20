@@ -87,6 +87,17 @@ void main() {
       ).toString(),
       isNot(contains('不得输出')),
     );
+    final details = const ImportIssue(
+      path: 'tables[0].rows[2].weeks',
+      message: '周次格式无效',
+      severity: ImportIssueSeverity.error,
+      details: {
+        'courseName': '不得输出',
+        'parsedNumbers': [321]
+      },
+    ).toJson()['details'] as Map;
+    expect(details.containsKey('courseName'), isFalse);
+    expect(details['parsedNumbers'], [321]);
   });
 
   test('validates empty IDs, bad weekday, section and duplicate rules', () {

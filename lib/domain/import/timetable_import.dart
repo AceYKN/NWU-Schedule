@@ -143,12 +143,15 @@ class ImportIssue {
   final ImportIssueSeverity severity;
   final Map<String, Object?> details;
 
-  Map<String, Object?> toJson() => {
-        'path': path,
-        'message': message,
-        'severity': severity.name,
-        if (details.isNotEmpty) 'details': details,
-      };
+  Map<String, Object?> toJson() {
+    final safeDetails = _filterDetails(details);
+    return {
+      'path': path,
+      'message': message,
+      'severity': severity.name,
+      if (safeDetails.isNotEmpty) 'details': safeDetails,
+    };
+  }
 
   static ImportIssue? fromJson(Object? value) {
     if (value is! Map) return null;
@@ -168,15 +171,32 @@ class ImportIssue {
       _ => null,
     };
     if (parsedSeverity == null) return null;
-    final details = rawDetails is Map
-        ? Map<String, Object?>.from(rawDetails)
-        : const <String, Object?>{};
+    final details = _filterDetails(rawDetails);
     return ImportIssue(
       path: path,
       message: message,
       severity: parsedSeverity,
       details: details,
     );
+  }
+
+  static Map<String, Object?> _filterDetails(Object? value) {
+    if (value is! Map) return const <String, Object?>{};
+    final safe = <String, Object?>{};
+    for (final entry in value.entries) {
+      if (entry.key is! String ||
+          !_safeDetailKeys.contains(entry.key as String)) {
+        continue;
+      }
+      final item = entry.value;
+      if (item == null || item is String || item is num || item is bool) {
+        safe[entry.key as String] = item;
+      } else if (item is List &&
+          item.every((element) => element is String || element is num)) {
+        safe[entry.key as String] = List<Object?>.from(item);
+      }
+    }
+    return Map.unmodifiable(safe);
   }
 
   @override
