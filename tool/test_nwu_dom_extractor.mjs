@@ -18,6 +18,13 @@ const scriptEnd = dartSource.indexOf(`${quote};`, scriptBodyStart);
 assert.notEqual(scriptEnd, -1, 'extraction script terminator is present');
 const extractionScript = dartSource.slice(scriptBodyStart, scriptEnd);
 new vm.Script(extractionScript);
+const contextMarker = `static const contextScript = r${quote}`;
+const contextStart = dartSource.indexOf(contextMarker);
+assert.notEqual(contextStart, -1, 'context script marker is present');
+const contextBodyStart = contextStart + contextMarker.length;
+const contextEnd = dartSource.indexOf(`${quote};`, contextBodyStart);
+assert.notEqual(contextEnd, -1, 'context script terminator is present');
+new vm.Script(dartSource.slice(contextBodyStart, contextEnd));
 
 const fixture = fs.readFileSync(
   path.join(repoRoot, 'test', 'fixtures', 'zhengfang', 'timetable_grid_fixture.html'),
