@@ -72,6 +72,9 @@ class NwuDomExtractor {
       issue(path, '周次格式无效，已跳过该行', 'error', weekDetails);
       return false;
     }
+    if (/单|双|全/.test(weekText) && !weekNumbers.length) {
+      maxWeek = Math.max(maxWeek, 20);
+    }
     for (const week of weekNumbers) maxWeek = Math.max(maxWeek, week);
     return true;
   };
