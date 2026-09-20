@@ -230,7 +230,7 @@ class _HomeContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolved = engine.calendarEngine.resolve(state.now);
+    final resolved = engine.resolveDate(state.now);
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
@@ -321,7 +321,7 @@ Future<void> _dismissCalendarUpdate(
 ) async {
   await ref.read(scheduleDataRepositoryProvider).saveSemester(
         ready.semester.copyWith(
-          calendarRevision: ready.engine.calendarEngine.definition.revision,
+          calendarRevision: ready.engine.calendarRevision,
         ),
       );
 }

@@ -161,7 +161,7 @@ class _MonthContent extends StatelessWidget {
             return _MonthCell(
               date: day,
               courses: courses,
-              resolved: engine.calendarEngine.resolve(day),
+              resolved: engine.resolveDate(day),
             );
           },
         ),

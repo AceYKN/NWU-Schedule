@@ -602,6 +602,10 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
 
   @override
   Future<ImportDiff> previewImportedTimetable(RemoteTimetable timetable) async {
+    final report = validateTimetable(timetable);
+    if (!report.isValid) {
+      throw TimetableImportValidationException(report);
+    }
     final context = await _loadImportDiffContext(timetable);
     return context.diff;
   }

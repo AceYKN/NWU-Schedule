@@ -43,7 +43,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             ref.watch(scheduleDisplayPreferencesProvider).asData?.value ??
                 const ScheduleDisplayPreferences.defaults();
         final currentWeek = engine.teachingWeekAt(DateTime.now().toUtc()) ?? 1;
-        final maxWeek = engine.calendarEngine.definition.totalWeeks;
+        final maxWeek = engine.totalWeeks;
         final week = (selectedWeek ?? currentWeek).clamp(1, maxWeek);
         return Scaffold(
           body: _WeekContent(
@@ -58,7 +58,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
               pageContext: context,
               ref: ref,
               semesterId: engine.semesterId,
-              initialDate: engine.calendarEngine.definition.weekStart(week),
+              initialDate: engine.weekStart(week),
             ),
           ),
           floatingActionButton: preferences.showBackToCurrentWeekFab &&
@@ -150,7 +150,7 @@ class _WeekContentState extends State<_WeekContent> {
           child: _WeekToolbar(
             week: widget.week,
             maxWeek: widget.maxWeek,
-            definition: widget.engine.calendarEngine.definition,
+            definition: widget.engine.calendarDefinition,
             onWeekChanged: widget.onWeekChanged,
             onAddCourse: widget.onAddCourse,
             onAddException: widget.onAddException,

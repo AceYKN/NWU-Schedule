@@ -650,6 +650,59 @@ void main() {
     expect(await database.select(database.importSnapshots).get(), hasLength(1));
   });
 
+  test('rejects invalid timetable previews before reading the local diff',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final timetable = RemoteTimetable(
+      semester: const RemoteSemester(
+        remoteTermKey: '2026-2027-1',
+        academicYear: '2026-2027',
+        term: 1,
+        label: '2026-2027 第一学期',
+      ),
+      totalWeeks: 20,
+      courses: [
+        ImportedCourse(
+          sourceCourseKey: 'course-a',
+          name: '课程 A',
+          code: null,
+          teachingClass: null,
+          credits: null,
+          assessment: null,
+          meetings: [
+            ImportedMeeting(
+              sourceMeetingKey: 'rule-a',
+              weekday: 1,
+              startSection: 1,
+              endSection: 2,
+              teacher: null,
+              campus: null,
+              room: null,
+              weekMask: WeekMask.all(20),
+            ),
+          ],
+        ),
+      ],
+      issues: [
+        const ImportIssue(
+          path: 'tables[0].rows[2].sections',
+          message: '节次无法识别，已跳过该行',
+          severity: ImportIssueSeverity.error,
+        ),
+      ],
+    );
+
+    await expectLater(
+      repository.previewImportedTimetable(timetable),
+      throwsA(isA<TimetableImportValidationException>()),
+    );
+    expect(await database.select(database.semesters).get(), isEmpty);
+    expect(await database.select(database.courses).get(), isEmpty);
+    expect(await database.select(database.importSnapshots).get(), isEmpty);
+  });
+
   test('preserves meeting identity when mutable timetable fields change',
       () async {
     final database = AppDatabase(NativeDatabase.memory());

@@ -42,6 +42,21 @@ class ScheduleEngine {
   final List<CourseException> exceptions;
   final NwuPeriodRepository periodRepository;
 
+  /// The calendar definition used by this schedule. Presentation code should
+  /// use this read-only view through [ScheduleEngine] rather than reaching
+  /// into [CalendarEngine] directly.
+  CalendarDefinition get calendarDefinition => calendarEngine.definition;
+
+  int get totalWeeks => calendarDefinition.totalWeeks;
+
+  int get calendarRevision => calendarDefinition.revision;
+
+  DateTime weekStart(int teachingWeek) =>
+      calendarDefinition.weekStart(teachingWeek);
+
+  ResolvedCalendarDate resolveDate(DateTime date) =>
+      calendarEngine.resolve(date);
+
   List<EffectiveCourseInstance> getCoursesForDate(DateTime date) {
     return _getCoursesForDate(date);
   }

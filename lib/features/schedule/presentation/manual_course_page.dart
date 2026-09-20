@@ -168,7 +168,7 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
     }
     setState(() => _saving = true);
     try {
-      final totalWeeks = ready.engine.calendarEngine.definition.totalWeeks;
+      final totalWeeks = ready.engine.totalWeeks;
       final masks = [
         for (final draft in _drafts) draft.weekMask(totalWeeks),
       ];
@@ -262,7 +262,7 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
         if (state is! ScheduleReady) {
           return const Center(child: Text('请先在设置中创建学期'));
         }
-        final totalWeeks = state.engine.calendarEngine.definition.totalWeeks;
+        final totalWeeks = state.engine.totalWeeks;
         _initialize(state, totalWeeks);
         if (widget.courseId != null && _existingCourse == null) {
           return const Center(child: Text('找不到这门课程'));
