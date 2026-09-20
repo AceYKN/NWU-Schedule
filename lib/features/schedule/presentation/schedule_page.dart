@@ -584,25 +584,29 @@ class _DayHeader extends StatelessWidget {
       child: Container(
         color: day.isToday ? scheme.primaryContainer : scheme.surfaceContainer,
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(day.label,
-                style: const TextStyle(fontWeight: FontWeight.w700)),
-            Text(
-              '${day.date.day}',
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-            if (day.marker != null)
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(day.label,
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
               Text(
-                day.marker!,
-                style: TextStyle(
-                  color: markerColor,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                ),
+                '${day.date.day}',
+                style: Theme.of(context).textTheme.labelSmall,
               ),
-          ],
+              if (day.marker != null)
+                Text(
+                  day.marker!,
+                  style: TextStyle(
+                    color: markerColor,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

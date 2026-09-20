@@ -100,7 +100,10 @@ void main() {
 
     await pumpPage(const SchedulePage());
     expect(find.text('周课表'), findsOneWidget);
-    expect(find.text('软件测试'), findsOneWidget);
+    final courseFinder = find.textContaining('软件测试', skipOffstage: false);
+    await tester.ensureVisible(courseFinder);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('软件测试'), findsOneWidget);
 
     await pumpPage(const CalendarPage());
     expect(find.byTooltip('选择日期'), findsOneWidget);
