@@ -216,6 +216,44 @@ void main() {
     );
   });
 
+  test('wraps malformed semester payloads with schema diagnostics', () async {
+    final importer = NwuZhengfangV9Importer(
+      readPayload: () async => {
+        'semesters': [
+          {'academicYear': 'not-a-year'},
+        ],
+      },
+    );
+
+    await expectLater(
+      importer.getSemesters(),
+      throwsA(
+        isA<TimetableImportFailure>()
+            .having(
+              (failure) => failure.diagnostic.parserStage,
+              'parserStage',
+              'semester',
+            )
+            .having(
+              (failure) => failure.diagnostic.responseSchemaKeys,
+              'responseSchemaKeys',
+              contains('semesters'),
+            ),
+      ),
+    );
+  });
+
+  test('redacts arbitrary raw week cell text from diagnostics', () {
+    final redacted = redactImportError(
+      const FormatException(
+        'courses[0].meetings[0].weekText 无法解析：raw="教师张三 321 教室"',
+      ),
+    );
+    expect(redacted, contains('raw="321"'));
+    expect(redacted, isNot(contains('教师张三')));
+    expect(redacted, isNot(contains('教室')));
+  });
+
   test('invalid week diagnostics retain the payload schema and field path',
       () async {
     final importer = NwuZhengfangV9Importer(

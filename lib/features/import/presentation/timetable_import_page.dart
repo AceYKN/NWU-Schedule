@@ -49,6 +49,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   int? _lastHttpStatus;
   bool _bridgeEnabled = false;
   int _navigationGeneration = 0;
+  Future<void> _bridgeTransition = Future<void>.value();
   String? _latestStartedUrl;
   bool _reading = false;
   bool _saving = false;
@@ -71,7 +72,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
           onPageStarted: (url) {
             _latestStartedUrl = url;
             _navigationGeneration++;
-            unawaited(_disableBridge());
+            _queueBridgeDisable();
             if (mounted) setState(() => _currentUrl = url);
           },
           onPageFinished: (url) => _onPageFinished(
@@ -106,6 +107,10 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       await _disableBridge();
       return;
     }
+    await _bridgeTransition;
+    if (generation != _navigationGeneration || url != _latestStartedUrl) {
+      return;
+    }
     if (mounted) setState(() => _currentUrl = url);
     if (NwuZhengfangV9Importer.isLoginUri(uri) ||
         !NwuZhengfangV9Importer.isTrustedTimetableUri(uri) ||
@@ -120,11 +125,21 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       return;
     }
     if (_bridgeEnabled || !mounted) return;
-    await _controller.addJavaScriptChannel(
-      _bridgeName,
-      onMessageReceived: (message) => _handleBridgeMessage(message.message),
-    );
-    _bridgeEnabled = true;
+    final transition = _bridgeTransition.then<void>((_) async {
+      if (generation != _navigationGeneration || !mounted) return;
+      await _controller.addJavaScriptChannel(
+        _bridgeName,
+        onMessageReceived: (message) =>
+            _handleBridgeMessage(message.message, generation: generation),
+      );
+      if (generation != _navigationGeneration || !mounted) {
+        await _removeBridgeChannel();
+        return;
+      }
+      _bridgeEnabled = true;
+    });
+    _bridgeTransition = transition;
+    await transition;
   }
 
   Future<bool> _hasTimetableContext() async {
@@ -142,6 +157,17 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   Future<void> _disableBridge() async {
     if (!_bridgeEnabled) return;
     _bridgeEnabled = false;
+    await _removeBridgeChannel();
+  }
+
+  void _queueBridgeDisable() {
+    _bridgeEnabled = false;
+    _bridgeTransition = _bridgeTransition.then<void>((_) async {
+      await _removeBridgeChannel();
+    });
+  }
+
+  Future<void> _removeBridgeChannel() async {
     await _bestEffort(() => _controller.removeJavaScriptChannel(_bridgeName));
   }
 
@@ -171,25 +197,29 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       _diff = null;
       _resolution = ImportConflictResolution.empty;
     });
+    final generation = _navigationGeneration;
     final importer = NwuZhengfangV9Importer(readPayload: _readPayload);
     try {
       final semesters = await importer.getSemesters();
       final selected = await _selectRemoteSemester(semesters);
       if (selected == null) return;
       final timetable = await importer.importSemester(selected);
+      if (generation != _navigationGeneration) return;
       final diff = await _buildDiff(timetable);
-      if (!mounted) return;
+      if (!mounted || generation != _navigationGeneration) return;
       setState(() {
         _timetable = timetable;
         _diff = diff;
         _resolution = ImportConflictResolution.empty;
       });
     } on TimetableImportFailure catch (error) {
+      if (generation != _navigationGeneration) return;
       _setFailure(
         importFailureUserMessage(error),
         await _enrichDiagnostic(error.diagnostic),
       );
     } on Object catch (error) {
+      if (generation != _navigationGeneration) return;
       _setFailure(
         nwuUserMessage(error, action: '无法读取课表'),
         await _enrichDiagnostic(ImportDiagnostic(
@@ -238,11 +268,18 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     );
   }
 
-  void _handleBridgeMessage(String message) {
-    unawaited(_handleBridgeMessageAsync(message));
+  void _handleBridgeMessage(
+    String message, {
+    required int generation,
+  }) {
+    unawaited(_handleBridgeMessageAsync(message, generation: generation));
   }
 
-  Future<void> _handleBridgeMessageAsync(String message) async {
+  Future<void> _handleBridgeMessageAsync(
+    String message, {
+    required int generation,
+  }) async {
+    if (!_bridgeEnabled || generation != _navigationGeneration) return;
     try {
       if (message.length > _maxPayloadCharacters) {
         throw const FormatException('课表桥接数据超过大小限制');
@@ -258,7 +295,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       final report = validateTimetable(timetable);
       if (!report.isValid) throw FormatException(report.issues.join('; '));
       final diff = await _buildDiff(timetable);
-      if (mounted) {
+      if (mounted && _bridgeEnabled && generation == _navigationGeneration) {
         setState(() {
           _timetable = timetable;
           _diff = diff;
@@ -268,14 +305,17 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
         });
       }
     } on Object catch (error) {
+      if (generation != _navigationGeneration) return;
+      final diagnostic = await _enrichDiagnostic(ImportDiagnostic(
+        adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+        parserStage: 'bridge-message',
+        currentUrlPath: _currentUrlPath,
+        error: redactImportError(error),
+      ));
+      if (generation != _navigationGeneration) return;
       _setFailure(
         nwuUserMessage(error, action: '课表桥接数据无效'),
-        await _enrichDiagnostic(ImportDiagnostic(
-          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
-          parserStage: 'bridge-message',
-          currentUrlPath: _currentUrlPath,
-          error: redactImportError(error),
-        )),
+        diagnostic,
       );
     }
   }

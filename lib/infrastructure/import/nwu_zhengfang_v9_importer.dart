@@ -53,14 +53,33 @@ class NwuZhengfangV9Importer implements TimetableImporter {
   @override
   Future<List<RemoteSemester>> getSemesters() async {
     final payload = await _payload();
-    final semesters = <RemoteSemester>[];
-    for (final candidate in _semesterCandidates(payload)) {
-      final semester = parser.parseSemester(candidate);
-      if (semesters.every((item) => item.id != semester.id)) {
-        semesters.add(semester);
+    try {
+      final candidates = _semesterCandidates(payload);
+      if (candidates.isEmpty) {
+        throw const FormatException('semester candidates must be a list');
       }
+      final semesters = <RemoteSemester>[];
+      for (final candidate in candidates) {
+        final semester = parser.parseSemester(candidate);
+        if (semesters.every((item) => item.id != semester.id)) {
+          semesters.add(semester);
+        }
+      }
+      return List.unmodifiable(semesters);
+    } on TimetableImportFailure {
+      rethrow;
+    } on Object catch (error) {
+      throw TimetableImportFailure(
+        '无法识别教务系统返回的学期数据',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'semester',
+          responseSchemaKeys:
+              payload.keys.map((key) => key.toString()).toList(),
+          error: redactImportError(error),
+        ),
+      );
     }
-    return List.unmodifiable(semesters);
   }
 
   @override

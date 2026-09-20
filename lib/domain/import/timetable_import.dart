@@ -467,7 +467,12 @@ class TimetableImportParser {
   }
 
   static int _int(Object? value, String path) {
-    if (value is num) return value.toInt();
+    if (value is num) {
+      if (!value.isFinite || value != value.toInt()) {
+        throw FormatException('$path must be an integer');
+      }
+      return value.toInt();
+    }
     final parsed = int.tryParse(value?.toString() ?? '');
     if (parsed != null) return parsed;
     throw FormatException('$path must be an integer');
@@ -475,8 +480,9 @@ class TimetableImportParser {
 
   static double? _optionalDouble(Object? value) {
     if (value == null) return null;
-    if (value is num) return value.toDouble();
-    return double.tryParse(value.toString().trim());
+    if (value is num) return value.isFinite ? value.toDouble() : null;
+    final parsed = double.tryParse(value.toString().trim());
+    return parsed?.isFinite == true ? parsed : null;
   }
 }
 
@@ -524,6 +530,14 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
         severity: ImportIssueSeverity.error,
       ));
     }
+    if (course.credits != null &&
+        (!course.credits!.isFinite || course.credits! < 0)) {
+      issues.add(ImportIssue(
+        path: '$coursePath.credits',
+        message: '学分必须是非负有限数字',
+        severity: ImportIssueSeverity.error,
+      ));
+    }
     if (!courseKeys.add(course.sourceCourseKey)) {
       issues.add(ImportIssue(
         path: '$coursePath.sourceCourseKey',
@@ -553,7 +567,16 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
           severity: ImportIssueSeverity.error,
         ));
       }
-      if (meeting.weekMask.weeks.any((week) => week > timetable.totalWeeks)) {
+      final maskValue = meeting.weekMask.value;
+      final maskIsValid = maskValue > 0 && maskValue.bitLength <= 64;
+      if (!maskIsValid) {
+        issues.add(ImportIssue(
+          path: '$path.weekMask',
+          message: '周次位掩码无效',
+          severity: ImportIssueSeverity.error,
+        ));
+      } else if (meeting.weekMask.weeks
+          .any((week) => week > timetable.totalWeeks)) {
         issues.add(ImportIssue(
           path: '$path.weekText',
           message: '周次超过学期教学周',

@@ -158,6 +158,47 @@ void main() {
     expect(validateTimetable(empty).isValid, isFalse);
   });
 
+  test('rejects numeric week masks that bypass text parsing', () {
+    final timetable = const TimetableImportParser().parse({
+      ...fixture,
+      'courses': [
+        {
+          'sourceCourseKey': 'numeric-mask',
+          'name': '软件测试',
+          'meetings': [
+            {
+              'sourceMeetingKey': 'numeric-mask-meeting',
+              'weekday': 1,
+              'startSection': 1,
+              'endSection': 2,
+              'weekMask': 0,
+            },
+          ],
+        },
+      ],
+    });
+
+    final report = validateTimetable(timetable);
+    expect(report.isValid, isFalse);
+    expect(
+      report.issues.any((issue) => issue.path.endsWith('.weekMask')),
+      isTrue,
+    );
+  });
+
+  test('rejects non-integral numeric scalar fields', () {
+    expect(
+      () => const TimetableImportParser().parse({
+        ...fixture,
+        'semester': {
+          ...(fixture['semester'] as Map<String, dynamic>),
+          'totalWeeks': 20.5,
+        },
+      }),
+      throwsFormatException,
+    );
+  });
+
   test('parser does not silently accept a missing course list', () {
     expect(
       () => const TimetableImportParser().parse({
