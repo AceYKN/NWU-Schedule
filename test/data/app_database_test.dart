@@ -169,4 +169,80 @@ void main() {
       throwsA(isA<Exception>()),
     );
   });
+
+  test('cascades every semester-owned row when a semester is deleted',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final created = DateTime(2026, 9, 1);
+
+    await database.into(database.semesters).insert(
+          SemestersCompanion.insert(
+            id: 'semester-cascade',
+            academicYear: '2026-2027',
+            term: 1,
+            label: '级联删除测试',
+            createdAt: created,
+          ),
+        );
+    await database.into(database.courses).insert(
+          CoursesCompanion.insert(
+            id: 'course-cascade',
+            semesterId: 'semester-cascade',
+            sourceType: 'imported',
+            name: '级联课程',
+            createdAt: created,
+            updatedAt: created,
+          ),
+        );
+    await database.into(database.meetingRules).insert(
+          MeetingRulesCompanion.insert(
+            id: 'rule-cascade',
+            courseId: 'course-cascade',
+            weekday: DateTime.monday,
+            startSection: 1,
+            endSection: 2,
+            weekMask: 1,
+            rawWeekText: '1周',
+          ),
+        );
+    await database.into(database.courseExceptions).insert(
+          CourseExceptionsCompanion.insert(
+            id: 'exception-cascade',
+            semesterId: 'semester-cascade',
+            type: 'cancel',
+            createdAt: created,
+          ),
+        );
+    await database.into(database.importSnapshots).insert(
+          ImportSnapshotsCompanion.insert(
+            id: 'snapshot-cascade',
+            semesterId: 'semester-cascade',
+            importedAt: created,
+            adapterVersion: 'test',
+            schemaVersion: 1,
+            normalizedJson: '{}',
+            hash: 'hash',
+          ),
+        );
+    await database.into(database.deletedSourceItems).insert(
+          DeletedSourceItemsCompanion.insert(
+            id: 'tombstone-cascade',
+            semesterId: 'semester-cascade',
+            sourceCourseKey: 'remote-course',
+            deletedAt: created,
+          ),
+        );
+
+    await (database.delete(database.semesters)
+          ..where((table) => table.id.equals('semester-cascade')))
+        .go();
+
+    expect(await database.select(database.semesters).get(), isEmpty);
+    expect(await database.select(database.courses).get(), isEmpty);
+    expect(await database.select(database.meetingRules).get(), isEmpty);
+    expect(await database.select(database.courseExceptions).get(), isEmpty);
+    expect(await database.select(database.importSnapshots).get(), isEmpty);
+    expect(await database.select(database.deletedSourceItems).get(), isEmpty);
+  });
 }
