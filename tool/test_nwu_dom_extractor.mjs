@@ -399,6 +399,39 @@ assert.match(realListFixture, /id="xq_rowspan_1"/);
 assert.match(realListFixture, /id="jc_1-1-2"/);
 assert.match(realListFixture, /计算机技术实验室-321/);
 
+const sameShapeTeachingClassesFixture = `
+<html><body>
+  <div>2026-2027年第1学期某同学的课表</div>
+  <table id="kblist_table">
+    <tr><td>星期</td><td>节次</td><td>课表信息</td></tr>
+    <tr><td id="xq_rowspan_1">星期一</td></tr>
+    <tr>
+      <td id="jc_1-1-2">1-2</td>
+      <td>同名课程★周数：1-16周校区:长安校区上课地点：321教师：教师甲教学班：同名课程-A教学班组成：软件工程202401</td>
+    </tr>
+    <tr>
+      <td id="jc_1-1-2">1-2</td>
+      <td>同名课程★周数：1-16周校区:长安校区上课地点：322教师：教师乙教学班：同名课程-B教学班组成：软件工程202401</td>
+    </tr>
+  </table>
+</body></html>`;
+const sameShapeTeachingClasses = runExtraction(sameShapeTeachingClassesFixture);
+assert.equal(sameShapeTeachingClasses.payload.issues.length, 0);
+assert.equal(sameShapeTeachingClasses.payload.courses.length, 2);
+assert.deepEqual(
+  sameShapeTeachingClasses.payload.courses.map((course) => course.name),
+  ['同名课程', '同名课程'],
+);
+assert.deepEqual(
+  sameShapeTeachingClasses.payload.courses
+    .map((course) => course.meetings[0].room),
+  ['321', '322'],
+);
+assert.equal(
+  JSON.stringify(sameShapeTeachingClasses.payload).includes('教学班-A'),
+  false,
+);
+
 const realList = runExtraction(realListFixture);
 assert.equal(realList.payload.totalWeeks, 18);
 assert.equal(realList.payload.courses.length, 6);

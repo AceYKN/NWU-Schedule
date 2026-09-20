@@ -134,6 +134,7 @@ class NwuDomExtractor {
     weekText,
     path,
     details,
+    identityHint = '',
   }) => {
     if (!validateWeekText(weekText, path + '.weeks', details)) return;
 
@@ -145,6 +146,7 @@ class NwuDomExtractor {
         sourceCourseKey: sourceCourseKey,
         name: name,
         meetings: [],
+        identityHint: identityHint,
       };
       courses.push(course);
     }
@@ -290,6 +292,17 @@ class NwuDomExtractor {
     const teacherText = normalize(
       source.slice(teacher.end, teacherEnd ?? source.length),
     );
+    const teachingClassEnd = firstMarkerIndexAfter(teachingClass?.end ?? -1, [
+      classComposition,
+      assessment,
+      selectionNote,
+      hours,
+      creditsMarker,
+      courseCode,
+    ]);
+    const teachingClassText = teachingClass == null
+      ? ''
+      : normalize(source.slice(teachingClass.end, teachingClassEnd ?? source.length));
     if (!name) {
       issue(path + '.courseName', '课程名为空，已跳过该行', 'error', details);
       return;
@@ -305,6 +318,7 @@ class NwuDomExtractor {
         weekday,
         startSection,
         endSection,
+        teachingClassText,
       ),
       name: name,
       weekday: weekday,
@@ -316,6 +330,9 @@ class NwuDomExtractor {
       weekText: weekText,
       path: path,
       details: details,
+      // The class label is used only as a hashed identity hint. It is not
+      // exposed as product metadata or persisted in the normalized payload.
+      identityHint: teachingClassText,
     });
   };
 
@@ -443,6 +460,7 @@ class NwuDomExtractor {
       ].join('|')).sort();
       const fingerprint = 'nwu-v2|course|' + hashIdentity([
         normalize(course.name),
+        normalize(course.identityHint || ''),
         ...shapes,
       ].join('|'));
       const ordinal = fingerprints.get(fingerprint) || 0;
