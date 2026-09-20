@@ -227,6 +227,10 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
         rules,
         removeExceptionIds: deletedExceptionIds,
       );
+      // The edit route can be reopened immediately after this save. Do not
+      // let it reuse the previous ScheduleEngine snapshot while Drift's
+      // change stream is still scheduling its next emission.
+      ref.invalidate(scheduleLoadProvider);
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       context.go('/schedule');

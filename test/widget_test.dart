@@ -59,6 +59,30 @@ void main() {
     tester.testTextInput.hide();
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
+      find.text('添加上课安排'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final addMeetingButton = find.widgetWithText(
+      OutlinedButton,
+      '添加上课安排',
+    );
+    expect(addMeetingButton, findsOneWidget);
+    expect(
+        tester.widget<OutlinedButton>(addMeetingButton).onPressed, isNotNull);
+    await tester.ensureVisible(addMeetingButton);
+    await tester.tap(addMeetingButton);
+    await tester.pumpAndSettle();
+    expect(find.text('上课安排 1', skipOffstage: false), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Text && widget.data == '上课安排 2',
+        description: 'second meeting heading',
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
       find.text('保存课程'),
       300,
       scrollable: find.byType(Scrollable).first,
@@ -68,17 +92,32 @@ void main() {
     final snapshot = await DriftScheduleDataRepository(database)
         .loadSemester('nwu-2026-2027-1');
     expect(snapshot.courses.single.name, '软件测试');
-    expect(snapshot.meetingRules.single.weekMask.weeks.length, 20);
+    expect(snapshot.meetingRules, hasLength(2));
+    expect(
+        snapshot.meetingRules.every((rule) => rule.weekMask.weeks.length == 20),
+        isTrue);
 
     appRouter.go('/course/${snapshot.courses.single.id}/edit');
     await tester.pumpAndSettle();
     expect(find.text('编辑整门课程'), findsOneWidget);
+    expect(find.text('上课安排 1', skipOffstage: false), findsOneWidget);
     await tester.enterText(
       find.widgetWithText(TextFormField, '课程名 *'),
       '软件测试 II',
     );
     tester.testTextInput.hide();
     await tester.pumpAndSettle();
+    final reopenedSecondHeading = find.byWidgetPredicate(
+      (widget) => widget is Text && widget.data == '上课安排 2',
+      description: 'second meeting heading',
+      skipOffstage: false,
+    );
+    await tester.scrollUntilVisible(
+      reopenedSecondHeading,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(reopenedSecondHeading, findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('保存课程'),
       300,
