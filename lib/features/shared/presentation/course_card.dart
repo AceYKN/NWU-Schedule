@@ -801,7 +801,10 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
       id: 'exception-${DateTime.now().microsecondsSinceEpoch}',
       semesterId: _instance.course.semesterId,
       courseId: _instance.course.id,
-      sourceMeetingId: _type == CourseExceptionType.add ? null : sourceRule!.id,
+      // ADD from an existing course still uses the clicked meeting as its
+      // template. Keep its identity even though ADD has no source date, so a
+      // course with multiple arrangements cannot fall back to the first one.
+      sourceMeetingId: sourceRule?.id,
       sourceDate:
           _type == CourseExceptionType.add ? null : dateOnly(_instance.date),
       type: _type,

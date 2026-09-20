@@ -288,6 +288,41 @@ void main() {
     expect(courses.single.isException, isTrue);
   });
 
+  test('ADD from an existing course keeps the selected meeting template', () {
+    final secondRule = MeetingRule(
+      id: 'rule-software-testing-second',
+      courseId: 'course-software-testing',
+      weekday: DateTime.tuesday,
+      startSection: 7,
+      endSection: 8,
+      teacher: '教师乙',
+      campus: '太白校区',
+      room: '3508',
+      weekMask: WeekMask.all(20),
+    );
+    final engine = makeEngine(
+      rules: [makeRule(), secondRule],
+      exceptions: [
+        CourseException(
+          id: 'add-existing-meeting',
+          semesterId: 'nwu-test-2026-1',
+          courseId: 'course-software-testing',
+          sourceMeetingId: secondRule.id,
+          type: CourseExceptionType.add,
+          targetDate: DateTime(2026, 9, 9),
+          targetStartSection: 9,
+          targetEndSection: 10,
+        ),
+      ],
+    );
+
+    final added = engine.getCoursesForDate(DateTime(2026, 9, 9));
+    expect(added, hasLength(1));
+    expect(added.single.teacher, '教师乙');
+    expect(added.single.campus, '太白校区');
+    expect(added.single.room, '3508');
+  });
+
   test('MOVE remains visible when its target date is a holiday', () {
     final engine = makeEngine(
       calendar: makeCalendar(
