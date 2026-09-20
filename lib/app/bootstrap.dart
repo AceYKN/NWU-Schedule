@@ -208,7 +208,12 @@ Future<void> rebuildNotificationsForCurrentSchedule({
   required ScheduleLoadState? state,
 }) async {
   final enabled = await repository.getSetting('notifications.enabled');
-  if (enabled != 'true') return;
+  if (enabled != 'true') {
+    // Restoring a backup or clearing settings can disable reminders while
+    // alarms from the previous dataset are still scheduled on Android.
+    await service.clear();
+    return;
+  }
   if (state is! ScheduleReady) {
     await service.clear();
     return;
