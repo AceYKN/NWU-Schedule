@@ -187,7 +187,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
             val row = RemoteViews(context.packageName, R.layout.widget_course_row)
             row.setTextViewText(R.id.widget_row_time, time(item.text("startTime")))
             row.setTextViewText(R.id.widget_row_name, item.text("courseName"))
-            val location = item.textOrNull("location")
+            val location = locationOrPlaceholder(item)
             val teacher = item.textOrNull("teacher")
             row.setTextViewText(
                 R.id.widget_row_meta,
