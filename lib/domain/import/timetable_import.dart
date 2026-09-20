@@ -201,8 +201,8 @@ class ImportIssue {
 
   @override
   String toString() {
-    final safeDetails = details.entries
-        .where((entry) => _safeDetailKeys.contains(entry.key))
+    final safeDetails = _filterDetails(details)
+        .entries
         .map((entry) => '${entry.key}=${entry.value}')
         .join(', ');
     return safeDetails.isEmpty
