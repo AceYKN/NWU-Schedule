@@ -4,6 +4,9 @@ import 'package:nwu_schedule/core/utils/week_mask.dart';
 void main() {
   test('parses continuous, discrete, odd, and even teaching weeks', () {
     expect(WeekMask.parse('1-16周').weeks, List<int>.generate(16, (i) => i + 1));
+    expect(WeekMask.parse('3-21周', maxWeek: 21).weeks.first, 3);
+    expect(WeekMask.parse('3-21周', maxWeek: 21).weeks.last, 21);
+    expect(WeekMask.parse('21周', maxWeek: 21).weeks, [21]);
     expect(WeekMask.parse('1,3,5,7周').weeks, [1, 3, 5, 7]);
     expect(WeekMask.parse('单周', maxWeek: 8).weeks, [1, 3, 5, 7]);
     expect(WeekMask.parse('双周', maxWeek: 8).weeks, [2, 4, 6, 8]);
