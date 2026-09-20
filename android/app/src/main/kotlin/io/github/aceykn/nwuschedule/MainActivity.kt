@@ -286,17 +286,30 @@ class MainActivity : FlutterActivity() {
     private fun clearWebViewSession(result: MethodChannel.Result) {
         try {
             CookieManager.getInstance().removeAllCookies {
-                CookieManager.getInstance().flush()
-                WebStorage.getInstance().deleteAllData()
-                WebViewDatabase.getInstance(this).clearFormData()
-                val webView = WebView(this)
-                webView.clearHistory()
-                webView.clearCache(true)
-                webView.destroy()
+                runBestEffort { CookieManager.getInstance().flush() }
+                runBestEffort { WebStorage.getInstance().deleteAllData() }
+                runBestEffort { WebViewDatabase.getInstance(this).clearFormData() }
+                runBestEffort {
+                    val webView = WebView(this)
+                    try {
+                        runBestEffort { webView.clearHistory() }
+                        runBestEffort { webView.clearCache(true) }
+                    } finally {
+                        runBestEffort { webView.destroy() }
+                    }
+                }
                 result.success(null)
             }
         } catch (error: Exception) {
             result.error("clear_failed", error.message, null)
+        }
+    }
+
+    private fun runBestEffort(action: () -> Unit) {
+        try {
+            action()
+        } catch (_: Throwable) {
+            // Cleanup must continue and the platform channel must complete.
         }
     }
 
