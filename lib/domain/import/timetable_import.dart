@@ -3,6 +3,9 @@ import 'dart:convert';
 
 import '../../core/utils/week_mask.dart';
 
+String safeWeekDiagnosticText(String raw) =>
+    raw.replaceAll(RegExp(r'[^0-9,，、\-~～—至\s]'), '').trim();
+
 class RemoteSemester {
   const RemoteSemester({
     required this.remoteTermKey,
@@ -420,7 +423,7 @@ class TimetableImportParser {
       return WeekMask.parse(rawText, maxWeek: maxWeek);
     } on Object catch (error) {
       throw FormatException(
-        '$path 无法解析：raw="$rawText"；$error',
+        '$path 无法解析：raw="${safeWeekDiagnosticText(rawText)}"；$error',
       );
     }
   }

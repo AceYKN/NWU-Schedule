@@ -2,13 +2,13 @@ import 'timetable_import.dart';
 
 String redactImportError(Object error) {
   final redacted = error.toString().replaceAllMapped(
-    RegExp(r'raw="([^"]*)"'),
+    RegExp(r'raw="[^；\r\n]*'),
     (match) {
       // A malformed week cell can contain arbitrary page text when the
       // DOM columns are shifted. Keep only structural teaching-week
       // characters in an exported diagnostic.
-      final raw = match.group(1) ?? '';
-      final safe = raw.replaceAll(RegExp(r'[^0-9,，、\-~～—至\s]'), '').trim();
+      final raw = (match.group(0) ?? '').substring('raw="'.length);
+      final safe = safeWeekDiagnosticText(raw);
       return 'raw="$safe"';
     },
   ).replaceAll(

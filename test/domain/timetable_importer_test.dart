@@ -319,6 +319,14 @@ void main() {
     );
     expect(hanWeekWord, contains('raw="1-18"'));
     expect(hanWeekWord, isNot(contains('周老师')));
+
+    final quotedWeekText = redactImportError(
+      const FormatException(
+        'courses[0].meetings[0].weekText 无法解析：raw="1-18"恶意文本"',
+      ),
+    );
+    expect(quotedWeekText, contains('raw="1-18"'));
+    expect(quotedWeekText, isNot(contains('恶意文本')));
   });
 
   test('invalid week diagnostics retain the payload schema and field path',
