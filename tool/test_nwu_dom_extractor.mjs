@@ -9,92 +9,260 @@ const dartSource = fs.readFileSync(
   path.join(repoRoot, 'lib', 'infrastructure', 'import', 'nwu_dom_extractor.dart'),
   'utf8',
 );
-const quote = String.fromCharCode(39).repeat(3);
-const marker = `static const extractionScript = r${quote}`;
-const scriptStart = dartSource.indexOf(marker);
-assert.notEqual(scriptStart, -1, 'extraction script marker is present');
-const scriptBodyStart = scriptStart + marker.length;
-const scriptEnd = dartSource.indexOf(`${quote};`, scriptBodyStart);
-assert.notEqual(scriptEnd, -1, 'extraction script terminator is present');
-const extractionScript = dartSource.slice(scriptBodyStart, scriptEnd);
-new vm.Script(extractionScript);
-const contextMarker = `static const contextScript = r${quote}`;
-const contextStart = dartSource.indexOf(contextMarker);
-assert.notEqual(contextStart, -1, 'context script marker is present');
-const contextBodyStart = contextStart + contextMarker.length;
-const contextEnd = dartSource.indexOf(`${quote};`, contextBodyStart);
-assert.notEqual(contextEnd, -1, 'context script terminator is present');
-new vm.Script(dartSource.slice(contextBodyStart, contextEnd));
 
-const fixture = fs.readFileSync(
-  path.join(repoRoot, 'test', 'fixtures', 'zhengfang', 'timetable_grid_fixture.html'),
-  'utf8',
-);
-assert.match(fixture, /rowspan="2"/);
-assert.match(fixture, /colspan="3"/);
-assert.match(fixture, />321<\/td>/);
+const quote = String.fromCharCode(39).repeat(3);
+const extractDartRawString = (markerName) => {
+  const marker = 'static const ' + markerName + ' = r' + quote;
+  const start = dartSource.indexOf(marker);
+  assert.notEqual(start, -1, markerName + ' marker is present');
+  const bodyStart = start + marker.length;
+  const end = dartSource.indexOf(quote + ';', bodyStart);
+  assert.notEqual(end, -1, markerName + ' terminator is present');
+  return dartSource.slice(bodyStart, end);
+};
+
+const extractionScript = extractDartRawString('extractionScript');
+const contextScript = extractDartRawString('contextScript');
+new vm.Script(extractionScript);
+new vm.Script(contextScript);
 
 const decodeText = (value) => value
   .replace(/<[^>]+>/g, '')
   .replace(/&nbsp;/g, ' ')
   .replace(/&amp;/g, '&')
+  .replace(/\s+/g, ' ')
   .trim();
-const parseFixtureTable = (html) => {
-  const tableHtml = html.match(/<table\b[^>]*>([\s\S]*?)<\/table>/i)?.[1];
-  assert.ok(tableHtml, 'fixture contains a table');
-  const rows = [...tableHtml.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map((rowMatch) => ({
-    cells: [...rowMatch[1].matchAll(/<(td|th)\b([^>]*)>([\s\S]*?)<\/\1>/gi)].map((cellMatch) => ({
-      innerText: decodeText(cellMatch[3]),
-      rowSpan: Number(cellMatch[2].match(/rowspan="(\d+)"/i)?.[1] || 1),
-      colSpan: Number(cellMatch[2].match(/colspan="(\d+)"/i)?.[1] || 1),
-    })),
-  }));
-  return { rows };
+
+const attribute = (source, name) =>
+  source.match(new RegExp(name + '="([^"]*)"', 'i'))?.[1] ?? null;
+
+const parseFixtureDocument = (html) => {
+  const tables = [...html.matchAll(/<table\b([^>]*)>([\s\S]*?)<\/table>/gi)]
+    .map((tableMatch) => {
+      const tableAttributes = tableMatch[1];
+      const table = {
+        id: attribute(tableAttributes, 'id') ?? '',
+        rows: [...tableMatch[2].matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)]
+          .map((rowMatch) => ({
+            cells: [...rowMatch[1].matchAll(
+              /<(td|th)\b([^>]*)>([\s\S]*?)<\/\1>/gi,
+            )].map((cellMatch) => {
+              const attrs = cellMatch[2];
+              const value = decodeText(cellMatch[3]);
+              return {
+                id: attribute(attrs, 'id') ?? '',
+                innerText: value,
+                textContent: value,
+                rowSpan: Number(attribute(attrs, 'rowspan') ?? 1),
+                colSpan: Number(attribute(attrs, 'colspan') ?? 1),
+              };
+            }),
+          })),
+      };
+      table.querySelectorAll = (selector) =>
+        selector === 'tr' ? table.rows : [];
+      return table;
+    });
+
+  const document = {
+    body: { innerText: decodeText(html) },
+    querySelector(selector) {
+      if (selector.startsWith('#')) {
+        return tables.find((table) => table.id === selector.slice(1)) ?? null;
+      }
+      return null;
+    },
+    querySelectorAll(selector) {
+      return selector === 'table' ? tables : [];
+    },
+  };
+
+  return { document, tables };
 };
 
-const table = parseFixtureTable(fixture);
-const context = {
-  window: {},
-  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
-  document: {
-    body: { innerText: fixture.replace(/<[^>]+>/g, ' ') },
-    querySelectorAll: () => [table],
-  },
+const runExtraction = (html) => {
+  const fixtureDocument = parseFixtureDocument(html);
+  const context = {
+    window: {},
+    location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+    document: fixtureDocument.document,
+  };
+  return {
+    payload: JSON.parse(vm.runInNewContext(extractionScript, context)),
+    context,
+    fixtureDocument,
+  };
 };
-const payload = JSON.parse(vm.runInNewContext(extractionScript, context));
-assert.equal(payload.courses.length, 2);
-assert.equal(payload.issues.filter((issue) => issue.severity === 'error').length, 0);
 
-const software = payload.courses.find((course) => course.code === 'CS301');
+// Keep the generic merged-cell fallback covered for variants that do not expose
+// NWU's verified #kblist_table list view.
+const genericFixture = fs.readFileSync(
+  path.join(
+    repoRoot,
+    'test',
+    'fixtures',
+    'zhengfang',
+    'timetable_grid_fixture.html',
+  ),
+  'utf8',
+);
+assert.match(genericFixture, /rowspan="2"/);
+assert.match(genericFixture, /colspan="3"/);
+assert.match(genericFixture, />321<\/td>/);
+
+const generic = runExtraction(genericFixture);
+assert.equal(generic.payload.courses.length, 2);
+assert.equal(
+  generic.payload.issues.filter((issue) => issue.severity === 'error').length,
+  0,
+);
+
+const software = generic.payload.courses.find(
+  (course) => course.name === '软件测试',
+);
 assert.ok(software);
+assert.equal(software.code, null);
+assert.equal(software.teachingClass, null);
+assert.equal(software.credits, null);
+assert.equal(software.assessment, null);
 assert.equal(software.meetings.length, 2);
 assert.equal(software.meetings[0].room, '321');
 assert.equal(software.meetings[0].weekText, '1-16周');
 assert.equal(software.meetings[1].weekText, '单周');
 
-const network = payload.courses.find((course) => course.code === 'CS302');
+const network = generic.payload.courses.find(
+  (course) => course.name === '计算机网络',
+);
 assert.ok(network);
 assert.equal(network.meetings[0].room, '3508');
 assert.equal(network.meetings[0].weekText, '2,4,6,8周');
 
-const invalidWeekTable = parseFixtureTable(fixture);
+const invalidWeekDocument = parseFixtureDocument(genericFixture);
+const invalidWeekTable = invalidWeekDocument.tables[0];
 invalidWeekTable.rows[2].cells[3].innerText = '321';
+invalidWeekTable.rows[2].cells[3].textContent = '321';
 const invalidWeekPayload = JSON.parse(vm.runInNewContext(extractionScript, {
-  ...context,
-  document: {
-    ...context.document,
-    querySelectorAll: () => [invalidWeekTable],
-  },
+  window: {},
+  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+  document: invalidWeekDocument.document,
 }));
 const invalidWeekIssue = invalidWeekPayload.issues.find((issue) =>
   issue.path.endsWith('.weeks') && issue.severity === 'error');
 assert.ok(invalidWeekIssue);
 assert.deepEqual(invalidWeekIssue.details.parsedNumbers, [321]);
-assert.equal(invalidWeekPayload.totalWeeks, 20);
 assert.equal(
   invalidWeekPayload.courses
     .flatMap((course) => course.meetings)
     .some((meeting) => meeting.weekText === '321'),
   false,
 );
-console.log('NWU DOM merged-cell fixture passed');
+
+// Real NWU DOM shape captured from the authenticated student timetable page,
+// with personal data replaced by synthetic values.
+const realListFixture = fs.readFileSync(
+  path.join(
+    repoRoot,
+    'test',
+    'fixtures',
+    'zhengfang',
+    'nwu_kblist_fixture.html',
+  ),
+  'utf8',
+);
+assert.match(realListFixture, /id="kblist_table"/);
+assert.match(realListFixture, /id="xq_rowspan_1"/);
+assert.match(realListFixture, /id="jc_1-1-2"/);
+assert.match(realListFixture, /计算机技术实验室-321/);
+
+const realList = runExtraction(realListFixture);
+assert.equal(realList.payload.totalWeeks, 18);
+assert.equal(realList.payload.courses.length, 5);
+assert.equal(
+  realList.payload.issues.filter((issue) => issue.severity === 'error').length,
+  0,
+);
+
+const experiment = realList.payload.courses.find(
+  (course) => course.name === '数据结构实验',
+);
+assert.ok(experiment);
+assert.equal(experiment.meetings.length, 2);
+assert.deepEqual(
+  experiment.meetings.map((meeting) => meeting.weekText),
+  ['1-9周', '10-18周'],
+);
+assert.ok(
+  experiment.meetings.every(
+    (meeting) =>
+      meeting.weekday === 1 &&
+      meeting.startSection === 1 &&
+      meeting.endSection === 2 &&
+      meeting.room === '计算机技术实验室-321',
+  ),
+);
+
+const realSoftware = realList.payload.courses.find(
+  (course) => course.name === '软件测试（双语）',
+);
+assert.ok(realSoftware);
+assert.equal(realSoftware.meetings.length, 2);
+assert.deepEqual(
+  realSoftware.meetings.map((meeting) => [
+    meeting.weekday,
+    meeting.startSection,
+    meeting.endSection,
+    meeting.weekText,
+    meeting.room,
+  ]),
+  [
+    [1, 3, 4, '1-18周', '3406'],
+    [1, 9, 10, '3-12周', '计算机技术实验室-321'],
+  ],
+);
+
+const mining = realList.payload.courses.find(
+  (course) => course.name === 'Web数据挖掘（双语）',
+);
+assert.ok(mining);
+assert.equal(mining.meetings[0].weekday, 2);
+assert.equal(mining.meetings[0].weekText, '1-8周,10-18周');
+
+const project = realList.payload.courses.find(
+  (course) => course.name === 'IT项目管理（双语)(含上机）',
+);
+assert.ok(project);
+assert.equal(project.meetings[0].weekText, '1-17周(单)');
+
+const ml = realList.payload.courses.find(
+  (course) => course.name === '机器学习',
+);
+assert.ok(ml);
+assert.equal(ml.meetings[0].weekday, 4);
+assert.equal(ml.meetings[0].startSection, 5);
+assert.equal(ml.meetings[0].endSection, 8);
+assert.equal(ml.meetings[0].weekText, '2-18周(双)');
+
+assert.equal(
+  realList.payload.courses
+    .flatMap((course) => course.meetings)
+    .some((meeting) => /\b321\b/.test(meeting.weekText)),
+  false,
+);
+assert.ok(
+  realList.payload.courses.every(
+    (course) =>
+      course.code == null &&
+      course.teachingClass == null &&
+      course.credits == null &&
+      course.assessment == null,
+  ),
+);
+
+const detectedContext = vm.runInNewContext(contextScript, {
+  window: {},
+  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+  document: realList.fixtureDocument.document,
+});
+assert.equal(detectedContext, 'timetable');
+
+console.log('NWU DOM fixtures passed');
