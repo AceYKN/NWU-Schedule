@@ -82,10 +82,10 @@ class NwuDomExtractor {
     return grid.slice(0, rows.length).map((row) => row || []);
   };
   const dayNumber = (value) => {
-    const source = normalize(value);
-    const numeric = source.match(/\d+/);
+    const source = normalize(value).replace(/\s+/g, '');
+    const numeric = source.match(/^(?:星期|周|礼拜)?([1-7])$/);
     if (numeric) {
-      const day = Number(numeric[0]);
+      const day = Number(numeric[1]);
       return day >= 1 && day <= 7 ? day : null;
     }
     const match = source.match(/[一二三四五六日天]/);
@@ -243,7 +243,7 @@ class NwuDomExtractor {
       const room = roomIndex >= 0 ? cellAt(roomIndex) || null : null;
       const rawCredits = creditIndex >= 0 ? cellAt(creditIndex) : '';
       const parsedCredits = rawCredits ? Number(rawCredits) : NaN;
-      const credits = Number.isFinite(parsedCredits) && parsedCredits >= 0 ? parsedCredits : null;
+      const credits = Number.isFinite(parsedCredits) && parsedCredits > 0 ? parsedCredits : null;
       if (rawCredits && credits == null) {
         issue(rowPath + '.credits', '学分格式无法识别，已按空值处理', 'warning', rowDetails);
       }

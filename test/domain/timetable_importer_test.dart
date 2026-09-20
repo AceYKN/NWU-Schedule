@@ -193,6 +193,7 @@ void main() {
       WebViewDiagnostics.versionFromUserAgent('Mozilla/5.0 Version/4.0'),
       '4.0',
     );
+    expect(WebViewDiagnostics.versionFromUserAgent('Mozilla/5.0'), isNull);
     expect(WebViewDiagnostics.versionFromUserAgent(null), isNull);
   });
 
