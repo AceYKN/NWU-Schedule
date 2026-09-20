@@ -57,18 +57,22 @@ class NwuDomExtractor {
       weekText.matchAll(/\d+/g),
       (match) => Number(match[0]),
     );
-    const unexpectedCharacters = Array.from(new Set(
-      Array.from(
-        weekText.matchAll(/[^\d\s,，、()（）\[\]{}单双全周次第\-~～—至]/g),
-        (match) => match[0],
-      ),
+    const unexpectedCharacters = Array.from(weekText).filter((character) =>
+      /[^\d\s,，、()（）\[\]{}单双全周次第\-~～—至]/u.test(character));
+    const unexpectedCharacterClasses = Array.from(new Set(
+      unexpectedCharacters.map((character) => {
+        if (/[\u3400-\u9fff]/u.test(character)) return 'han';
+        if (/[A-Za-z]/.test(character)) return 'latin';
+        return 'symbol';
+      }),
     ));
     const weekDetails = {
       ...details,
       rawLength: weekText.length,
       rawShape: weekShape(weekText, weekNumbers),
       parsedNumbers: weekNumbers,
-      unexpectedCharacters: unexpectedCharacters,
+      unexpectedCharacterClasses: unexpectedCharacterClasses,
+      unexpectedCharacterCount: unexpectedCharacters.length,
     };
     const invalid =
       unexpectedCharacters.length > 0 ||

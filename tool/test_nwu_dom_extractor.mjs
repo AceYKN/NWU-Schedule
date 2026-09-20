@@ -305,7 +305,12 @@ const shiftedWeekIssue = shiftedWeekPayload.issues.find((issue) =>
   issue.path.endsWith('.weeks') && issue.severity === 'error');
 assert.ok(shiftedWeekIssue);
 assert.deepEqual(shiftedWeekIssue.details.parsedNumbers, [1, 18, 32]);
-assert.deepEqual(shiftedWeekIssue.details.unexpectedCharacters, ['教', '室']);
+assert.deepEqual(
+  shiftedWeekIssue.details.unexpectedCharacterClasses,
+  ['han'],
+);
+assert.equal(shiftedWeekIssue.details.unexpectedCharacterCount, 2);
+assert.equal(JSON.stringify(shiftedWeekIssue).includes('教室'), false);
 assert.equal(
   shiftedWeekPayload.courses
     .flatMap((course) => course.meetings)
