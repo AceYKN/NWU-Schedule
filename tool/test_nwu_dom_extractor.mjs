@@ -137,6 +137,71 @@ assert.ok(network);
 assert.equal(network.meetings[0].room, '3508');
 assert.equal(network.meetings[0].weekText, '2,4,6,8周');
 
+const rowSpanZeroFixture = `
+<!doctype html>
+<html lang="zh-CN">
+  <body>
+    <h1>2026-2027 第一学期</h1>
+    <table>
+      <thead>
+        <tr>
+          <th rowspan="2">课程名称</th>
+          <th colspan="3">上课安排</th>
+          <th rowspan="2">教师</th>
+          <th rowspan="2">教室</th>
+          <th rowspan="2">教学班</th>
+          <th rowspan="2">课程代码</th>
+        </tr>
+        <tr>
+          <th>星期</th>
+          <th>节次</th>
+          <th>周次</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td rowspan="0">跨剩余行课程</td>
+          <td>星期一</td>
+          <td>1-2节</td>
+          <td>1-8周</td>
+          <td>教师甲</td>
+          <td>101</td>
+          <td>教学班甲</td>
+          <td>CS399</td>
+        </tr>
+        <tr>
+          <td>星期三</td>
+          <td>3-4节</td>
+          <td>单周</td>
+          <td>教师甲</td>
+          <td>101</td>
+          <td>教学班甲</td>
+          <td>CS399</td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>`;
+const rowSpanZero = runExtraction(rowSpanZeroFixture);
+assert.equal(
+  rowSpanZero.payload.issues.filter((issue) => issue.severity === 'error').length,
+  0,
+);
+assert.equal(rowSpanZero.payload.courses.length, 1);
+assert.equal(rowSpanZero.payload.courses[0].name, '跨剩余行课程');
+assert.deepEqual(
+  rowSpanZero.payload.courses[0].meetings.map((meeting) => [
+    meeting.weekday,
+    meeting.startSection,
+    meeting.endSection,
+    meeting.weekText,
+  ]),
+  [
+    [1, 1, 2, '1-8周'],
+    [3, 3, 4, '单周'],
+  ],
+);
+
 const invalidWeekDocument = parseFixtureDocument(genericFixture);
 const invalidWeekTable = invalidWeekDocument.tables[0];
 invalidWeekTable.rows[2].cells[3].innerText = '321';

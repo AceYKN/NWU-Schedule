@@ -462,7 +462,13 @@ class NwuDomExtractor {
       let columnIndex = 0;
       for (const cell of cells) {
         while (grid[rowIndex][columnIndex] !== undefined) columnIndex++;
-        const rowSpan = Math.max(1, Number(cell.rowSpan) || 1);
+        const declaredRowSpan = Number(cell.rowSpan);
+        // HTML uses rowspan="0" to mean all remaining rows in the current
+        // table section. The DOM exposes that value as 0; treating it as one
+        // row shifts every following logical column.
+        const rowSpan = declaredRowSpan === 0
+          ? Math.max(1, rows.length - rowIndex)
+          : Math.max(1, declaredRowSpan || 1);
         const colSpan = Math.max(1, Number(cell.colSpan) || 1);
         const value = text(cell);
         for (let rowOffset = 0; rowOffset < rowSpan; rowOffset++) {
