@@ -816,7 +816,14 @@ const ajaxViewDocument = {
     return null;
   },
   querySelectorAll(selector) {
-    if (!selector.includes('button') && !selector.includes('input') &&
+    if (selector.includes('password') ||
+        selector.includes('#yhm') ||
+        selector.includes('#mm')) {
+      return [];
+    }
+    if (!selector.includes('button') &&
+        !selector.includes('input[type="button"]') &&
+        !selector.includes('input[type="submit"]') &&
         !selector.includes('a')) {
       return [];
     }
