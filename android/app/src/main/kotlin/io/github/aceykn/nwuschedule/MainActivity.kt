@@ -26,19 +26,25 @@ class MainActivity : FlutterActivity() {
 
         val backupHandler = BackupFileChannelHandler(this)
         backupFileChannelHandler = backupHandler
-        MethodChannel(messenger, BACKUP_CHANNEL).setMethodCallHandler(backupHandler::handle)
+        MethodChannel(messenger, BACKUP_CHANNEL).setMethodCallHandler { call, result ->
+            backupHandler.handle(call, result)
+        }
 
         val notificationHandler = NotificationChannelHandler(this)
         notificationChannelHandler = notificationHandler
-        MethodChannel(messenger, NOTIFICATION_CHANNEL)
-            .setMethodCallHandler(notificationHandler::handle)
+        MethodChannel(messenger, NOTIFICATION_CHANNEL).setMethodCallHandler { call, result ->
+            notificationHandler.handle(call, result)
+        }
 
         val widgetHandler = WidgetChannelHandler(this)
-        MethodChannel(messenger, WIDGET_CHANNEL).setMethodCallHandler(widgetHandler::handle)
+        MethodChannel(messenger, WIDGET_CHANNEL).setMethodCallHandler { call, result ->
+            widgetHandler.handle(call, result)
+        }
 
         val webViewSessionHandler = WebViewSessionChannelHandler(this)
-        MethodChannel(messenger, WEBVIEW_SESSION_CHANNEL)
-            .setMethodCallHandler(webViewSessionHandler::handle)
+        MethodChannel(messenger, WEBVIEW_SESSION_CHANNEL).setMethodCallHandler { call, result ->
+            webViewSessionHandler.handle(call, result)
+        }
 
         navigationChannel = MethodChannel(messenger, NAVIGATION_CHANNEL)
     }
