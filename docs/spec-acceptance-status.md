@@ -59,7 +59,7 @@
 | --- | --- | --- |
 | NWU 登录 → 选课 → 个人课表查询 → 读取 → Preview → 保存 | PASS（模拟器真实会话） | 已完成真实读取、Preview、确认导入、重启后回读；发布前可再用实体设备复核 |
 | 教室 `321` 在真实页面中的最终字段归属 | BLOCKED（需设备 Owner） | 脱敏诊断或人工抽查，不能上传原始课表 |
-| 真实 endpoint、`gnmkdm`、POST 参数、响应 schema、稳定远端 ID | BLOCKED（需真实会话） | 只记录字段名/路径，不记录 Cookie、Token 或原始响应 |
+| 真实 endpoint、`gnmkdm`、POST 参数、响应 schema、稳定远端 ID | PARTIAL（form boundary 已观察） | 已记录 action 与 `xnm`/`xqm` 字段；独立 JSON schema、运行时参数值和稳定远端 ID 尚未确认 |
 | 关闭导入后必须重新登录 | PASS（模拟器真实会话） | 确认导入后重新进入 Import 已回到 NWU 登录表单 |
 | 通知权限拒绝/允许、实际触发、点击、无重复 | PARTIAL（模拟器已覆盖拒绝/重新允许、触发、点击和无重复） | 仍缺少真实设备记录 |
 | Small/Medium/Large Widget、多个实例、日期/时间切换 | PARTIAL（模拟器已覆盖三尺寸、两实例、日期/时间滚动和本轮重启保持） | 仍缺少真实设备 Owner 的最终复核，以及真实数据编辑后的记录 |
