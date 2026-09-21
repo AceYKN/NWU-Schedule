@@ -737,6 +737,36 @@ const hiddenLoginContext = vm.runInNewContext(contextScript, {
 });
 assert.equal(hiddenLoginContext, 'timetable');
 
+// A real expired session can leave stale timetable markup in the DOM while a
+// visible login form is rendered. Authentication must win in that case.
+const visibleLoginControl = {
+  hidden: false,
+  getAttribute: () => null,
+  getClientRects: () => [{}],
+};
+const staleTimetableLoginDocument = {
+  body: { innerText: '用户登录 密码' },
+  querySelector(selector) {
+    if (selector === '#kblist_table') return {};
+    if (selector === '#kbgrid_table_0') return {};
+    return selector.includes('input') || selector === '#yhm' || selector === '#mm'
+      ? visibleLoginControl
+      : null;
+  },
+  querySelectorAll(selector) {
+    return selector.includes('input') || selector.includes('#yhm') ||
+      selector.includes('#mm')
+      ? [visibleLoginControl]
+      : [];
+  },
+};
+const staleTimetableLoginContext = vm.runInNewContext(contextScript, {
+  window: {},
+  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+  document: staleTimetableLoginDocument,
+});
+assert.equal(staleTimetableLoginContext, 'login');
+
 let listViewVisible = false;
 const ajaxViewDocument = {
   body: { innerText: '2026-2027 第1学期 个人课表查询' },
