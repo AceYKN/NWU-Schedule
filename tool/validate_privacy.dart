@@ -39,6 +39,11 @@ void main() {
   }
 
   final gitignore = File('.gitignore').readAsStringSync();
+  final gitignorePatterns = gitignore
+      .split(RegExp(r'\r?\n'))
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty && !line.startsWith('#'))
+      .toSet();
   const requiredSigningIgnores = {
     '/android/key.properties',
     '*.jks',
@@ -46,7 +51,7 @@ void main() {
     '*.p12',
   };
   final missingSigningIgnores = requiredSigningIgnores
-      .where((pattern) => !gitignore.split('\n').contains(pattern))
+      .where((pattern) => !gitignorePatterns.contains(pattern))
       .toList(growable: false);
   if (missingSigningIgnores.isNotEmpty) {
     throw StateError(
