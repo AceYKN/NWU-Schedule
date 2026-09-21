@@ -7,7 +7,7 @@ typedef TimetablePayloadReader = Future<Map<String, dynamic>> Function();
 /// page/API discovery remains outside this normalizer because the authenticated
 /// endpoint and response shape must be observed in a real student session.
 class NwuZhengfangV9Importer implements TimetableImporter {
-  static const adapterVersion = 'nwu-zhengfang-v9-dom-v7';
+  static const adapterVersion = 'nwu-zhengfang-v9-dom-v8';
   static final entryUri = Uri.parse('https://jwgl.nwu.edu.cn/jwglxt/');
 
   static bool isAllowedUri(Uri uri) =>

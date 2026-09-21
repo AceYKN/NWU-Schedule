@@ -12,7 +12,7 @@
 | Home NOW/NEXT/DONE/NO CLASS 与跨日查找 | `schedule_engine_test.dart`、Home golden 测试 | PASS（自动化） |
 | MOVE/CANCEL/ADD | `fixture_schedule_pipeline_test.dart` 串联 DB、ScheduleEngine、通知计划、Widget 快照 | PASS（自动化） |
 | 导入 Preview、Diff、Three-way Merge、tombstone | `import_diff_test.dart`、`three_way_merge_test.dart`、Drift repository 测试 | PASS（自动化） |
-| 关键 DOM 解析与 `rowspan/colspan` | `tool/test_nwu_dom_extractor.mjs`、脱敏 NWU list/grid fixtures | PASS（自动化） |
+| 关键 DOM 解析与 `rowspan/colspan` | `tool/test_nwu_dom_extractor.mjs`、脱敏 NWU list/grid fixtures；当前 V9 `.timetable_con` 结构回归 | PASS（自动化） |
 | `321` 教室不进入周次、异常周次 fail-closed | DOM fixture 与 `timetable_import_test.dart` | PASS（自动化） |
 | 不完整 DOM 不触发 destructive import | `drift_schedule_data_repository_test.dart` | PASS（自动化） |
 | 未收录校历的学期仍可导入并显示缺失校历提示 | `drift_schedule_data_repository_test.dart`、`schedule_pages_test.dart` | PASS（自动化） |
@@ -26,7 +26,7 @@
 | UI、Golden、无障碍 | `test/widget`、`test/golden`、`accessibility_test.dart` | PASS（自动化） |
 | Android 构建 | [GitHub Actions Run 35593121935](https://github.com/AceYKN/NWU-Schedule/actions/runs/35593121935)：debug/release APK 与 merged manifest 校验 | PASS |
 
-最近一次本地全量检查（`main` 提交 `847955a`）：校历校验、隐私校验、DOM fixture、`flutter analyze`、194 项 `flutter test` 和本地 debug APK 构建均通过。新增身份回归覆盖：同一 `sourceMeetingKey` 优先于竞争结构匹配，重复精确键保持歧义并拒绝自动合并。[GitHub Actions Run 35593121935](https://github.com/AceYKN/NWU-Schedule/actions/runs/35593121935) 已以 `847955a` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
+最近一次本地全量检查（`main` 提交 `2efec61`）：校历校验、隐私校验、当前 V9 DOM fixture、`flutter analyze`、195 项 `flutter test` 和本地 debug APK 构建均通过。新增身份回归覆盖：同一 `sourceMeetingKey` 优先于竞争结构匹配、重复精确键保持歧义并拒绝自动合并、多安排采用一对一保守匹配。`d4b299c` 已补上当前真实页面的 `.timetable_con` 结构解析，`2efec61` 已补上身份匹配回归；对应 GitHub Actions 仍在运行，完成后补录 Run 链接。
 
 ## 设备上已核对但不等同于真实集成通过
 
