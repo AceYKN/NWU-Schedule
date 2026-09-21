@@ -851,6 +851,32 @@ class NwuDomExtractor {
   return JSON.stringify(buildPayload());
 })()''';
 
+  static const prepareListViewScript = r'''(() => {
+  const listTable = document.querySelector('#kblist_table');
+  if (listTable) return 'ready';
+
+  const gridTable = document.querySelector('#kbgrid_table_0');
+  if (!gridTable) return 'not-timetable';
+
+  const controls = Array.from(
+    document.querySelectorAll('a, button, input[type="button"], input[type="submit"]'),
+  );
+  const listControl = controls.find((element) => {
+    const label = String(
+      element.innerText || element.textContent || element.value || '',
+    ).replace(/\s+/g, '').trim();
+    return label === '列表';
+  });
+  if (!listControl) return 'list-control-missing';
+
+  listControl.click();
+  return 'switching';
+})()''';
+
+  static const listViewReadyScript = r'''(() => (
+    document.querySelector('#kblist_table') ? 'ready' : 'waiting'
+  ))()''';
+
   static const contextScript = r'''(() => {
   const isVisible = (element) => {
     if (!element || element.hidden ||
@@ -875,6 +901,14 @@ class NwuDomExtractor {
     }
     return true;
   };
+  const listTable = typeof document.querySelector === 'function'
+    ? document.querySelector('#kblist_table')
+    : null;
+  const gridTable = typeof document.querySelector === 'function'
+    ? document.querySelector('#kbgrid_table_0')
+    : null;
+  if (listTable || gridTable) return 'timetable';
+
   const loginSelector = 'input[type="password"], #yhm, #mm, '
     + 'input[name*="password" i], input[id*="password" i]';
   const loginControls = typeof document.querySelectorAll === 'function'
@@ -885,13 +919,6 @@ class NwuDomExtractor {
     .replace(/\s+/g, ' ').trim();
   const loginText = bodyText.includes('用户登录') && bodyText.includes('密码');
   if (loginControl || loginText) return 'login';
-
-  if (
-    typeof document.querySelector === 'function' &&
-    document.querySelector('#kblist_table')
-  ) {
-    return 'timetable';
-  }
 
   // The URL allowlist is enforced by the Flutter WebView layer. Inside an
   // allowlisted page, still require a concrete extraction source before the
