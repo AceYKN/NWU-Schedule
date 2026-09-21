@@ -50,8 +50,18 @@ class ImportIdentityMatcher {
     ImportedMeeting remote,
     Iterable<T> candidates,
   ) {
+    final available = candidates.toList(growable: false);
+    final exact = available
+        .where(
+          (candidate) =>
+              _sourceMeetingKey(candidate) == remote.sourceMeetingKey,
+        )
+        .toList(growable: false);
+    if (exact.length == 1) return exact.single;
+    if (exact.length > 1) return null;
+
     final scored = <({T candidate, int score})>[];
-    for (final candidate in candidates) {
+    for (final candidate in available) {
       final score = meetingMatchScore(remote, candidate);
       if (score != null) scored.add((candidate: candidate, score: score));
     }
@@ -201,6 +211,12 @@ class ImportIdentityMatcher {
 
   static bool _sameCourseName(String left, String right) =>
       _normalizeText(left) == _normalizeText(right);
+
+  static String? _sourceMeetingKey(Object candidate) => switch (candidate) {
+        MeetingRule value => value.sourceMeetingKey,
+        ImportedMeeting value => value.sourceMeetingKey,
+        _ => null,
+      };
 
   static String _normalizeText(String value) =>
       value.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();

@@ -95,6 +95,30 @@ void main() {
     expect(result?.id, 'local-meeting');
   });
 
+  test('prefers an exact source meeting key over a competing structural match',
+      () {
+    final remote = importedMeeting(key: 'target-key');
+    final exact = localMeeting(id: 'exact', sourceKey: 'target-key');
+    final competing = localMeeting(id: 'competing', sourceKey: 'other-key');
+
+    expect(
+      matcher.matchMeeting(remote, [competing, exact])?.id,
+      'exact',
+    );
+  });
+
+  test('rejects duplicate exact source meeting keys as ambiguous', () {
+    final remote = importedMeeting(key: 'duplicate-key');
+
+    expect(
+      matcher.matchMeeting(remote, [
+        localMeeting(id: 'first', sourceKey: 'duplicate-key'),
+        localMeeting(id: 'second', sourceKey: 'duplicate-key'),
+      ]),
+      isNull,
+    );
+  });
+
   test('preserves meeting identity when sections or weeks change', () {
     final remote = importedMeeting(
       startSection: 5,
