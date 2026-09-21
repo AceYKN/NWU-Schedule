@@ -197,4 +197,54 @@ void main() {
       isNull,
     );
   });
+
+  test('uses a one-to-one best assignment for multi-meeting courses', () {
+    final remote = [
+      importedMeeting(
+        key: 'remote-a',
+        weekday: 1,
+        startSection: 3,
+        endSection: 4,
+        teacher: '教师甲',
+        campus: '长安校区',
+        room: '3406',
+      ),
+      importedMeeting(
+        key: 'remote-b',
+        weekday: 2,
+        startSection: 5,
+        endSection: 6,
+        teacher: '教师乙',
+        campus: '太白校区',
+        room: '3508',
+      ),
+    ];
+    final local = [
+      localMeeting(
+        id: 'shared-candidate',
+        sourceKey: 'old-a',
+        weekday: 1,
+        startSection: 3,
+        endSection: 4,
+        teacher: '教师乙',
+        campus: '长安校区',
+        room: '3508',
+      ),
+      localMeeting(
+        id: 'later-only-candidate',
+        sourceKey: 'old-b',
+        weekday: 3,
+        startSection: 9,
+        endSection: 10,
+        teacher: '教师甲',
+        campus: '长安校区',
+        room: '3406',
+      ),
+    ];
+
+    expect(
+      ImportIdentityMatcher.courseShapeScore(remote, local),
+      greaterThan(200),
+    );
+  });
 }
