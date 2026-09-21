@@ -157,7 +157,6 @@ NwuAppError classifyNwuError(Object error) {
 
 NwuAppError _classifyImportFailure(TimetableImportFailure failure) {
   final stage = failure.diagnostic.parserStage.toLowerCase();
-  final text = failure.message.toLowerCase();
   if (stage.contains('authentication')) {
     return const AuthenticationExpiredError();
   }
