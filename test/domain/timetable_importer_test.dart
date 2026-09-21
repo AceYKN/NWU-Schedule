@@ -249,11 +249,14 @@ void main() {
     );
   });
 
-  test('keeps a bridge-disabled payload read as an authentication failure',
-      () async {
+  test('preserves live timetable-context failures from the WebView', () async {
     final importer = NwuZhengfangV9Importer(
-      readPayload: () async => throw const FormatException(
-        '登录完成后请先打开课表页面',
+      readPayload: () async => throw const TimetableImportFailure(
+        '当前页面尚未识别到课表结构',
+        ImportDiagnostic(
+          adapterVersion: 'test',
+          parserStage: 'timetable-context',
+        ),
       ),
     );
 
@@ -264,7 +267,36 @@ void main() {
             .having(
               (failure) => failure.diagnostic.parserStage,
               'parserStage',
-              'payload-read',
+              'timetable-context',
+            )
+            .having(
+              (failure) => importFailureUserMessage(failure),
+              'userMessage',
+              contains('当前课表结构尚未准备完成'),
+            ),
+      ),
+    );
+  });
+
+  test('preserves explicit authentication failures from the WebView', () async {
+    final importer = NwuZhengfangV9Importer(
+      readPayload: () async => throw const TimetableImportFailure(
+        '教务系统登录状态已经失效',
+        ImportDiagnostic(
+          adapterVersion: 'test',
+          parserStage: 'authentication',
+        ),
+      ),
+    );
+
+    await expectLater(
+      importer.getSemesters(),
+      throwsA(
+        isA<TimetableImportFailure>()
+            .having(
+              (failure) => failure.diagnostic.parserStage,
+              'parserStage',
+              'authentication',
             )
             .having(
               (failure) => importFailureUserMessage(failure),
