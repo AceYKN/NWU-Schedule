@@ -106,6 +106,8 @@ class NwuZhengfangV9Importer implements TimetableImporter {
     if (_cachedPayload != null) return _cachedPayload!;
     try {
       return _cachedPayload = await readPayload();
+    } on TimetableImportFailure {
+      rethrow;
     } on Object catch (error) {
       final safeError = redactImportError(error);
       final parserMismatch =
