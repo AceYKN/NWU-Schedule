@@ -852,10 +852,35 @@ class NwuDomExtractor {
 })()''';
 
   static const contextScript = r'''(() => {
-  const loginControl = document.querySelector(
-    'input[type="password"], #yhm, #mm, '
-      + 'input[name*="password" i], input[id*="password" i]'
-  );
+  const isVisible = (element) => {
+    if (!element || element.hidden ||
+        element.getAttribute?.('aria-hidden') === 'true') {
+      return false;
+    }
+    try {
+      const style = typeof window.getComputedStyle === 'function'
+        ? window.getComputedStyle(element)
+        : null;
+      if (style && (style.display === 'none' ||
+          style.visibility === 'hidden' || style.opacity === '0')) {
+        return false;
+      }
+      if (typeof element.getClientRects === 'function' &&
+          element.getClientRects().length === 0) {
+        return false;
+      }
+    } catch (_) {
+      // A missing layout API must not make the context detector crash. The
+      // URL and concrete timetable checks below remain the safety boundary.
+    }
+    return true;
+  };
+  const loginSelector = 'input[type="password"], #yhm, #mm, '
+    + 'input[name*="password" i], input[id*="password" i]';
+  const loginControls = typeof document.querySelectorAll === 'function'
+    ? Array.from(document.querySelectorAll(loginSelector))
+    : [document.querySelector(loginSelector)].filter((element) => element);
+  const loginControl = loginControls.find(isVisible);
   const bodyText = (document.body ? document.body.innerText : '')
     .replace(/\s+/g, ' ').trim();
   const loginText = bodyText.includes('用户登录') && bodyText.includes('密码');

@@ -697,6 +697,37 @@ const detectedContext = vm.runInNewContext(contextScript, {
 });
 assert.equal(detectedContext, 'timetable');
 
+// Zhengfang may keep a hidden login form in the authenticated page DOM. It
+// must not disable the timetable bridge while the concrete list table exists.
+const hiddenLoginControl = {
+  hidden: true,
+  getAttribute: () => null,
+  getClientRects: () => [],
+};
+const hiddenLoginDocument = {
+  body: realList.fixtureDocument.document.body,
+  querySelector(selector) {
+    if (selector === '#kblist_table') {
+      return realList.fixtureDocument.document.querySelector(selector);
+    }
+    return selector.includes('input') || selector === '#yhm' || selector === '#mm'
+      ? hiddenLoginControl
+      : null;
+  },
+  querySelectorAll(selector) {
+    return selector.includes('input') || selector.includes('#yhm') ||
+      selector.includes('#mm')
+      ? [hiddenLoginControl]
+      : [];
+  },
+};
+const hiddenLoginContext = vm.runInNewContext(contextScript, {
+  window: {},
+  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+  document: hiddenLoginDocument,
+});
+assert.equal(hiddenLoginContext, 'timetable');
+
 const pathOnlyContext = vm.runInNewContext(contextScript, {
   window: {},
   location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
