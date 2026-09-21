@@ -18,14 +18,15 @@
 | 未收录校历的学期仍可导入并显示缺失校历提示 | `drift_schedule_data_repository_test.dart`、`schedule_pages_test.dart` | PASS（自动化） |
 | 教师/教室/校区/周次/节次变化后的 meeting identity 与例外 | Drift repository identity tests | PASS（自动化） |
 | 备份、清除、恢复、旧备份兼容 | `schedule_backup_test.dart`、`backup_repository_test.dart`、fixture pipeline | PASS（自动化） |
+| 清除所有数据后恢复首次启动状态 | `widget_test.dart`、Drift repository assertions | PASS（自动化） |
 | Rolling WidgetSnapshot 与 Android 当前日期/时间过滤 | `widget_snapshot_test.dart`、`CourseWidgetProvider.kt` | PASS（自动化/静态） |
 | 通知权限、重建、旧 Alarm 清理 | `bootstrap_test.dart`、`notification_planner_test.dart`、`MainActivity.kt` | PASS（自动化/静态） |
 | 隐私边界、无统计/广告依赖、merged manifest | privacy/manifest validators 与 CI | PASS（自动化） |
 | 课表显示设置的实时预览 | `widget_test.dart`、`schedule_display_settings_page.dart` | PASS（自动化） |
 | UI、Golden、无障碍 | `test/widget`、`test/golden`、`accessibility_test.dart` | PASS（自动化） |
-| Android 构建 | [GitHub Actions Run #225](https://github.com/AceYKN/NWU-Schedule/actions/runs/35545524797)：debug/release APK 与 merged manifest 校验 | PASS |
+| Android 构建 | [GitHub Actions Run #228](https://github.com/AceYKN/NWU-Schedule/actions/runs/35546953443)：debug/release APK 与 merged manifest 校验 | PASS |
 
-最近一次本地全量检查：校历校验、隐私校验、DOM fixture、`flutter analyze`、184 项 `flutter test` 和本地 debug APK 构建均通过。新增证据包括：旧数据库课程元数据显式清空、备份恢复晚期坏引用保持原数据、Medium/Large Native Widget 缺失地点显示“地点待补充”、手动课程“添加第二条上课安排 → 保存 → 重新打开编辑页仍保留两条”、未知校历学期可安全导入并显示符合 SPEC 文案的缺失校历提示，以及课表显示设置开关即时更新预览（包括真实节次时间和返回本周按钮）。[GitHub Actions Run #225](https://github.com/AceYKN/NWU-Schedule/actions/runs/35545524797) 以 `main` 提交 `300d619` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
+最近一次本地全量检查：校历校验、隐私校验、DOM fixture、`flutter analyze`、184 项 `flutter test` 和本地 debug APK 构建均通过。新增证据包括：旧数据库课程元数据显式清空、备份恢复晚期坏引用保持原数据、Medium/Large Native Widget 缺失地点显示“地点待补充”、手动课程“添加第二条上课安排 → 保存 → 重新打开编辑页仍保留两条”、未知校历学期可安全导入并显示符合 SPEC 文案的缺失校历提示、课表显示设置开关即时更新预览（包括真实节次时间和返回本周按钮），以及清除所有数据后回到“欢迎/导入我的课表”首次启动页且本地学期数据为空。[GitHub Actions Run #228](https://github.com/AceYKN/NWU-Schedule/actions/runs/35546953443) 以 `main` 提交 `359b3ef` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
 
 ## 设备上已核对但不等同于真实集成通过
 
