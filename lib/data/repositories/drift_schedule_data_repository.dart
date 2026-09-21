@@ -9,6 +9,7 @@ import '../../domain/course/course.dart' as domain;
 import '../../domain/course/course_exception.dart' as domain;
 import '../../domain/course/meeting_rule.dart' as domain;
 import '../../domain/import/import_diff.dart';
+import '../../domain/import/import_identity.dart';
 import '../../domain/import/timetable_import.dart';
 import '../../domain/import/three_way_merge.dart';
 import '../../domain/schedule/schedule_data_repository.dart';
@@ -1071,71 +1072,11 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   domain.MeetingRule? _bestMeetingMatch(
     ImportedMeeting meeting,
     List<domain.MeetingRule> candidates,
-  ) {
-    final scored = <({domain.MeetingRule rule, int score, int anchors})>[];
-    for (final candidate in candidates) {
-      final sameWeekday = candidate.weekday == meeting.weekday;
-      final sameSections = candidate.startSection == meeting.startSection &&
-          candidate.endSection == meeting.endSection;
-      final sameWeeks = candidate.weekMask.value == meeting.weekMask.value;
-      final sameTeacher = _sameMeetingText(candidate.teacher, meeting.teacher);
-      final sameCampus = _sameMeetingText(candidate.campus, meeting.campus);
-      final sameRoom = _sameMeetingText(candidate.room, meeting.room);
-      final structuralAnchors = [
-        sameWeekday,
-        sameSections,
-        sameWeeks,
-      ].where((value) => value).length;
-      // Teacher, campus, and room are mutable display properties. They may
-      // help rank a candidate, but must never be the only evidence that two
-      // rows represent the same recurring meeting. If the time/week shape
-      // has no overlap, prefer add/remove over silently moving an exception
-      // to an unrelated rule.
-      if (structuralAnchors == 0) continue;
-      final anchors = [
-        sameWeekday,
-        sameSections,
-        sameWeeks,
-        sameTeacher,
-        sameCampus,
-        sameRoom,
-      ].where((value) => value).length;
-      if (anchors < 2) continue;
-
-      var score = 0;
-      if (sameWeekday) score += 8;
-      if (sameSections) {
-        score += 6;
-      } else if (candidate.startSection == meeting.startSection ||
-          candidate.endSection == meeting.endSection) {
-        score += 2;
-      }
-      if (sameWeeks) {
-        score += 5;
-      } else if (_weekMasksOverlap(candidate.weekMask, meeting.weekMask)) {
-        score += 1;
-      }
-      if (sameTeacher) score += 3;
-      if (sameCampus) score += 2;
-      if (sameRoom) score += 3;
-      scored.add((rule: candidate, score: score, anchors: anchors));
-    }
-    scored.sort((left, right) => right.score.compareTo(left.score));
-    if (scored.isEmpty) return null;
-    if (scored.length > 1 && scored[0].score == scored[1].score) {
-      return null;
-    }
-    return scored.first.rule;
-  }
-
-  static bool _sameMeetingText(String? left, String? right) =>
-      (left ?? '').trim() == (right ?? '').trim();
-
-  static bool _weekMasksOverlap(
-    WeekMask left,
-    WeekMask right,
   ) =>
-      (left.value & right.value) != 0;
+      const ImportIdentityMatcher().matchMeeting<domain.MeetingRule>(
+        meeting,
+        candidates,
+      );
 
   static String _importedCourseId(String semesterId, String sourceKey) {
     final digest =
