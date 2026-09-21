@@ -48,6 +48,7 @@ void main() {
     final irregularMask = WeekMask.fromWeeks([1, 2, 4, 7]);
     final irregular = inferWeekPattern(irregularMask, totalWeeks: 18);
     expect(irregular.isIrregular, isTrue);
+    expect(irregular.mode, WeekSelectionMode.custom);
     expect(
       MeetingDraft.fromRule(
         MeetingRuleFixture.rule(irregularMask),

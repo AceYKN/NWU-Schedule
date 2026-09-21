@@ -3,12 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
-import '../../../core/nwu/periods.dart';
 import '../../../domain/course/course.dart';
 import '../../../domain/course/meeting_draft.dart';
 import '../../../domain/course/meeting_rule.dart';
 import '../../../domain/course/week_pattern.dart';
 import '../../../domain/errors/app_error.dart';
+import 'course_form_fields.dart';
 
 class ManualCoursePage extends ConsumerStatefulWidget {
   const ManualCoursePage({this.courseId, super.key});
@@ -274,7 +274,7 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
         return Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 36),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 96),
             children: [
               Text(
                 widget.courseId == null ? '手动添加课程' : '编辑整门课程',
@@ -293,11 +293,7 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
                     value == null || value.trim().isEmpty ? '请输入课程名称' : null,
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _note,
-                decoration: const InputDecoration(labelText: '备注'),
-                maxLines: 3,
-              ),
+              CompactNotesField(controller: _note),
               const SizedBox(height: 24),
               Row(
                 children: [
@@ -410,18 +406,22 @@ class _MeetingDraftCardState extends State<_MeetingDraftCard> {
     );
   }
 
-  void _updateRegular({
-    int? startWeek,
-    int? endWeek,
-    WeekPattern? pattern,
-  }) {
+  void _updateWeekSelection(TeachingWeekSelection selection) {
+    final pattern = switch (selection.mode) {
+      WeekSelectionMode.all => WeekPattern.all,
+      WeekSelectionMode.odd => WeekPattern.odd,
+      WeekSelectionMode.even => WeekPattern.even,
+      WeekSelectionMode.custom => WeekPattern.all,
+    };
+    final isCustom = selection.mode == WeekSelectionMode.custom;
     _update(
       widget.draft.copyWith(
-        startWeek: startWeek,
-        endWeek: endWeek,
+        startWeek: selection.startWeek,
+        endWeek: selection.endWeek,
         pattern: pattern,
-        originalWeekMask: null,
-        isIrregular: false,
+        selectionMode: selection.mode,
+        originalWeekMask: isCustom ? weekMaskFromSelection(selection) : null,
+        isIrregular: isCustom,
       ),
     );
   }
@@ -473,52 +473,15 @@ class _MeetingDraftCardState extends State<_MeetingDraftCard> {
                   _update(draft.copyWith(weekday: value ?? 1)),
             ),
             const SizedBox(height: 12),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final startField = DropdownButtonFormField<int>(
-                  initialValue: draft.startSection,
-                  decoration: const InputDecoration(labelText: '开始节'),
-                  items: _sectionItems(),
-                  onChanged: (value) {
-                    final start = value ?? 1;
-                    _update(
-                      draft.copyWith(
-                        startSection: start,
-                        endSection:
-                            draft.endSection < start ? start : draft.endSection,
-                      ),
-                    );
-                  },
-                );
-                final endField = DropdownButtonFormField<int>(
-                  key: ValueKey(draft.endSection),
-                  initialValue: draft.endSection,
-                  decoration: const InputDecoration(labelText: '结束节'),
-                  items: _sectionItems(),
-                  onChanged: (value) =>
-                      _update(draft.copyWith(endSection: value ?? 1)),
-                  validator: (value) =>
-                      value == null || value < draft.startSection
-                          ? '结束节不能早于开始节'
-                          : null,
-                );
-                if (constraints.maxWidth >= 430) {
-                  return Row(
-                    children: [
-                      Expanded(child: startField),
-                      const SizedBox(width: 12),
-                      Expanded(child: endField),
-                    ],
-                  );
-                }
-                return Column(
-                  children: [
-                    startField,
-                    const SizedBox(height: 12),
-                    endField,
-                  ],
-                );
-              },
+            SectionRangeSelector(
+              startSection: draft.startSection,
+              endSection: draft.endSection,
+              onChanged: (selection) => _update(
+                draft.copyWith(
+                  startSection: selection.start,
+                  endSection: selection.end,
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -539,7 +502,7 @@ class _MeetingDraftCardState extends State<_MeetingDraftCard> {
                   decoration: const InputDecoration(labelText: '教室'),
                   onChanged: (_) => _updateText(),
                 );
-                if (constraints.maxWidth >= 430) {
+                if (constraints.maxWidth >= 320) {
                   return Row(
                     children: [
                       Expanded(child: campusField),
@@ -558,162 +521,21 @@ class _MeetingDraftCardState extends State<_MeetingDraftCard> {
               },
             ),
             const SizedBox(height: 18),
-            _WeekSelector(
-              draft: draft,
+            TeachingWeekSelector(
               totalWeeks: widget.totalWeeks,
-              onRegularChanged: _updateRegular,
+              startWeek: draft.startWeek,
+              endWeek: draft.endWeek,
+              mode: draft.selectionMode,
+              selectedWeeks: draft
+                  .weekMask(widget.totalWeeks)
+                  .weeks
+                  .where((week) => week <= widget.totalWeeks)
+                  .toSet(),
+              onChanged: _updateWeekSelection,
             ),
           ],
         ),
       ),
     );
-  }
-
-  List<DropdownMenuItem<int>> _sectionItems() => List.generate(
-        NwuPeriodRepository.all.length,
-        (index) => DropdownMenuItem(
-          value: index + 1,
-          child: Text('第 ${index + 1} 节'),
-        ),
-      );
-}
-
-class _WeekSelector extends StatelessWidget {
-  const _WeekSelector({
-    required this.draft,
-    required this.totalWeeks,
-    required this.onRegularChanged,
-  });
-
-  final MeetingDraft draft;
-  final int totalWeeks;
-  final void Function({int? startWeek, int? endWeek, WeekPattern? pattern})
-      onRegularChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final weeks = draft.isIrregular && draft.originalWeekMask != null
-        ? draft.originalWeekMask!.weeks
-        : _safeWeeks();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('周次', style: Theme.of(context).textTheme.labelLarge),
-        if (draft.isIrregular) ...[
-          const SizedBox(height: 4),
-          Text(
-            '来自教务系统的不规则周次；修改下面的范围或单双周后将转换为规则模式。',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-        const SizedBox(height: 10),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final startField = DropdownButtonFormField<int>(
-              initialValue: draft.startWeek,
-              decoration: const InputDecoration(labelText: '起始周'),
-              items: _weekItems(),
-              onChanged: (value) =>
-                  onRegularChanged(startWeek: value ?? draft.startWeek),
-            );
-            final endField = DropdownButtonFormField<int>(
-              key: ValueKey(draft.endWeek),
-              initialValue: draft.endWeek,
-              decoration: const InputDecoration(labelText: '结束周'),
-              items: _weekItems(),
-              onChanged: (value) =>
-                  onRegularChanged(endWeek: value ?? draft.endWeek),
-              validator: (value) => value == null || value < draft.startWeek
-                  ? '结束周不能早于起始周'
-                  : null,
-            );
-            if (constraints.maxWidth >= 430) {
-              return Row(
-                children: [
-                  Expanded(child: startField),
-                  const SizedBox(width: 12),
-                  Expanded(child: endField),
-                ],
-              );
-            }
-            return Column(
-              children: [
-                startField,
-                const SizedBox(height: 12),
-                endField,
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        SegmentedButton<WeekPattern>(
-          segments: [
-            for (final pattern in WeekPattern.values)
-              ButtonSegment(value: pattern, label: Text(pattern.label)),
-          ],
-          selected: {draft.pattern},
-          onSelectionChanged: (selection) {
-            if (selection.isNotEmpty) {
-              onRegularChanged(pattern: selection.first);
-            }
-          },
-        ),
-        const SizedBox(height: 12),
-        Text(
-          '本安排覆盖 ${weeks.length} 周',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            for (var week = 1; week <= totalWeeks; week++)
-              Container(
-                width: 30,
-                height: 30,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: weeks.contains(week)
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '$week',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: weeks.contains(week)
-                            ? Theme.of(context).colorScheme.onPrimaryContainer
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight:
-                            weeks.contains(week) ? FontWeight.w700 : null,
-                      ),
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  List<DropdownMenuItem<int>> _weekItems() => List.generate(
-        totalWeeks,
-        (index) => DropdownMenuItem(
-          value: index + 1,
-          child: Text('${index + 1}'),
-        ),
-      );
-
-  List<int> _safeWeeks() {
-    try {
-      return buildPatternWeekMask(
-        startWeek: draft.startWeek,
-        endWeek: draft.endWeek,
-        pattern: draft.pattern,
-        totalWeeks: totalWeeks,
-      ).weeks;
-    } on Object {
-      return const [];
-    }
   }
 }

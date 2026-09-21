@@ -14,6 +14,7 @@ class MeetingDraft {
     required this.teacher,
     required this.campus,
     required this.room,
+    this.selectionMode = WeekSelectionMode.all,
     this.sourceMeetingKey,
     this.originalWeekMask,
     this.isIrregular = false,
@@ -31,6 +32,7 @@ class MeetingDraft {
       teacher: '',
       campus: '',
       room: '',
+      selectionMode: WeekSelectionMode.all,
     );
   }
 
@@ -45,6 +47,7 @@ class MeetingDraft {
       startWeek: selection.startWeek,
       endWeek: selection.endWeek,
       pattern: selection.pattern,
+      selectionMode: selection.mode,
       teacher: rule.teacher ?? '',
       campus: rule.campus ?? '',
       room: rule.room ?? '',
@@ -63,6 +66,7 @@ class MeetingDraft {
   final int startWeek;
   final int endWeek;
   final WeekPattern pattern;
+  final WeekSelectionMode selectionMode;
   final String teacher;
   final String campus;
   final String room;
@@ -78,6 +82,7 @@ class MeetingDraft {
     int? startWeek,
     int? endWeek,
     WeekPattern? pattern,
+    WeekSelectionMode? selectionMode,
     String? teacher,
     String? campus,
     String? room,
@@ -95,6 +100,7 @@ class MeetingDraft {
       startWeek: startWeek ?? this.startWeek,
       endWeek: endWeek ?? this.endWeek,
       pattern: pattern ?? this.pattern,
+      selectionMode: selectionMode ?? this.selectionMode,
       teacher: teacher ?? this.teacher,
       campus: campus ?? this.campus,
       room: room ?? this.room,
@@ -106,7 +112,9 @@ class MeetingDraft {
   }
 
   WeekMask weekMask(int totalWeeks) {
-    if (isIrregular && originalWeekMask != null) return originalWeekMask!;
+    if (selectionMode == WeekSelectionMode.custom && originalWeekMask != null) {
+      return originalWeekMask!;
+    }
     return buildPatternWeekMask(
       startWeek: startWeek,
       endWeek: endWeek,

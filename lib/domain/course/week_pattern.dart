@@ -2,6 +2,22 @@ import '../../core/utils/week_mask.dart';
 
 enum WeekPattern { all, odd, even }
 
+/// The presentation model used by course forms when selecting teaching weeks.
+///
+/// [WeekPattern] remains the compact domain representation for regular masks;
+/// [custom] keeps an explicit mask so irregular imported schedules are not
+/// silently widened to a continuous range.
+enum WeekSelectionMode { all, odd, even, custom }
+
+extension WeekSelectionModeLabels on WeekSelectionMode {
+  String get label => switch (this) {
+        WeekSelectionMode.all => '全部周',
+        WeekSelectionMode.odd => '单周',
+        WeekSelectionMode.even => '双周',
+        WeekSelectionMode.custom => '自定义',
+      };
+}
+
 extension WeekPatternLabels on WeekPattern {
   String get label => switch (this) {
         WeekPattern.all => '全部周',
@@ -40,12 +56,14 @@ class WeekPatternSelection {
     required this.startWeek,
     required this.endWeek,
     required this.pattern,
+    required this.mode,
     required this.isIrregular,
   });
 
   final int startWeek;
   final int endWeek;
   final WeekPattern pattern;
+  final WeekSelectionMode mode;
   final bool isIrregular;
 }
 
@@ -57,6 +75,7 @@ WeekPatternSelection inferWeekPattern(WeekMask mask,
       startWeek: 1,
       endWeek: totalWeeks,
       pattern: WeekPattern.all,
+      mode: WeekSelectionMode.custom,
       isIrregular: true,
     );
   }
@@ -74,6 +93,11 @@ WeekPatternSelection inferWeekPattern(WeekMask mask,
         startWeek: startWeek,
         endWeek: endWeek,
         pattern: pattern,
+        mode: switch (pattern) {
+          WeekPattern.all => WeekSelectionMode.all,
+          WeekPattern.odd => WeekSelectionMode.odd,
+          WeekPattern.even => WeekSelectionMode.even,
+        },
         isIrregular: false,
       );
     }
@@ -82,6 +106,7 @@ WeekPatternSelection inferWeekPattern(WeekMask mask,
     startWeek: startWeek,
     endWeek: endWeek,
     pattern: WeekPattern.all,
+    mode: WeekSelectionMode.custom,
     isIrregular: true,
   );
 }
