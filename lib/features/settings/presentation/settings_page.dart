@@ -590,6 +590,9 @@ Future<void> _setNotificationEnabled(
     }
     final granted = await service.requestPermission();
     if (!granted) {
+      await repository.setSetting('notifications.enabled', 'false');
+      await _bestEffort(service.clear);
+      ref.invalidate(notificationEnabledProvider);
       if (context.mounted) _showMessage(context, '未获得通知权限，提醒未开启');
       return;
     }
