@@ -16,7 +16,7 @@
 | `321` 教室不进入周次、异常周次 fail-closed | DOM fixture 与 `timetable_import_test.dart` | PASS（自动化） |
 | 不完整 DOM 不触发 destructive import | `drift_schedule_data_repository_test.dart` | PASS（自动化） |
 | 未收录校历的学期仍可导入并显示缺失校历提示 | `drift_schedule_data_repository_test.dart`、`schedule_pages_test.dart` | PASS（自动化） |
-| 教师/教室/校区/周次/节次变化后的 meeting identity 与例外 | Drift repository identity tests | PASS（自动化） |
+| 教师/教室/校区/周次/节次变化后的 meeting identity 与例外 | Drift repository identity tests；`sourceMeetingKey` 精确匹配与结构匹配回归测试 | PASS（自动化） |
 | 备份、清除、恢复、旧备份兼容 | `schedule_backup_test.dart`、`backup_repository_test.dart`、fixture pipeline | PASS（自动化） |
 | 清除所有数据后恢复首次启动状态 | `widget_test.dart`、Drift repository assertions | PASS（自动化） |
 | Rolling WidgetSnapshot 与 Android 当前日期/时间过滤 | `widget_snapshot_test.dart`、`CourseWidgetProvider.kt` | PASS（自动化/静态） |
@@ -24,16 +24,16 @@
 | 隐私边界、无统计/广告依赖、merged manifest | privacy/manifest validators 与 CI | PASS（自动化） |
 | 课表显示设置的实时预览 | `widget_test.dart`、`schedule_display_settings_page.dart` | PASS（自动化） |
 | UI、Golden、无障碍 | `test/widget`、`test/golden`、`accessibility_test.dart` | PASS（自动化） |
-| Android 构建 | [GitHub Actions Run #230](https://github.com/AceYKN/NWU-Schedule/actions/runs/35547829278)：debug/release APK 与 merged manifest 校验 | PASS |
+| Android 构建 | [GitHub Actions Run 35593121935](https://github.com/AceYKN/NWU-Schedule/actions/runs/35593121935)：debug/release APK 与 merged manifest 校验 | PASS |
 
-最近一次本地全量检查：校历校验、隐私校验、DOM fixture、`flutter analyze`、184 项 `flutter test` 和本地 debug APK 构建均通过。新增证据包括：旧数据库课程元数据显式清空、备份恢复晚期坏引用保持原数据、Medium/Large Native Widget 缺失地点显示“地点待补充”、手动课程“添加第二条上课安排 → 保存 → 重新打开编辑页仍保留两条”、未知校历学期可安全导入并显示符合 SPEC 文案的缺失校历提示、课表显示设置开关即时更新预览（包括真实节次时间和返回本周按钮），以及清除所有数据后回到“欢迎/导入我的课表”首次启动页且本地学期数据为空。[GitHub Actions Run #230](https://github.com/AceYKN/NWU-Schedule/actions/runs/35547829278) 以 `main` 提交 `893248b` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
+最近一次本地全量检查（`main` 提交 `847955a`）：校历校验、隐私校验、DOM fixture、`flutter analyze`、194 项 `flutter test` 和本地 debug APK 构建均通过。新增身份回归覆盖：同一 `sourceMeetingKey` 优先于竞争结构匹配，重复精确键保持歧义并拒绝自动合并。[GitHub Actions Run 35593121935](https://github.com/AceYKN/NWU-Schedule/actions/runs/35593121935) 已以 `847955a` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
 
 ## 设备上已核对但不等同于真实集成通过
 
 - Pixel 8 API 35 模拟器 `emulator-5554` 在线。
 - `app-debug.apk` 安装成功，`MainActivity` 成为 `topResumedActivity`。
 - 启动后的抽样 logcat 未发现 `FATAL EXCEPTION`。
-- 本轮以 `main` 提交 `359b3ef` 重新构建并安装 debug APK；`io.github.aceykn.nwuschedule/.MainActivity` 再次成为 `topResumedActivity`，安装后最近 500 行 logcat 未发现 `FATAL EXCEPTION`。
+- 本轮以 `main` 提交 `847955a` 重新构建并安装 debug APK；`io.github.aceykn.nwuschedule/.MainActivity` 启动进程保持存活，安装后抽样 logcat 未发现 `FATAL EXCEPTION`、`am_crash` 或 `am_proc_died`。
 
 这只证明 APK 能安装和启动，不证明真实教务账号导入成功。
 
