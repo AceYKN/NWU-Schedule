@@ -140,4 +140,37 @@ void main() {
       isNull,
     );
   });
+
+  test('does not merge a same-name course with no structural overlap', () {
+    final remote = ImportedCourse(
+      sourceCourseKey: 'new-key',
+      name: '软件测试',
+      meetings: [
+        importedMeeting(
+          weekday: 5,
+          startSection: 9,
+          endSection: 10,
+          weeks: WeekMask.fromWeeks([9, 11, 13, 15]),
+        ),
+      ],
+    );
+    final local = Course(
+      id: 'local-course',
+      semesterId: 'semester',
+      sourceType: CourseSourceType.imported,
+      sourceCourseKey: 'old-key',
+      name: '软件测试',
+    );
+
+    expect(
+      matcher.matchLocalCourse(
+        remote,
+        [local],
+        {
+          local.id: [localMeeting()],
+        },
+      ),
+      isNull,
+    );
+  });
 }

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import '../course/course.dart';
 import '../course/meeting_rule.dart';
 import 'timetable_import.dart';
@@ -20,17 +18,15 @@ class ImportIdentityMatcher {
     Iterable<Course> candidates,
     Map<String, List<MeetingRule>> localRules,
   ) {
-    final matches = [
-      for (final candidate in candidates)
-        if (_sameCourseName(candidate.name, remote.name))
-          (
-            course: candidate,
-            score: courseShapeScore(
-              remote.meetings,
-              localRules[candidate.id] ?? const [],
-            ),
-          ),
-    ];
+    final matches = <({Course course, int score})>[];
+    for (final candidate in candidates) {
+      if (!_sameCourseName(candidate.name, remote.name)) continue;
+      final score = courseShapeScore(
+        remote.meetings,
+        localRules[candidate.id] ?? const [],
+      );
+      if (score != null) matches.add((course: candidate, score: score));
+    }
     return _uniqueBest(matches);
   }
 
@@ -38,14 +34,12 @@ class ImportIdentityMatcher {
     ImportedCourse remote,
     Iterable<ImportedCourse> candidates,
   ) {
-    final matches = [
-      for (final candidate in candidates)
-        if (_sameCourseName(candidate.name, remote.name))
-          (
-            course: candidate,
-            score: courseShapeScore(remote.meetings, candidate.meetings),
-          ),
-    ];
+    final matches = <({ImportedCourse course, int score})>[];
+    for (final candidate in candidates) {
+      if (!_sameCourseName(candidate.name, remote.name)) continue;
+      final score = courseShapeScore(remote.meetings, candidate.meetings);
+      if (score != null) matches.add((course: candidate, score: score));
+    }
     return _uniqueBest(matches);
   }
 
@@ -71,20 +65,41 @@ class ImportIdentityMatcher {
 
   /// Scores the stable recurring shape of a course, independent of mutable
   /// display properties.
-  static int courseShapeScore(
+  static int? courseShapeScore(
     List<ImportedMeeting> remote,
     List<Object> local,
   ) {
-    final remoteShapes = remote.map(_remoteShape).toSet();
-    final localShapes = local.map(_shape).toSet();
-    final overlap = remoteShapes.intersection(localShapes).length;
-    final sameWeekdays = remote
-        .map((item) => item.weekday)
-        .toSet()
-        .intersection(local.map(_weekday).toSet())
-        .length;
-    final sameCount = remote.length == local.length ? 1 : 0;
-    return overlap * 100 + sameWeekdays * 10 + sameCount;
+    if (remote.isEmpty || local.isEmpty) return null;
+
+    // A course-level match is valid only when at least one meeting has a
+    // unique schedule-structure match. This prevents a same-name course with
+    // a completely different timetable from being silently merged merely
+    // because it is the only same-name candidate.
+    final unmatched = [...local];
+    var matchedCount = 0;
+    var totalScore = 0;
+    for (final remoteMeeting in remote) {
+      final scored = <({Object candidate, int score})>[];
+      for (final candidate in unmatched) {
+        final score = meetingMatchScore(remoteMeeting, candidate);
+        if (score != null) {
+          scored.add((candidate: candidate, score: score));
+        }
+      }
+      if (scored.isEmpty) continue;
+      scored.sort((left, right) => right.score.compareTo(left.score));
+      if (scored.length > 1 && scored[0].score == scored[1].score) {
+        return null;
+      }
+      final best = scored.first;
+      unmatched.remove(best.candidate);
+      matchedCount++;
+      totalScore += best.score;
+    }
+    if (matchedCount == 0) return null;
+    return matchedCount * 100 +
+        totalScore +
+        (remote.length == local.length ? 1 : 0);
   }
 
   /// Returns null when the remote meeting cannot be matched unambiguously.
@@ -181,38 +196,11 @@ class ImportIdentityMatcher {
     if (matches.length > 1 && matches[0].score == matches[1].score) {
       return null;
     }
-    // A name-only match is safe only when it is the sole local candidate.
-    // If several same-name courses exist, require a structural anchor.
-    if (matches.length > 1 && matches.first.score == 0) return null;
     return matches.first.course;
   }
 
   static bool _sameCourseName(String left, String right) =>
       _normalizeText(left) == _normalizeText(right);
-
-  static String _remoteShape(ImportedMeeting meeting) => jsonEncode([
-        meeting.weekday,
-        meeting.startSection,
-        meeting.endSection,
-        meeting.weekMask.value,
-      ]);
-
-  static String _shape(Object meeting) => switch (meeting) {
-        MeetingRule value => jsonEncode([
-            value.weekday,
-            value.startSection,
-            value.endSection,
-            value.weekMask.value,
-          ]),
-        ImportedMeeting value => _remoteShape(value),
-        _ => throw ArgumentError('Unsupported meeting shape'),
-      };
-
-  static int _weekday(Object meeting) => switch (meeting) {
-        MeetingRule value => value.weekday,
-        ImportedMeeting value => value.weekday,
-        _ => throw ArgumentError('Unsupported meeting weekday'),
-      };
 
   static String _normalizeText(String value) =>
       value.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
