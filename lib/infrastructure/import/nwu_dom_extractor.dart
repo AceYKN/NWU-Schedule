@@ -890,6 +890,48 @@ class NwuDomExtractor {
   return JSON.stringify(buildPayload());
 })()''';
 
+  static const prepareListViewScript = r'''(() => {
+  const payloadHint = window.__NWU_SCHEDULE_PAYLOAD__ != null ||
+    window.__NWU_TIMETABLE__ != null ||
+    window.nwuSchedulePayload != null;
+  if (payloadHint) return 'ready';
+
+  const listTable = document.querySelector('#kblist_table');
+  if (listTable) return 'ready';
+
+  const gridTable = document.querySelector('#kbgrid_table_0');
+  if (!gridTable) return 'not-timetable';
+
+  const controls = Array.from(
+    document.querySelectorAll(
+      'a, button, input[type="button"], input[type="submit"]',
+    ),
+  );
+  let listControl = null;
+  for (let index = 0; index < controls.length; index++) {
+    const element = controls[index];
+    const label = String(
+      element.innerText || element.textContent || element.value || '',
+    ).replace(/\s+/g, '').trim();
+    if (label === '列表') {
+      listControl = element;
+      break;
+    }
+  }
+  if (!listControl) return 'list-control-missing';
+
+  listControl.click();
+  return 'switching';
+})()''';
+
+  static const listViewReadyScript = r'''(() => {
+  const payloadHint = window.__NWU_SCHEDULE_PAYLOAD__ != null ||
+    window.__NWU_TIMETABLE__ != null ||
+    window.nwuSchedulePayload != null;
+  if (payloadHint) return 'ready';
+  return document.querySelector('#kblist_table') ? 'ready' : 'waiting';
+})()''';
+
   static const contextScript = r'''(() => {
   const isVisible = (element) => {
     if (!element || element.hidden ||
@@ -916,26 +958,31 @@ class NwuDomExtractor {
   };
   const loginSelector = 'input[type="password"], #yhm, #mm, '
     + 'input[name*="password" i], input[id*="password" i]';
-  // A concrete list table is stronger evidence than stale or hidden login
-  // controls left in the authenticated page DOM.
-  if (
-    typeof document.querySelector === 'function' &&
-    document.querySelector('#kblist_table')
-  ) {
-    return 'timetable';
-  }
-
   const loginCandidate = typeof document.querySelector === 'function'
     ? document.querySelector(loginSelector)
     : null;
   const loginControls = typeof document.querySelectorAll === 'function'
     ? Array.from(document.querySelectorAll(loginSelector))
     : loginCandidate ? [loginCandidate] : [];
-  const loginControl = loginControls.find(isVisible);
+  let loginControl = null;
+  for (let index = 0; index < loginControls.length; index++) {
+    if (isVisible(loginControls[index])) {
+      loginControl = loginControls[index];
+      break;
+    }
+  }
   const bodyText = (document.body ? document.body.innerText : '')
     .replace(/\s+/g, ' ').trim();
   const loginText = bodyText.includes('用户登录') && bodyText.includes('密码');
   if (loginControl || loginText) return 'login';
+
+  const listTable = typeof document.querySelector === 'function'
+    ? document.querySelector('#kblist_table')
+    : null;
+  const gridTable = typeof document.querySelector === 'function'
+    ? document.querySelector('#kbgrid_table_0')
+    : null;
+  if (listTable || gridTable) return 'timetable';
 
   // The URL allowlist is enforced by the Flutter WebView layer. Inside an
   // allowlisted page, still require a concrete extraction source before the

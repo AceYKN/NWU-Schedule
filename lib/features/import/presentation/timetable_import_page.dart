@@ -116,7 +116,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     if (mounted) setState(() => _currentUrl = url);
     if (NwuZhengfangV9Importer.isLoginUri(uri) ||
         !NwuZhengfangV9Importer.isTrustedTimetableUri(uri) ||
-        !await _hasTimetableContext()) {
+        await _currentTimetableContext() != 'timetable') {
       if (generation != _navigationGeneration || url != _latestStartedUrl) {
         return;
       }
@@ -144,14 +144,40 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     await transition;
   }
 
-  Future<bool> _hasTimetableContext() async {
+  Future<String> _currentTimetableContext() async {
     try {
       final value = await _controller.runJavaScriptReturningResult(
         NwuDomExtractor.contextScript,
       );
-      return value.toString().replaceAll('"', '').toLowerCase() == 'timetable';
+      return value.toString().replaceAll('"', '').trim().toLowerCase();
     } on Object {
-      // A page that cannot be inspected is not a safe context for the bridge.
+      // A page that cannot be inspected is not a safe timetable context.
+      return 'other';
+    }
+  }
+
+  Future<bool> _ensureListTimetableReady() async {
+    try {
+      final prepared = await _controller.runJavaScriptReturningResult(
+        NwuDomExtractor.prepareListViewScript,
+      );
+      final state =
+          prepared.toString().replaceAll('"', '').trim().toLowerCase();
+      if (state == 'ready') return true;
+      if (state != 'switching') return false;
+
+      for (var attempt = 0; attempt < 15; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        final ready = await _controller.runJavaScriptReturningResult(
+          NwuDomExtractor.listViewReadyScript,
+        );
+        if (ready.toString().replaceAll('"', '').trim().toLowerCase() ==
+            'ready') {
+          return true;
+        }
+      }
+      return false;
+    } on Object {
       return false;
     }
   }
@@ -174,29 +200,68 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   }
 
   Future<Map<String, dynamic>> _readPayload() async {
-    final currentUri = Uri.tryParse(_currentUrl ?? _latestStartedUrl ?? '');
-    if (currentUri != null && NwuZhengfangV9Importer.isLoginUri(currentUri)) {
+    final currentUrl = await _controller.currentUrl() ?? _currentUrl;
+    final uri = currentUrl == null ? null : Uri.tryParse(currentUrl);
+
+    if (uri != null && NwuZhengfangV9Importer.isLoginUri(uri)) {
       throw TimetableImportFailure(
         '当前会话已回到教务系统登录页面',
         ImportDiagnostic(
           adapterVersion: NwuZhengfangV9Importer.adapterVersion,
           parserStage: 'authentication',
-          currentUrlPath: currentUri.path,
+          currentUrlPath: uri.path,
           error: 'login-page',
         ),
       );
     }
-    if (!_bridgeEnabled) {
+    if (uri == null || !NwuZhengfangV9Importer.isTrustedTimetableUri(uri)) {
       throw TimetableImportFailure(
         '当前页面尚未识别为课表页面',
         ImportDiagnostic(
           adapterVersion: NwuZhengfangV9Importer.adapterVersion,
           parserStage: 'timetable-context',
-          currentUrlPath: _currentUrlPath,
-          error: 'bridge-disabled',
+          currentUrlPath: uri?.path,
+          error: 'untrusted-timetable-path',
         ),
       );
     }
+
+    final context = await _currentTimetableContext();
+    if (context == 'login') {
+      throw TimetableImportFailure(
+        '当前会话已回到教务系统登录页面',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'authentication',
+          currentUrlPath: uri.path,
+          error: 'login-dom',
+        ),
+      );
+    }
+    if (context != 'timetable') {
+      throw TimetableImportFailure(
+        '当前页面尚未识别为课表页面',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'timetable-context',
+          currentUrlPath: uri.path,
+          error: 'timetable-dom-missing',
+        ),
+      );
+    }
+
+    if (!await _ensureListTimetableReady()) {
+      throw TimetableImportFailure(
+        '个人课表已经打开，但列表视图尚未准备完成',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'timetable-context',
+          currentUrlPath: uri.path,
+          error: 'list-view-not-ready',
+        ),
+      );
+    }
+
     final result = await _controller.runJavaScriptReturningResult(
       NwuDomExtractor.extractionScript,
     );

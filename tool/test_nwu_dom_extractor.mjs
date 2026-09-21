@@ -22,8 +22,12 @@ const extractDartRawString = (markerName) => {
 };
 
 const extractionScript = extractDartRawString('extractionScript');
+const prepareListViewScript = extractDartRawString('prepareListViewScript');
+const listViewReadyScript = extractDartRawString('listViewReadyScript');
 const contextScript = extractDartRawString('contextScript');
 new vm.Script(extractionScript);
+new vm.Script(prepareListViewScript);
+new vm.Script(listViewReadyScript);
 new vm.Script(contextScript);
 
 const decodeText = (value) => value
@@ -801,7 +805,63 @@ const visibleLoginWithTableContext = vm.runInNewContext(contextScript, {
   location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
   document: timetableWithVisibleLoginDocument,
 });
-assert.equal(visibleLoginWithTableContext, 'timetable');
+assert.equal(visibleLoginWithTableContext, 'login');
+
+let listViewVisible = false;
+const ajaxViewDocument = {
+  body: { innerText: '2026-2027 第1学期 个人课表查询' },
+  querySelector(selector) {
+    if (selector === '#kblist_table') return listViewVisible ? {} : null;
+    if (selector === '#kbgrid_table_0') return {};
+    return null;
+  },
+  querySelectorAll(selector) {
+    if (selector.includes('password') ||
+        selector.includes('#yhm') ||
+        selector.includes('#mm')) {
+      return [];
+    }
+    if (!selector.includes('button') &&
+        !selector.includes('input[type="button"]') &&
+        !selector.includes('input[type="submit"]') &&
+        !selector.includes('a')) {
+      return [];
+    }
+    return [{
+      innerText: '列表',
+      textContent: '列表',
+      value: '',
+      click() {
+        listViewVisible = true;
+      },
+    }];
+  },
+};
+const gridContext = vm.runInNewContext(contextScript, {
+  window: {},
+  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+  document: ajaxViewDocument,
+});
+assert.equal(gridContext, 'timetable');
+const prepareState = vm.runInNewContext(prepareListViewScript, {
+  window: {},
+  document: ajaxViewDocument,
+});
+assert.equal(prepareState, 'switching');
+const readyState = vm.runInNewContext(listViewReadyScript, {
+  window: {},
+  document: ajaxViewDocument,
+});
+assert.equal(readyState, 'ready');
+
+const payloadPrepareState = vm.runInNewContext(prepareListViewScript, {
+  window: { __NWU_SCHEDULE_PAYLOAD__: { courses: [] } },
+  document: {
+    querySelector: () => null,
+    querySelectorAll: () => [],
+  },
+});
+assert.equal(payloadPrepareState, 'ready');
 
 const loginPageContext = vm.runInNewContext(contextScript, {
   window: {},
