@@ -116,7 +116,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     if (mounted) setState(() => _currentUrl = url);
     if (NwuZhengfangV9Importer.isLoginUri(uri) ||
         !NwuZhengfangV9Importer.isTrustedTimetableUri(uri) ||
-        !await _hasTimetableContext()) {
+        await _currentTimetableContext() != 'timetable') {
       if (generation != _navigationGeneration || url != _latestStartedUrl) {
         return;
       }
@@ -144,14 +144,40 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     await transition;
   }
 
-  Future<bool> _hasTimetableContext() async {
+  Future<String> _currentTimetableContext() async {
     try {
       final value = await _controller.runJavaScriptReturningResult(
         NwuDomExtractor.contextScript,
       );
-      return value.toString().replaceAll('"', '').toLowerCase() == 'timetable';
+      return value.toString().replaceAll('"', '').trim().toLowerCase();
     } on Object {
-      // A page that cannot be inspected is not a safe context for the bridge.
+      // A page that cannot be inspected is not a safe timetable context.
+      return 'other';
+    }
+  }
+
+  Future<bool> _ensureListTimetableReady() async {
+    try {
+      final prepared = await _controller.runJavaScriptReturningResult(
+        NwuDomExtractor.prepareListViewScript,
+      );
+      final state =
+          prepared.toString().replaceAll('"', '').trim().toLowerCase();
+      if (state == 'ready') return true;
+      if (state != 'switching') return false;
+
+      for (var attempt = 0; attempt < 15; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        final ready = await _controller.runJavaScriptReturningResult(
+          NwuDomExtractor.listViewReadyScript,
+        );
+        if (ready.toString().replaceAll('"', '').trim().toLowerCase() ==
+            'ready') {
+          return true;
+        }
+      }
+      return false;
+    } on Object {
       return false;
     }
   }
@@ -174,16 +200,65 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   }
 
   Future<Map<String, dynamic>> _readPayload() async {
-    if (!_bridgeEnabled) {
-      throw const FormatException('登录完成后请先打开课表页面');
+    final currentUrl = await _controller.currentUrl() ?? _currentUrl;
+    final uri = currentUrl == null ? null : Uri.tryParse(currentUrl);
+    if (uri == null ||
+        !NwuZhengfangV9Importer.isTrustedTimetableUri(uri)) {
+      throw TimetableImportFailure(
+        '当前不是个人课表页面',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'timetable-context',
+          currentUrlPath: uri?.path,
+        ),
+      );
     }
+
+    final context = await _currentTimetableContext();
+    if (context == 'login') {
+      throw TimetableImportFailure(
+        '教务系统登录状态已经失效',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'authentication',
+          currentUrlPath: uri.path,
+        ),
+      );
+    }
+    if (context != 'timetable') {
+      throw TimetableImportFailure(
+        '当前页面尚未识别到课表结构',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'timetable-context',
+          currentUrlPath: uri.path,
+        ),
+      );
+    }
+
+    if (!await _ensureListTimetableReady()) {
+      throw TimetableImportFailure(
+        '个人课表已经打开，但列表视图尚未准备完成',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'timetable-context',
+          currentUrlPath: uri.path,
+        ),
+      );
+    }
+
     final result = await _controller.runJavaScriptReturningResult(
       NwuDomExtractor.extractionScript,
     );
     final payload = _decodePayload(result);
     if (payload == null) {
-      throw const FormatException(
-        '当前页面没有暴露可识别的课表数据，请打开个人课表页面后重试',
+      throw TimetableImportFailure(
+        '当前版本暂时无法识别教务系统课表',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'parser',
+          currentUrlPath: uri.path,
+        ),
       );
     }
     return payload;
