@@ -805,6 +805,15 @@ const readyState = vm.runInNewContext(listViewReadyScript, {
 });
 assert.equal(readyState, 'ready');
 
+const payloadPrepareState = vm.runInNewContext(prepareListViewScript, {
+  window: { __NWU_SCHEDULE_PAYLOAD__: { courses: [] } },
+  document: {
+    querySelector: () => null,
+    querySelectorAll: () => [],
+  },
+});
+assert.equal(payloadPrepareState, 'ready');
+
 const pathOnlyContext = vm.runInNewContext(contextScript, {
   window: {},
   location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
