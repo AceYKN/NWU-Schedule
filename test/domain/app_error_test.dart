@@ -28,6 +28,23 @@ void main() {
     expect(importFailureUserMessage(error), isNot(contains('FormatException')));
   });
 
+  test('separates timetable context failures from authentication failures', () {
+    const error = TimetableImportFailure(
+      '当前页面尚未识别为课表页面',
+      ImportDiagnostic(
+        adapterVersion: 'nwu-zhengfang-v9',
+        parserStage: 'timetable-context',
+        currentUrlPath: '/jwglxt/xtgl/index_initMenu.html',
+        error: 'bridge-disabled',
+      ),
+    );
+
+    expect(
+        classifyNwuError(error).code, NwuErrorCode.timetableContextUnavailable);
+    expect(importFailureUserMessage(error), contains('无法识别为课表页面'));
+    expect(importFailureUserMessage(error), isNot(contains('登录状态已经失效')));
+  });
+
   test('maps database failures to a stable presentation message', () {
     final error = classifyNwuError(StateError('SQLiteException: locked'));
 

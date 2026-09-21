@@ -36,6 +36,31 @@ class NwuDomExtractor {
       : '',
   );
 
+  // Zhengfang pages currently replace Array.prototype.filter/some/every with
+  // legacy callbacks whose argument order is incompatible with standard JS.
+  // The extractor runs in that page context, so keep these operations local
+  // and deterministic instead of trusting page-owned prototypes.
+  const filterItems = (items, predicate) => {
+    const result = [];
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      if (predicate(item, index, items)) result.push(item);
+    }
+    return result;
+  };
+  const someItems = (items, predicate) => {
+    for (let index = 0; index < items.length; index++) {
+      if (predicate(items[index], index, items)) return true;
+    }
+    return false;
+  };
+  const everyItems = (items, predicate) => {
+    for (let index = 0; index < items.length; index++) {
+      if (!predicate(items[index], index, items)) return false;
+    }
+    return true;
+  };
+
   const courses = [];
   const issues = [];
   let maxWeek = 0;
@@ -71,7 +96,7 @@ class NwuDomExtractor {
       weekText.matchAll(/\d+/g),
       (match) => Number(match[0]),
     );
-    const unexpectedCharacters = Array.from(weekText).filter((character) =>
+    const unexpectedCharacters = filterItems(Array.from(weekText), (character) =>
       /[^\d\s,，、()（）\[\]{}单双全周次第\-~～—至]/u.test(character));
     const unexpectedCharacterClasses = Array.from(new Set(
       unexpectedCharacters.map((character) => {
@@ -91,7 +116,8 @@ class NwuDomExtractor {
     const invalid =
       unexpectedCharacters.length > 0 ||
       (!weekNumbers.length && !/单|双|全/.test(weekText)) ||
-      weekNumbers.some(
+      someItems(
+        weekNumbers,
         (week) => !Number.isInteger(week) || week < 1 || week > 64,
       );
     if (invalid) {
@@ -149,7 +175,8 @@ class NwuDomExtractor {
       courseGroupKey + '|meeting|' + meetingKey;
 
     if (
-      course.meetings.some(
+      someItems(
+        course.meetings,
         (item) => item.sourceMeetingKey === sourceMeetingKey,
       )
     ) {
@@ -377,7 +404,7 @@ class NwuDomExtractor {
       // candidate course detail cell. Do not filter only by the `周数` label:
       // a malformed row missing that label must become a validation error,
       // rather than disappearing and being interpreted as a remote deletion.
-      const infoCells = cells.filter((cell) => {
+      const infoCells = filterItems(cells, (cell) => {
         const id = cell.id || '';
         if (/^xq_rowspan_[1-7]$/.test(id)) return false;
         if (/^jc_[1-7]-\d+-\d+$/.test(id)) return false;
@@ -509,14 +536,16 @@ class NwuDomExtractor {
   }
 
   const headerMatches = (headers, patterns) => {
-    const exact = headers
-      .map((header, index) => patterns.includes(header) ? index : -1)
-      .filter((index) => index >= 0);
+    const exact = filterItems(
+      headers.map((header, index) => patterns.includes(header) ? index : -1),
+      (index) => index >= 0,
+    );
     if (exact.length) return exact;
-    return headers
-      .map((header, index) => patterns.some((pattern) =>
-        pattern !== '课程' && header.includes(pattern)) ? index : -1)
-      .filter((index) => index >= 0);
+    return filterItems(
+      headers.map((header, index) => someItems(patterns, (pattern) =>
+        pattern !== '课程' && header.includes(pattern)) ? index : -1),
+      (index) => index >= 0,
+    );
   };
   const headerIndex = (headers, patterns) => {
     const matches = headerMatches(headers, patterns);
@@ -645,11 +674,12 @@ class NwuDomExtractor {
       const candidateHeaders = Array.from(
         { length: width },
         (_, columnIndex) => normalize(
-          grid
-            .slice(0, candidateEnd + 1)
-            .map((row) => row[columnIndex] || '')
-            .filter((value) => value)
-            .join(' '),
+          filterItems(
+            grid
+              .slice(0, candidateEnd + 1)
+              .map((row) => row[columnIndex] || ''),
+            (value) => value,
+          ).join(' '),
         ),
       );
       const score = headerScore(candidateHeaders);
@@ -696,20 +726,27 @@ class NwuDomExtractor {
         headerMatches(headers, patterns),
       ]),
     );
-    const invalidRequired = requiredHeaders
-      .filter(([field]) => requiredIndexes[field].length !== 1)
+    const invalidRequired = filterItems(
+      requiredHeaders,
+      ([field]) => requiredIndexes[field].length !== 1,
+    )
       .map(([field]) => field);
-    const duplicateRequired = requiredHeaders
-      .filter(([field]) => requiredIndexes[field].length === 1)
-      .filter(([field], fieldIndex, fields) => {
+    const duplicateRequired = filterItems(
+      filterItems(
+        requiredHeaders,
+        ([field]) => requiredIndexes[field].length === 1,
+      ),
+      ([field], fieldIndex, fields) => {
         const index = requiredIndexes[field][0];
-        return fields.some(
+        return someItems(
+          fields,
           ([otherField], otherIndex) =>
             otherIndex !== fieldIndex &&
             requiredIndexes[otherField].length === 1 &&
             requiredIndexes[otherField][0] === index,
         );
-      })
+      },
+    )
       .map(([field]) => field);
     const invalidColumns = [
       ...new Set([...invalidRequired, ...duplicateRequired]),
@@ -747,7 +784,9 @@ class NwuDomExtractor {
     for (let rowIndex = headerEnd + 1; rowIndex < grid.length; rowIndex++) {
       const rowPath = 'tables[' + tableIndex + '].rows[' + rowIndex + ']';
       const cells = grid[rowIndex] || [];
-      if (!cells.length || cells.every((value) => !normalize(value))) continue;
+      if (!cells.length || everyItems(cells, (value) => !normalize(value))) {
+        continue;
+      }
 
       const cellAt = (index) => index >= 0 ? normalize(cells[index]) : '';
       const name = cellAt(nameIndex);
@@ -877,21 +916,26 @@ class NwuDomExtractor {
   };
   const loginSelector = 'input[type="password"], #yhm, #mm, '
     + 'input[name*="password" i], input[id*="password" i]';
-  const loginControls = typeof document.querySelectorAll === 'function'
-    ? Array.from(document.querySelectorAll(loginSelector))
-    : [document.querySelector(loginSelector)].filter((element) => element);
-  const loginControl = loginControls.find(isVisible);
-  const bodyText = (document.body ? document.body.innerText : '')
-    .replace(/\s+/g, ' ').trim();
-  const loginText = bodyText.includes('用户登录') && bodyText.includes('密码');
-  if (loginControl || loginText) return 'login';
-
+  // A concrete list table is stronger evidence than stale or hidden login
+  // controls left in the authenticated page DOM.
   if (
     typeof document.querySelector === 'function' &&
     document.querySelector('#kblist_table')
   ) {
     return 'timetable';
   }
+
+  const loginCandidate = typeof document.querySelector === 'function'
+    ? document.querySelector(loginSelector)
+    : null;
+  const loginControls = typeof document.querySelectorAll === 'function'
+    ? Array.from(document.querySelectorAll(loginSelector))
+    : loginCandidate ? [loginCandidate] : [];
+  const loginControl = loginControls.find(isVisible);
+  const bodyText = (document.body ? document.body.innerText : '')
+    .replace(/\s+/g, ' ').trim();
+  const loginText = bodyText.includes('用户登录') && bodyText.includes('密码');
+  if (loginControl || loginText) return 'login';
 
   // The URL allowlist is enforced by the Flutter WebView layer. Inside an
   // allowlisted page, still require a concrete extraction source before the

@@ -96,13 +96,36 @@ const parseFixtureDocument = (html) => {
   return { document, tables };
 };
 
-const runExtraction = (html) => {
+const runExtraction = (html, { legacyArrayCallbacks = false } = {}) => {
   const fixtureDocument = parseFixtureDocument(html);
   const context = {
     window: {},
     location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
     document: fixtureDocument.document,
   };
+  if (legacyArrayCallbacks) {
+    vm.runInNewContext(`
+      Array.prototype.filter = function(callback) {
+        const result = [];
+        for (let index = 0; index < this.length; index++) {
+          if (callback(index, this[index], this)) result.push(this[index]);
+        }
+        return result;
+      };
+      Array.prototype.some = function(callback) {
+        for (let index = 0; index < this.length; index++) {
+          if (callback(index, this[index], this)) return true;
+        }
+        return false;
+      };
+      Array.prototype.every = function(callback) {
+        for (let index = 0; index < this.length; index++) {
+          if (!callback(index, this[index], this)) return false;
+        }
+        return true;
+      };
+    `, context);
+  }
   return {
     payload: JSON.parse(vm.runInNewContext(extractionScript, context)),
     context,
@@ -484,6 +507,24 @@ assert.equal(
   0,
 );
 
+// Zhengfang currently patches Array.prototype callbacks on the live page.
+// The extractor must still parse the verified list table in that environment.
+const realListWithLegacyArrayCallbacks = runExtraction(realListFixture, {
+  legacyArrayCallbacks: true,
+});
+assert.equal(realListWithLegacyArrayCallbacks.payload.totalWeeks, 18);
+assert.equal(realListWithLegacyArrayCallbacks.payload.courses.length, 6);
+assert.equal(
+  realListWithLegacyArrayCallbacks.payload.courses
+    .flatMap((course) => course.meetings).length,
+  realList.payload.courses.flatMap((course) => course.meetings).length,
+);
+assert.equal(
+  realListWithLegacyArrayCallbacks.payload.issues
+    .filter((issue) => issue.severity === 'error').length,
+  0,
+);
+
 const obsoleteIdentityChanged = runExtraction(
   realListFixture.replace(/数据结构实验-0003/g, '数据结构实验-9999'),
 );
@@ -732,6 +773,46 @@ const hiddenLoginContext = vm.runInNewContext(contextScript, {
   document: hiddenLoginDocument,
 });
 assert.equal(hiddenLoginContext, 'timetable');
+
+const visibleLoginControl = {
+  hidden: false,
+  getAttribute: () => null,
+  getClientRects: () => [{}],
+};
+const timetableWithVisibleLoginDocument = {
+  body: realList.fixtureDocument.document.body,
+  querySelector(selector) {
+    if (selector === '#kblist_table') {
+      return realList.fixtureDocument.document.querySelector(selector);
+    }
+    return selector.includes('input') || selector === '#yhm' || selector === '#mm'
+      ? visibleLoginControl
+      : null;
+  },
+  querySelectorAll(selector) {
+    return selector.includes('input') || selector.includes('#yhm') ||
+      selector.includes('#mm')
+      ? [visibleLoginControl]
+      : [];
+  },
+};
+const visibleLoginWithTableContext = vm.runInNewContext(contextScript, {
+  window: {},
+  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+  document: timetableWithVisibleLoginDocument,
+});
+assert.equal(visibleLoginWithTableContext, 'timetable');
+
+const loginPageContext = vm.runInNewContext(contextScript, {
+  window: {},
+  location: { pathname: '/jwglxt/xtgl/login_slogin.html' },
+  document: {
+    body: { innerText: '用户登录 密码' },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+  },
+});
+assert.equal(loginPageContext, 'login');
 
 const pathOnlyContext = vm.runInNewContext(contextScript, {
   window: {},

@@ -4,6 +4,7 @@ import '../import/timetable_importer.dart';
 
 enum NwuErrorCode {
   authenticationExpired,
+  timetableContextUnavailable,
   timetableEndpointUnavailable,
   parserMismatch,
   invalidRemoteData,
@@ -30,6 +31,14 @@ final class AuthenticationExpiredError extends NwuAppError {
       : super(
           NwuErrorCode.authenticationExpired,
           '登录状态已经失效，请重新登录西北大学教务系统。',
+        );
+}
+
+final class TimetableContextUnavailableError extends NwuAppError {
+  const TimetableContextUnavailableError()
+      : super(
+          NwuErrorCode.timetableContextUnavailable,
+          '当前页面暂时无法识别为课表页面，请打开个人课表页面后重试。',
         );
 }
 
@@ -148,15 +157,17 @@ NwuAppError classifyNwuError(Object error) {
 
 NwuAppError _classifyImportFailure(TimetableImportFailure failure) {
   final stage = failure.diagnostic.parserStage.toLowerCase();
-  final text = failure.message.toLowerCase();
-  if (stage.contains('payload-read') ||
-      stage.contains('authentication') ||
-      text.contains('登录') ||
-      text.contains('认证')) {
+  if (stage.contains('authentication') || stage.contains('login')) {
     return const AuthenticationExpiredError();
+  }
+  if (stage.contains('timetable-context')) {
+    return const TimetableContextUnavailableError();
   }
   if (stage.contains('validation') || stage.contains('bridge')) {
     return const InvalidRemoteDataError();
+  }
+  if (stage.contains('payload-read')) {
+    return const ParserMismatchError();
   }
   if (stage.contains('parser') ||
       stage.contains('timetable') ||

@@ -174,8 +174,28 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   }
 
   Future<Map<String, dynamic>> _readPayload() async {
+    final currentUri = Uri.tryParse(_currentUrl ?? _latestStartedUrl ?? '');
+    if (currentUri != null && NwuZhengfangV9Importer.isLoginUri(currentUri)) {
+      throw TimetableImportFailure(
+        '当前会话已回到教务系统登录页面',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'authentication',
+          currentUrlPath: currentUri.path,
+          error: 'login-page',
+        ),
+      );
+    }
     if (!_bridgeEnabled) {
-      throw const FormatException('登录完成后请先打开课表页面');
+      throw TimetableImportFailure(
+        '当前页面尚未识别为课表页面',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'timetable-context',
+          currentUrlPath: _currentUrlPath,
+          error: 'bridge-disabled',
+        ),
+      );
     }
     final result = await _controller.runJavaScriptReturningResult(
       NwuDomExtractor.extractionScript,
@@ -455,7 +475,8 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   }
 
   String? get _currentUrlPath {
-    final uri = _currentUrl == null ? null : Uri.tryParse(_currentUrl!);
+    final url = _currentUrl ?? _latestStartedUrl;
+    final uri = url == null ? null : Uri.tryParse(url);
     return uri?.path;
   }
 

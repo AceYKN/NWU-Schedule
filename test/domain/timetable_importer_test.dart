@@ -249,7 +249,7 @@ void main() {
     );
   });
 
-  test('keeps a bridge-disabled payload read as an authentication failure',
+  test('does not classify a generic payload-read message as authentication',
       () async {
     final importer = NwuZhengfangV9Importer(
       readPayload: () async => throw const FormatException(
@@ -269,8 +269,65 @@ void main() {
             .having(
               (failure) => importFailureUserMessage(failure),
               'userMessage',
-              contains('登录状态已经失效'),
+              contains('无法识别教务系统课表'),
             ),
+      ),
+    );
+  });
+
+  test('keeps bridge-disabled context distinct from authentication', () async {
+    final importer = NwuZhengfangV9Importer(
+      readPayload: () async => throw const TimetableImportFailure(
+        '当前页面尚未识别为课表页面',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'timetable-context',
+          currentUrlPath: '/jwglxt/xtgl/index_initMenu.html',
+          error: 'bridge-disabled',
+        ),
+      ),
+    );
+
+    await expectLater(
+      importer.getSemesters(),
+      throwsA(
+        isA<TimetableImportFailure>()
+            .having(
+              (failure) => failure.diagnostic.parserStage,
+              'parserStage',
+              'timetable-context',
+            )
+            .having(
+              (failure) => importFailureUserMessage(failure),
+              'userMessage',
+              contains('无法识别为课表页面'),
+            ),
+      ),
+    );
+  });
+
+  test('keeps an explicit authentication diagnostic as authentication',
+      () async {
+    final importer = NwuZhengfangV9Importer(
+      readPayload: () async => throw const TimetableImportFailure(
+        '当前会话已回到教务系统登录页面',
+        ImportDiagnostic(
+          adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+          parserStage: 'authentication',
+          currentUrlPath: '/jwglxt/xtgl/login_slogin.html',
+          error: 'login-page',
+        ),
+      ),
+    );
+
+    await expectLater(
+      importer.getSemesters(),
+      throwsA(
+        isA<TimetableImportFailure>().having(
+          (failure) => importFailureUserMessage(failure),
+          'userMessage',
+          contains('登录状态已经失效'),
+        ),
       ),
     );
   });
