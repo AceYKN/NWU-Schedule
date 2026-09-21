@@ -141,6 +141,11 @@ assert.equal(software.meetings.length, 2);
 assert.equal(software.meetings[0].room, '321');
 assert.equal(software.meetings[0].weekText, '1-16周');
 assert.equal(software.meetings[1].weekText, '单周');
+assert.ok(generic.payload.courses.every((course) =>
+  !Object.hasOwn(course, 'code') &&
+  !Object.hasOwn(course, 'teachingClass') &&
+  !Object.hasOwn(course, 'credits') &&
+  !Object.hasOwn(course, 'assessment')));
 
 const network = generic.payload.courses.find(
   (course) => course.name === '计算机网络',
