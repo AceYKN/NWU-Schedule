@@ -24,16 +24,16 @@
 | 隐私边界、无统计/广告依赖、merged manifest | privacy/manifest validators 与 CI | PASS（自动化） |
 | 课表显示设置的实时预览 | `widget_test.dart`、`schedule_display_settings_page.dart` | PASS（自动化） |
 | UI、Golden、无障碍 | `test/widget`、`test/golden`、`accessibility_test.dart` | PASS（自动化） |
-| Android 构建 | [GitHub Actions Run 35609291647](https://github.com/AceYKN/NWU-Schedule/actions/runs/35609291647)：debug/release APK 与 merged manifest 校验 | PASS |
+| Android 构建 | [GitHub Actions Run 35612115920](https://github.com/AceYKN/NWU-Schedule/actions/runs/35612115920)：debug/release APK、merged manifest 校验与 `nwu-schedule-apks-844d528` artifact 上传 | PASS |
 
-最近一次本地全量检查（代码提交 `dc3f2d8`，当前 `main` 文档提交 `1681b7c`）：校历校验、隐私校验、当前 V9 DOM fixture、`flutter analyze`、195 项 `flutter test` 和本地 debug APK 构建均通过。`dc3f2d8` 修复了真实 V9 页面 `周数：` 展示前缀和 Android WebView 下拉选项误取学年的问题，并完成真实读取、Preview、确认导入和重启回读。此前的身份回归覆盖仍包括：同一 `sourceMeetingKey` 优先于竞争结构匹配、重复精确键保持歧义并拒绝自动合并、多安排采用一对一保守匹配。[GitHub Actions Run 35609291647](https://github.com/AceYKN/NWU-Schedule/actions/runs/35609291647) 已以当前 `main` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
+最近一次本地全量检查（当前 `main` 提交 `844d528`）：校历校验、隐私校验、当前 V9 DOM fixture、`flutter analyze`、196 项 `flutter test` 和本地 debug APK 构建均通过。此前的 `dc3f2d8` 修复了真实 V9 页面 `周数：` 展示前缀和 Android WebView 下拉选项误取学年的问题，并完成真实读取、Preview、确认导入和重启回读；本次新增校历 revision 提示回归测试。[GitHub Actions Run 35612115920](https://github.com/AceYKN/NWU-Schedule/actions/runs/35612115920) 已以当前 `main` 完成全部 CI 检查，包括 debug/release APK 构建、最终 merged manifest 校验和 review artifact 上传。
 
 ## 设备上已核对但不等同于真实集成通过
 
 - Pixel 8 API 35 模拟器 `emulator-5554` 在线。
 - `app-debug.apk` 安装成功，`MainActivity` 成为 `topResumedActivity`。
 - 启动后的抽样 logcat 未发现 `FATAL EXCEPTION`。
-- 本轮以 `main` 提交 `847955a` 重新构建并安装 debug APK；`io.github.aceykn.nwuschedule/.MainActivity` 启动进程保持存活，安装后抽样 logcat 未发现 `FATAL EXCEPTION`、`am_crash` 或 `am_proc_died`。
+- 本轮以导入修复提交 `dc3f2d8` 重新构建并安装 debug APK；`io.github.aceykn.nwuschedule/.MainActivity` 启动进程保持存活，安装后抽样 logcat 未发现 `FATAL EXCEPTION`、`am_crash` 或 `am_proc_died`。
 - 在同一 APK 上执行强制停止并重新启动后，应用进程重新存活，`CourseWidgetProvider` 仍保留 2 个实例（`widgets.size=2`），抽样 logcat 仍未发现上述崩溃标记。
 
 这只证明 APK 能安装和启动，不证明真实教务账号导入成功。
