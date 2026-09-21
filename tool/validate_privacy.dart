@@ -38,6 +38,23 @@ void main() {
     throw StateError('Release WebView debugging is not explicitly disabled');
   }
 
+  final gitignore = File('.gitignore').readAsStringSync();
+  const requiredSigningIgnores = {
+    '/android/key.properties',
+    '*.jks',
+    '*.keystore',
+    '*.p12',
+  };
+  final missingSigningIgnores = requiredSigningIgnores
+      .where((pattern) => !gitignore.split('\n').contains(pattern))
+      .toList(growable: false);
+  if (missingSigningIgnores.isNotEmpty) {
+    throw StateError(
+      'Release signing files are not ignored: '
+      '${missingSigningIgnores.join(', ')}',
+    );
+  }
+
   final pubspec = File('pubspec.yaml').readAsStringSync().toLowerCase();
   const forbiddenPackages = [
     'firebase',
@@ -63,6 +80,6 @@ void main() {
 
   stdout.writeln(
     'Privacy validation passed (permissions, backup policy, cleartext policy, '
-    'WebView debugging, dependencies).',
+    'WebView debugging, signing ignores, dependencies).',
   );
 }
