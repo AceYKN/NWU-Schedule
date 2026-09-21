@@ -22,8 +22,12 @@ const extractDartRawString = (markerName) => {
 };
 
 const extractionScript = extractDartRawString('extractionScript');
+const prepareListViewScript = extractDartRawString('prepareListViewScript');
+const listViewReadyScript = extractDartRawString('listViewReadyScript');
 const contextScript = extractDartRawString('contextScript');
 new vm.Script(extractionScript);
+new vm.Script(prepareListViewScript);
+new vm.Script(listViewReadyScript);
 new vm.Script(contextScript);
 
 const decodeText = (value) => value
@@ -732,6 +736,44 @@ const hiddenLoginContext = vm.runInNewContext(contextScript, {
   document: hiddenLoginDocument,
 });
 assert.equal(hiddenLoginContext, 'timetable');
+
+let listViewVisible = false;
+const ajaxViewDocument = {
+  body: { innerText: '2026-2027 第1学期 个人课表查询' },
+  querySelector(selector) {
+    if (selector === '#kblist_table') return listViewVisible ? {} : null;
+    if (selector === '#kbgrid_table_0') return {};
+    return null;
+  },
+  querySelectorAll(selector) {
+    if (!selector.includes('button') && !selector.includes('input') &&
+        !selector.includes('a')) {
+      return [];
+    }
+    return [{
+      innerText: '列表',
+      textContent: '列表',
+      value: '',
+      click() {
+        listViewVisible = true;
+      },
+    }];
+  },
+};
+const gridContext = vm.runInNewContext(contextScript, {
+  window: {},
+  location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+  document: ajaxViewDocument,
+});
+assert.equal(gridContext, 'timetable');
+const prepareState = vm.runInNewContext(prepareListViewScript, {
+  document: ajaxViewDocument,
+});
+assert.equal(prepareState, 'switching');
+const readyState = vm.runInNewContext(listViewReadyScript, {
+  document: ajaxViewDocument,
+});
+assert.equal(readyState, 'ready');
 
 const pathOnlyContext = vm.runInNewContext(contextScript, {
   window: {},
