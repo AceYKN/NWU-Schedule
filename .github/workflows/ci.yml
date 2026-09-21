@@ -52,3 +52,13 @@ jobs:
           dart run tool/validate_merged_manifest.dart
           build/app/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml
           --release
+      - if: github.ref == 'refs/heads/main'
+        name: Upload review APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: nwu-schedule-apks-${{ github.sha }}
+          path: |
+            build/app/outputs/flutter-apk/app-debug.apk
+            build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
