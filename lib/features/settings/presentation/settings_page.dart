@@ -521,7 +521,7 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
     ref.invalidate(notificationEnabledProvider);
     ref.invalidate(notificationLeadMinutesProvider);
     ref.invalidate(scheduleLoadProvider);
-    if (context.mounted) _showMessage(context, '本地数据已清除');
+    if (context.mounted) context.go('/');
   } catch (error) {
     if (context.mounted) {
       _showMessage(context, nwuUserMessage(error, action: '清除数据失败'));

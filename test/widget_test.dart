@@ -1,6 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:nwu_schedule/app/app.dart';
@@ -193,6 +194,51 @@ void main() {
     expect(find.textContaining('临时加课'), findsOneWidget);
     expect(find.textContaining('单次课程'), findsOneWidget);
 
+    appRouter.go('/settings');
+    await tester.pumpAndSettle();
+    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    await tester.pumpAndSettle();
+    final clearDataTile = find.text('清除所有数据', skipOffstage: false);
+    expect(clearDataTile, findsOneWidget);
+    await tester.ensureVisible(clearDataTile);
+    await tester.pumpAndSettle();
+    await tester.tap(clearDataTile);
+    await tester.pumpAndSettle();
+    expect(find.text('清除所有数据？'), findsOneWidget);
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    for (final channelName in const [
+      'nwu_schedule/notifications',
+      'nwu_schedule/widget',
+      'nwu_schedule/webview_session',
+    ]) {
+      messenger.setMockMethodCallHandler(
+        MethodChannel(channelName),
+        (_) async => null,
+      );
+    }
+    addTearDown(() {
+      for (final channelName in const [
+        'nwu_schedule/notifications',
+        'nwu_schedule/widget',
+        'nwu_schedule/webview_session',
+      ]) {
+        messenger.setMockMethodCallHandler(MethodChannel(channelName), null);
+      }
+    });
+    await tester.tap(find.widgetWithText(FilledButton, '清除'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+    expect(appRouter.routeInformationProvider.value.uri.path, '/');
+    expect(find.text('欢迎'), findsOneWidget);
+    expect(find.text('导入我的课表'), findsOneWidget);
+    expect(
+      await DriftScheduleDataRepository(database).loadSemesters(),
+      isEmpty,
+    );
+
+    await tester.binding.setSurfaceSize(null);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
