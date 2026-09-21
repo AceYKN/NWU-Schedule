@@ -33,7 +33,7 @@
 - Pixel 8 API 35 模拟器 `emulator-5554` 在线。
 - `app-debug.apk` 安装成功，`MainActivity` 成为 `topResumedActivity`。
 - 启动后的抽样 logcat 未发现 `FATAL EXCEPTION`。
-- 本轮以 `main` 提交 `300d619` 重新构建并安装 debug APK；`io.github.aceykn.nwuschedule/.MainActivity` 再次成为 `topResumedActivity`，安装后最近 500 行 logcat 未发现 `FATAL EXCEPTION`。
+- 本轮以 `main` 提交 `359b3ef` 重新构建并安装 debug APK；`io.github.aceykn.nwuschedule/.MainActivity` 再次成为 `topResumedActivity`，安装后最近 500 行 logcat 未发现 `FATAL EXCEPTION`。
 
 这只证明 APK 能安装和启动，不证明真实教务账号导入成功。
 
