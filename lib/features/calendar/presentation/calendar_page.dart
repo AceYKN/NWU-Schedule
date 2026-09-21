@@ -54,20 +54,24 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
         );
         final firstDay = DateTime(month.year, month.month);
         final totalDays = DateTime(month.year, month.month + 1, 0).day;
-        final days = List<DateTime>.generate(
-          totalDays,
-          (index) => DateTime(month.year, month.month, index + 1),
+        final leading = firstDay.weekday - 1;
+        final cellCount = ((leading + totalDays + 6) ~/ 7) * 7;
+        final gridStart = firstDay.subtract(Duration(days: leading));
+        final gridDays = List<DateTime>.generate(
+          cellCount,
+          (index) => gridStart.add(Duration(days: index)),
         );
         return _MonthContent(
           month: month,
-          firstDay: firstDay,
-          days: days,
+          gridDays: gridDays,
           coursesByDate: {
-            for (final day in days) dateKey(day): engine.getCoursesForDate(day),
+            for (final day in gridDays)
+              dateKey(day): engine.getCoursesForDate(day),
           },
           onMonthChanged: (value) => setState(() => month = value),
           engine: engine,
           now: campusNow,
+          currentTeachingWeek: engine.resolveDate(campusNow).teachingWeek,
         );
       },
     );
@@ -77,26 +81,25 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
 class _MonthContent extends StatelessWidget {
   const _MonthContent({
     required this.month,
-    required this.firstDay,
-    required this.days,
+    required this.gridDays,
     required this.coursesByDate,
     required this.onMonthChanged,
     required this.engine,
     required this.now,
+    required this.currentTeachingWeek,
   });
 
   final DateTime month;
-  final DateTime firstDay;
-  final List<DateTime> days;
+  final List<DateTime> gridDays;
   final Map<String, List<EffectiveCourseInstance>> coursesByDate;
   final ValueChanged<DateTime> onMonthChanged;
   final ScheduleEngine engine;
   final DateTime now;
+  final int? currentTeachingWeek;
 
   @override
   Widget build(BuildContext context) {
     final themeTokens = scheduleThemeTokensOf(context);
-    final leading = firstDay.weekday - 1;
     return ListView(
       padding: EdgeInsets.fromLTRB(
         themeTokens.pagePadding,
@@ -155,43 +158,100 @@ class _MonthContent extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Row(
-          children: ['一', '二', '三', '四', '五', '六', '日']
-              .map(
-                (day) => Expanded(
-                  child: Center(
-                    child: Text(
-                      day,
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
+          children: [
+            const SizedBox(width: 44),
+            ...['一', '二', '三', '四', '五', '六', '日'].map(
+              (day) => Expanded(
+                child: Center(
+                  child: Text(
+                    day,
+                    style: Theme.of(context).textTheme.labelMedium,
                   ),
                 ),
-              )
-              .toList(),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: leading + days.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 7,
-            mainAxisExtent: themeTokens.monthCellHeight,
-          ),
-          itemBuilder: (context, index) {
-            if (index < leading) {
-              return const SizedBox.shrink();
-            }
-            final day = days[index - leading];
-            final courses = coursesByDate[dateKey(day)] ?? const [];
-            return _MonthCell(
-              date: day,
-              courses: courses,
-              resolved: engine.resolveDate(day),
-              now: now,
-            );
-          },
+        Column(
+          children: [
+            for (var row = 0; row < gridDays.length ~/ 7; row++)
+              SizedBox(
+                height: themeTokens.monthCellHeight,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _TeachingWeekGutter(
+                      week: _weekForRow(row),
+                      highlighted: _weekForRow(row) == currentTeachingWeek,
+                    ),
+                    for (var column = 0; column < 7; column++)
+                      Expanded(
+                        child: Builder(
+                          builder: (context) {
+                            final day = gridDays[row * 7 + column];
+                            return _MonthCell(
+                              date: day,
+                              isInMonth: day.month == month.month &&
+                                  day.year == month.year,
+                              courses: coursesByDate[dateKey(day)] ?? const [],
+                              resolved: engine.resolveDate(day),
+                              now: now,
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
         ),
       ],
+    );
+  }
+
+  int? _weekForRow(int row) {
+    for (var column = 0; column < 7; column++) {
+      final week = engine.resolveDate(gridDays[row * 7 + column]).teachingWeek;
+      if (week != null) return week;
+    }
+    return null;
+  }
+}
+
+class _TeachingWeekGutter extends StatelessWidget {
+  const _TeachingWeekGutter({required this.week, required this.highlighted});
+
+  final int? week;
+  final bool highlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 44,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: highlighted ? scheme.primaryContainer : null,
+          border: Border.all(
+            color: Theme.of(context).dividerColor.withValues(alpha: .25),
+            width: .5,
+          ),
+        ),
+        child: Center(
+          child: week == null
+              ? const SizedBox.shrink()
+              : Text(
+                  '第$week周',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: highlighted ? scheme.primary : null,
+                        fontWeight: highlighted ? FontWeight.w700 : null,
+                      ),
+                ),
+        ),
+      ),
     );
   }
 }
@@ -199,12 +259,14 @@ class _MonthContent extends StatelessWidget {
 class _MonthCell extends StatelessWidget {
   const _MonthCell({
     required this.date,
+    required this.isInMonth,
     required this.courses,
     required this.resolved,
     required this.now,
   });
 
   final DateTime date;
+  final bool isInMonth;
   final List<EffectiveCourseInstance> courses;
   final ResolvedCalendarDate resolved;
   final DateTime now;
@@ -217,6 +279,13 @@ class _MonthCell extends StatelessWidget {
     final holiday = resolved.override?.type == CalendarOverrideType.holiday;
     final outsideSemester =
         !resolved.isTeachingDay && !holiday && resolved.teachingWeek == null;
+    final status = holiday
+        ? '休'
+        : resolved.override?.type == CalendarOverrideType.useScheduleOf
+            ? '调'
+            : outsideSemester
+                ? '—'
+                : null;
     final semanticParts = [
       '${date.month}月${date.day}日',
       if (label != null && label.isNotEmpty) label,
@@ -228,49 +297,58 @@ class _MonthCell extends StatelessWidget {
       button: true,
       excludeSemantics: true,
       label: '${semanticParts.join('，')}，点击查看当天课程',
-      onTap: () => _showDailyAgenda(context, date, courses),
-      child: Card(
-        color: isToday
-            ? Theme.of(context).colorScheme.primaryContainer
-            : holiday
-                ? Theme.of(context).colorScheme.surfaceContainerHighest
-                : null,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => _showDailyAgenda(context, date, courses),
-          child: Padding(
-            padding: EdgeInsets.all(themeTokens.monthCellPadding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${date.day}',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                if (label != null && label.isNotEmpty)
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                if (resolved.teachingWeek != null)
-                  Text(
-                    '第${resolved.teachingWeek}周',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                if (outsideSemester)
-                  Text('学期外', style: Theme.of(context).textTheme.labelSmall),
-                if (courses.isNotEmpty)
-                  Text(
-                    '${courses.length} 节',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
+      onTap: () => _showDailyAgenda(context, date, courses, resolved),
+      child: Opacity(
+        opacity: isInMonth ? 1 : .45,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: isToday
+                ? Theme.of(context).colorScheme.primaryContainer
+                : holiday
+                    ? Theme.of(context).colorScheme.surfaceContainerHighest
+                    : null,
+            border: Border.all(
+              color: Theme.of(context).dividerColor.withValues(alpha: .25),
+              width: .5,
+            ),
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: () => _showDailyAgenda(context, date, courses, resolved),
+              child: Padding(
+                padding: EdgeInsets.all(themeTokens.monthCellPadding),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${date.day}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                  ),
-              ],
+                    if (status != null)
+                      Text(
+                        status,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    if (courses.isNotEmpty)
+                      Text(
+                        '${courses.length} 节',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -283,6 +361,7 @@ void _showDailyAgenda(
   BuildContext context,
   DateTime date,
   List<EffectiveCourseInstance> courses,
+  ResolvedCalendarDate resolved,
 ) {
   showModalBottomSheet<void>(
     context: context,
@@ -299,6 +378,10 @@ void _showDailyAgenda(
               '${date.month}月${date.day}日 ${weekdayName(date.weekday)}',
               style: Theme.of(context).textTheme.titleLarge,
             ),
+            if (resolved.label != null && resolved.label!.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(resolved.label!),
+            ],
             const SizedBox(height: 16),
             if (courses.isEmpty)
               const Text('当天没有课程')

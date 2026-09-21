@@ -165,6 +165,17 @@ void main() {
     await pumpPage(const CalendarPage());
     expect(find.byTooltip('选择日期'), findsOneWidget);
     expect(find.text('1 节'), findsWidgets);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Text &&
+            widget.data != null &&
+            widget.data!.startsWith('第') &&
+            widget.data!.endsWith('周'),
+      ),
+      findsWidgets,
+    );
+    expect(tester.takeException(), isNull);
 
     await pumpPage(const CourseDetailPage(courseId: 'widget-pages-course'));
     expect(find.text('课程详情'), findsOneWidget);
