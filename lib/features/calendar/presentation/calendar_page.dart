@@ -283,9 +283,7 @@ class _MonthCell extends StatelessWidget {
         ? '休'
         : resolved.override?.type == CalendarOverrideType.useScheduleOf
             ? '调'
-            : outsideSemester
-                ? '—'
-                : null;
+            : null;
     final semanticParts = [
       '${date.month}月${date.day}日',
       if (label != null && label.isNotEmpty) label,

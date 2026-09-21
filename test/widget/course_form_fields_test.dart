@@ -61,6 +61,20 @@ void main() {
     expect(field.minLines, 2);
     expect(field.maxLines, 3);
   });
+
+  testWidgets('section range changes clamp the other endpoint', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: _SectionHarness()));
+
+    var fields = find.byType(DropdownButtonFormField<int>);
+    tester.widget<DropdownButtonFormField<int>>(fields.at(0)).onChanged!(8);
+    await tester.pump();
+    expect(find.text('8-8'), findsOneWidget);
+
+    fields = find.byType(DropdownButtonFormField<int>);
+    tester.widget<DropdownButtonFormField<int>>(fields.at(1)).onChanged!(3);
+    await tester.pump();
+    expect(find.text('8-8'), findsOneWidget);
+  });
 }
 
 class _WeekSelectorHarness extends StatefulWidget {
@@ -117,6 +131,37 @@ class _WeekSelectorHarnessState extends State<_WeekSelectorHarness> {
             _selectedWeeks = selection.selectedWeeks.toSet();
           }),
         ),
+      ),
+    );
+  }
+}
+
+class _SectionHarness extends StatefulWidget {
+  const _SectionHarness();
+
+  @override
+  State<_SectionHarness> createState() => _SectionHarnessState();
+}
+
+class _SectionHarnessState extends State<_SectionHarness> {
+  int _start = 5;
+  int _end = 7;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        children: [
+          Text('$_start-$_end'),
+          SectionRangeSelector(
+            startSection: _start,
+            endSection: _end,
+            onChanged: (selection) => setState(() {
+              _start = selection.start;
+              _end = selection.end;
+            }),
+          ),
+        ],
       ),
     );
   }

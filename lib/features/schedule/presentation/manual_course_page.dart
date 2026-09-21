@@ -274,7 +274,7 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
         return Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 96),
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 96),
             children: [
               Text(
                 widget.courseId == null ? '手动添加课程' : '编辑整门课程',

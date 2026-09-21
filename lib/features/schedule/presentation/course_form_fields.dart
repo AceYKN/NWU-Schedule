@@ -136,6 +136,7 @@ class TeachingWeekSelector extends StatelessWidget {
               decoration: const InputDecoration(labelText: '起始周'),
               items: _weekItems(),
               onChanged: (value) => _changeRange(
+                context,
                 start: value ?? safeRange.start,
                 end: safeRange.end,
               ),
@@ -146,6 +147,7 @@ class TeachingWeekSelector extends StatelessWidget {
               decoration: const InputDecoration(labelText: '结束周'),
               items: _weekItems(),
               onChanged: (value) => _changeRange(
+                context,
                 start: safeRange.start,
                 end: value ?? safeRange.end,
               ),
@@ -177,7 +179,7 @@ class TeachingWeekSelector extends StatelessWidget {
               ChoiceChip(
                 label: Text(candidate.label),
                 selected: mode == candidate,
-                onSelected: (_) => _selectMode(candidate, weeks),
+                onSelected: (_) => _selectMode(context, candidate, weeks),
               ),
           ],
         ),
@@ -233,41 +235,61 @@ class TeachingWeekSelector extends StatelessWidget {
     };
   }
 
-  void _selectMode(WeekSelectionMode nextMode, Set<int> currentWeeks) {
+  void _selectMode(
+    BuildContext context,
+    WeekSelectionMode nextMode,
+    Set<int> currentWeeks,
+  ) {
     if (nextMode == WeekSelectionMode.custom) {
+      final safeWeeks =
+          currentWeeks.isEmpty ? {_safeRange.start} : currentWeeks;
       onChanged(
         TeachingWeekSelection(
-          startWeek: currentWeeks.reduce((a, b) => a < b ? a : b),
-          endWeek: currentWeeks.reduce((a, b) => a > b ? a : b),
+          startWeek: safeWeeks.reduce((a, b) => a < b ? a : b),
+          endWeek: safeWeeks.reduce((a, b) => a > b ? a : b),
           mode: nextMode,
-          selectedWeeks: currentWeeks,
+          selectedWeeks: safeWeeks,
         ),
       );
       return;
     }
     final range = _safeRange;
+    final nextWeeks = _weeksForMode(nextMode, range.start, range.end);
+    if (nextWeeks.isEmpty) {
+      _showAtLeastOneWeekMessage(context);
+      return;
+    }
     onChanged(
       TeachingWeekSelection(
         startWeek: range.start,
         endWeek: range.end,
         mode: nextMode,
-        selectedWeeks: _weeksForMode(nextMode, range.start, range.end),
+        selectedWeeks: nextWeeks,
       ),
     );
   }
 
-  void _changeRange({required int start, required int end}) {
+  void _changeRange(
+    BuildContext context, {
+    required int start,
+    required int end,
+  }) {
     var nextStart = start.clamp(1, totalWeeks).toInt();
     var nextEnd = end.clamp(1, totalWeeks).toInt();
     if (nextStart > nextEnd) nextEnd = nextStart;
     if (nextEnd < nextStart) nextStart = nextEnd;
     if (mode != WeekSelectionMode.custom) {
+      final nextWeeks = _weeksForMode(mode, nextStart, nextEnd);
+      if (nextWeeks.isEmpty) {
+        _showAtLeastOneWeekMessage(context);
+        return;
+      }
       onChanged(
         TeachingWeekSelection(
           startWeek: nextStart,
           endWeek: nextEnd,
           mode: mode,
-          selectedWeeks: _weeksForMode(mode, nextStart, nextEnd),
+          selectedWeeks: nextWeeks,
         ),
       );
       return;
@@ -311,6 +333,12 @@ class TeachingWeekSelector extends StatelessWidget {
         mode: WeekSelectionMode.custom,
         selectedWeeks: next,
       ),
+    );
+  }
+
+  void _showAtLeastOneWeekMessage(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('至少选择一个教学周')),
     );
   }
 
