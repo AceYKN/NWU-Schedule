@@ -11,6 +11,7 @@ import '../../../domain/course/course_exception.dart';
 import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
 import 'course_color_resolver.dart';
+import '../../schedule/presentation/course_form_fields.dart';
 
 class CourseCard extends StatelessWidget {
   const CourseCard({
@@ -656,56 +657,31 @@ class _StandaloneAddExceptionSheetState
                 ),
                 onTap: _pickDate,
               ),
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      initialValue: _startSection,
-                      decoration: const InputDecoration(labelText: '开始节'),
-                      items: _sectionItems(),
-                      onChanged: (value) => setState(() {
-                        _startSection = value ?? 1;
-                        if (_endSection < _startSection) {
-                          _endSection = _startSection;
-                        }
-                      }),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      key: ValueKey(_endSection),
-                      initialValue: _endSection,
-                      decoration: const InputDecoration(labelText: '结束节'),
-                      items: _sectionItems(),
-                      onChanged: (value) =>
-                          setState(() => _endSection = value ?? 1),
-                      validator: (value) =>
-                          value == null || value < _startSection
-                              ? '结束节不能早于开始节'
-                              : null,
-                    ),
-                  ),
-                ],
+              SectionRangeSelector(
+                startSection: _startSection,
+                endSection: _endSection,
+                onChanged: (selection) => setState(() {
+                  _startSection = selection.start;
+                  _endSection = selection.end;
+                }),
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _teacher,
-                decoration: const InputDecoration(labelText: '教师（可选）'),
+                decoration: const InputDecoration(labelText: '教师'),
               ),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _campus,
-                decoration: const InputDecoration(labelText: '校区（可选）'),
+                decoration: const InputDecoration(labelText: '校区'),
               ),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _room,
-                decoration: const InputDecoration(labelText: '教室（可选）'),
+                decoration: const InputDecoration(labelText: '教室'),
               ),
-              TextFormField(
-                controller: _note,
-                decoration: const InputDecoration(labelText: '备注（可选）'),
-                maxLines: 2,
-              ),
+              const SizedBox(height: 12),
+              CompactNotesField(controller: _note, label: '备注（可选）'),
               const SizedBox(height: 20),
               FilledButton(
                 onPressed: _submit,
@@ -717,14 +693,6 @@ class _StandaloneAddExceptionSheetState
       ),
     );
   }
-
-  List<DropdownMenuItem<int>> _sectionItems() => List.generate(
-        NwuPeriodRepository.all.length,
-        (index) => DropdownMenuItem(
-          value: index + 1,
-          child: Text('第 ${index + 1} 节'),
-        ),
-      );
 }
 
 class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
@@ -802,9 +770,15 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
           _type == CourseExceptionType.cancel ? null : _startSection,
       targetEndSection:
           _type == CourseExceptionType.cancel ? null : _endSection,
-      teacherOverride: _optional(_teacher),
-      campusOverride: _optional(_campus),
-      roomOverride: _optional(_room),
+      teacherOverride: _type == CourseExceptionType.cancel
+          ? null
+          : exceptionOverrideIfChanged(_teacher.text, _instance.teacher),
+      campusOverride: _type == CourseExceptionType.cancel
+          ? null
+          : exceptionOverrideIfChanged(_campus.text, _instance.campus),
+      roomOverride: _type == CourseExceptionType.cancel
+          ? null
+          : exceptionOverrideIfChanged(_room.text, _instance.room),
       addedCourseName:
           _type == CourseExceptionType.add ? _instance.course.name : null,
       note: _optional(_note),
@@ -872,57 +846,32 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
                   ),
                   onTap: _pickDate,
                 ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        initialValue: _startSection,
-                        decoration: const InputDecoration(labelText: '开始节'),
-                        items: _sectionItems(),
-                        onChanged: (value) => setState(() {
-                          _startSection = value ?? 1;
-                          if (_endSection < _startSection) {
-                            _endSection = _startSection;
-                          }
-                        }),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        key: ValueKey(_endSection),
-                        initialValue: _endSection,
-                        decoration: const InputDecoration(labelText: '结束节'),
-                        items: _sectionItems(),
-                        onChanged: (value) =>
-                            setState(() => _endSection = value ?? 1),
-                        validator: (value) =>
-                            value == null || value < _startSection
-                                ? '结束节不能早于开始节'
-                                : null,
-                      ),
-                    ),
-                  ],
+                SectionRangeSelector(
+                  startSection: _startSection,
+                  endSection: _endSection,
+                  onChanged: (selection) => setState(() {
+                    _startSection = selection.start;
+                    _endSection = selection.end;
+                  }),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _teacher,
-                  decoration: const InputDecoration(labelText: '教师覆盖值（可选）'),
+                  decoration: const InputDecoration(labelText: '教师'),
                 ),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _campus,
-                  decoration: const InputDecoration(labelText: '校区覆盖值（可选）'),
+                  decoration: const InputDecoration(labelText: '校区'),
                 ),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _room,
-                  decoration: const InputDecoration(labelText: '教室覆盖值（可选）'),
+                  decoration: const InputDecoration(labelText: '教室'),
                 ),
               ],
-              TextFormField(
-                controller: _note,
-                decoration: const InputDecoration(labelText: '备注（可选）'),
-                maxLines: 2,
-              ),
+              const SizedBox(height: 12),
+              CompactNotesField(controller: _note, label: '备注（可选）'),
               const SizedBox(height: 20),
               FilledButton(
                 onPressed: _submit,
@@ -934,12 +883,4 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
       ),
     );
   }
-
-  List<DropdownMenuItem<int>> _sectionItems() => List.generate(
-        NwuPeriodRepository.all.length,
-        (index) => DropdownMenuItem(
-          value: index + 1,
-          child: Text('第 ${index + 1} 节'),
-        ),
-      );
 }

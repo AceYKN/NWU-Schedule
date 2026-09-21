@@ -2,6 +2,15 @@ import '../../core/nwu/periods.dart';
 
 enum CourseExceptionType { move, cancel, add }
 
+/// Stores only a changed value in an exception. An empty string is retained
+/// when it intentionally clears an existing value; null means "use the
+/// effective course value".
+String? exceptionOverrideIfChanged(String? edited, String? original) {
+  final next = edited?.trim() ?? '';
+  final baseline = original?.trim() ?? '';
+  return next == baseline ? null : next;
+}
+
 class CourseException {
   CourseException({
     required this.id,
