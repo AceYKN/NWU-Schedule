@@ -19,8 +19,22 @@ class NwuDomExtractor {
   }
 
   const bodyText = document.body ? document.body.innerText : '';
-  const year = bodyText.match(/(20\d{2})\s*[-—~至]\s*(20\d{2})/);
-  const termText = bodyText.match(/第\s*([一二三123])\s*学期/);
+  const timetableText = (() => {
+    const listTable = typeof document.querySelector === 'function'
+      ? document.querySelector('#kblist_table')
+      : null;
+    const value = listTable && (listTable.innerText || listTable.textContent);
+    return value ? String(value) : '';
+  })();
+  // Hidden select options can appear before the selected academic year in
+  // Android WebView innerText. Prefer the actual timetable table, whose
+  // heading belongs to the data being imported, and only fall back to the
+  // document text for older pages/fixtures without a table heading.
+  const metadataText = timetableText || bodyText;
+  const year = metadataText.match(/(20\d{2})\s*[-—~至]\s*(20\d{2})/) ||
+    bodyText.match(/(20\d{2})\s*[-—~至]\s*(20\d{2})/);
+  const termText = metadataText.match(/第\s*([一二三123])\s*学期/) ||
+    bodyText.match(/第\s*([一二三123])\s*学期/);
   if (!year || !termText) return JSON.stringify(null);
 
   const termMap = { '一': 1, '二': 2, '三': 3, '1': 1, '2': 2, '3': 3 };
@@ -354,6 +368,16 @@ class NwuDomExtractor {
 
   const structuredWeekText = (value) => {
     const normalized = normalize(value);
+    // The current V9 list view prefixes this field with "周数：".  The
+    // prefix is display metadata, not part of the WeekMask grammar.  Strip
+    // it before handling the optional section-range parenthesis so a real
+    // page is not rejected as a partial timetable.
+    const weekLabel = /(?:周数|周次)\s*[:：]/u.exec(normalized);
+    if (weekLabel) {
+      return normalize(
+        normalized.slice(weekLabel.index + weekLabel[0].length),
+      );
+    }
     const closingParenthesis = normalized.indexOf(')');
     return normalize(
       closingParenthesis >= 0

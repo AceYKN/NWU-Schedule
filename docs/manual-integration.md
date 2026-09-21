@@ -19,7 +19,7 @@
 /jwglxt/kbcx/xskbcx_cxXsgrkb.html
 ```
 
-其余仍在官方域名下的页面可以继续导航，但不会获得课表 JavaScript Bridge；即使路径匹配，页面仍必须实际暴露 `#kblist_table` 或明确的课表 payload 才会启用 Bridge。页面路径或 DOM 结构变化时应导出诊断后再更新适配器。当前诊断版本为 `nwu-zhengfang-v9-dom-v8`。这项路径验证不等同于真实 API endpoint、`gnmkdm` 或响应 schema 已验证。
+其余仍在官方域名下的页面可以继续导航，但不会获得课表 JavaScript Bridge；即使路径匹配，页面仍必须实际暴露 `#kblist_table` 或明确的课表 payload 才会启用 Bridge。页面路径或 DOM 结构变化时应导出诊断后再更新适配器。当前诊断版本为 `nwu-zhengfang-v9-dom-v9`。这项路径验证不等同于真实 API endpoint、`gnmkdm` 或响应 schema 已验证。
 
 真实页面 DOM 已验证存在列表课表 `#kblist_table`。当前主 DOM 适配器只依赖以下已观察结构：
 
@@ -29,7 +29,7 @@ xq_rowspan_<1..7>             -> 星期分组
 jc_<weekday>-<start>-<end>    -> 节次范围
 ```
 
-当前 V9 列表页的课程单元使用 `.timetable_con`：课程名在 `.title`，带 `glyphicon-calendar` 的字体节点提供“节次/周次”，带 `glyphicon-map-marker` 的字体节点提供“校区/教室”，带 `glyphicon-user` 的字体节点提供教师。旧版或脱敏 fixture 中的 `周数：`、`校区:`、`上课地点：`、`教师：` 标签分支仍保留。DOM 适配器优先从这些结构化字段切分产品字段，不再从视觉矩阵表中猜列位置；`#kbgrid_table_0` 不作为主解析源。课程代码、教学班、学分和考核方式不属于产品课表字段，适配器不会解析或输出它们；没有稳定远端 ID 时使用版本化、学期作用域的课程名与完整上课结构指纹，并在 Dart Diff 层做保守匹配。若 `#kblist_table` 存在但结构不符合上述契约，应直接产生校验错误并停止导入，不回退到启发式解析。仓库中的 `nwu_kblist_fixture.html` 只保留脱敏后的结构与合成课程数据，不得提交真实姓名、学号或完整原始 DOM。
+当前 V9 列表页的课程单元使用 `.timetable_con`：课程名在 `.title`，带 `glyphicon-calendar` 的字体节点提供“节次/周次”，带 `glyphicon-map-marker` 的字体节点提供“校区/教室”，带 `glyphicon-user` 的字体节点提供教师。真实页面的日历字段可能显示为 `周数：1-18周`，适配器会去掉这个展示标签后再解析周次。旧版或脱敏 fixture 中的 `周数：`、`校区:`、`上课地点：`、`教师：` 标签分支仍保留。DOM 适配器优先从这些结构化字段切分产品字段，不再从视觉矩阵表中猜列位置；`#kbgrid_table_0` 不作为主解析源。课程代码、教学班、学分和考核方式不属于产品课表字段，适配器不会解析或输出它们；没有稳定远端 ID 时使用版本化、学期作用域的课程名与完整上课结构指纹，并在 Dart Diff 层做保守匹配。若 `#kblist_table` 存在但结构不符合上述契约，应直接产生校验错误并停止导入，不回退到启发式解析。仓库中的 `nwu_kblist_fixture.html` 只保留脱敏后的结构与合成课程数据，不得提交真实姓名、学号或完整原始 DOM。
 
 ## 首次导入
 

@@ -223,7 +223,12 @@ const makeStructuredCourse = (title, schedule, location, teacher) => {
   });
 };
 
-const runStructuredExtraction = () => {
+const runStructuredExtraction = ({
+  firstSchedule = '(1-2节)1-8周,10-18周',
+  secondSchedule = '(1-2节)9周',
+  bodyText = '2026-2027学年第1学期结构化课表',
+  tableText = '2026-2027学年第1学期结构化课表',
+} = {}) => {
   const makeRow = (cells) => ({ cells, parentElement: null });
   const firstWeekday = makeStructuredElement({
     tagName: 'td',
@@ -245,7 +250,7 @@ const runStructuredExtraction = () => {
         children: [
           makeStructuredCourse(
             '结构课程★',
-            '(1-2节)1-8周,10-18周',
+            firstSchedule,
             '长安校区 321',
             '教师甲',
           ),
@@ -258,7 +263,7 @@ const runStructuredExtraction = () => {
         children: [
           makeStructuredCourse(
             '结构课程★',
-            '(1-2节)9周',
+            secondSchedule,
             '长安校区 321',
             '教师乙',
           ),
@@ -274,10 +279,12 @@ const runStructuredExtraction = () => {
   const table = {
     id: 'kblist_table',
     rows,
+    innerText: tableText,
+    textContent: tableText,
     querySelectorAll: (selector) => selector === 'tr' ? rows : [],
   };
   const document = {
-    body: { innerText: '2026-2027学年第1学期结构化课表' },
+    body: { innerText: bodyText },
     querySelector: (selector) => selector === '#kblist_table' ? table : null,
     querySelectorAll: () => [],
   };
@@ -326,6 +333,28 @@ assert.deepEqual(
 assert.equal(
   structured.issues.filter((issue) => issue.severity === 'error').length,
   0,
+);
+
+const structuredWithWeekLabel = runStructuredExtraction({
+  firstSchedule: '周数：1-8周,10-18周',
+});
+assert.deepEqual(
+  structuredWithWeekLabel.courses[0].meetings[0].weekText,
+  '1-8周,10-18周',
+);
+assert.equal(
+  structuredWithWeekLabel.issues.filter((issue) => issue.severity === 'error')
+    .length,
+  0,
+);
+
+const structuredWithScopedSemester = runStructuredExtraction({
+  bodyText: '2032-2033 学年选项 2026-2027 学期页面',
+  tableText: '2026-2027学年第1学期结构化课表',
+});
+assert.equal(
+  structuredWithScopedSemester.semester.academicYear,
+  '2026-2027',
 );
 
 // Keep the generic merged-cell fallback covered for variants that do not expose
