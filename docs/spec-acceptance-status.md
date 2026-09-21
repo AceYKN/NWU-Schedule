@@ -34,6 +34,7 @@
 - `app-debug.apk` 安装成功，`MainActivity` 成为 `topResumedActivity`。
 - 启动后的抽样 logcat 未发现 `FATAL EXCEPTION`。
 - 本轮以 `main` 提交 `847955a` 重新构建并安装 debug APK；`io.github.aceykn.nwuschedule/.MainActivity` 启动进程保持存活，安装后抽样 logcat 未发现 `FATAL EXCEPTION`、`am_crash` 或 `am_proc_died`。
+- 在同一 APK 上执行强制停止并重新启动后，应用进程重新存活，`CourseWidgetProvider` 仍保留 2 个实例（`widgets.size=2`），抽样 logcat 仍未发现上述崩溃标记。
 
 这只证明 APK 能安装和启动，不证明真实教务账号导入成功。
 
@@ -59,7 +60,7 @@
 | 真实 endpoint、`gnmkdm`、POST 参数、响应 schema、稳定远端 ID | BLOCKED（需真实会话） | 只记录字段名/路径，不记录 Cookie、Token 或原始响应 |
 | 关闭导入后必须重新登录 | BLOCKED（需设备 Owner） | 重新进入 Import 的手工验证 |
 | 通知权限拒绝/允许、实际触发、点击、无重复 | PARTIAL（模拟器已覆盖拒绝/重新允许、触发、点击和无重复） | 仍缺少真实设备记录 |
-| Small/Medium/Large Widget、多个实例、日期/时间切换 | PARTIAL（模拟器已覆盖三尺寸、两实例和日期/时间滚动） | 仍缺少真实设备 Owner 的最终复核，以及重启/真实数据编辑后的记录 |
+| Small/Medium/Large Widget、多个实例、日期/时间切换 | PARTIAL（模拟器已覆盖三尺寸、两实例、日期/时间滚动和本轮重启保持） | 仍缺少真实设备 Owner 的最终复核，以及真实数据编辑后的记录 |
 | 第 11 节作息时间 | BLOCKED（需项目 Owner） | 校方最新作息确认；当前代码按 SPEC 暂存 `21:00–21:50` |
 
 真实联调只应使用 `docs/manual-integration.md` 的个人课表路径，并且认证材料必须在聊天、仓库、Issue、日志和诊断文件之外提供。
