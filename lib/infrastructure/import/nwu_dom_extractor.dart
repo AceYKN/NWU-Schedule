@@ -852,6 +852,12 @@ class NwuDomExtractor {
 })()''';
 
   static const prepareListViewScript = r'''(() => {
+  const payloadHint = typeof window !== 'undefined' &&
+    (window.__NWU_SCHEDULE_PAYLOAD__ != null ||
+      window.__NWU_TIMETABLE__ != null ||
+      window.nwuSchedulePayload != null);
+  if (payloadHint) return 'ready';
+
   const listTable = document.querySelector('#kblist_table');
   if (listTable) return 'ready';
 
