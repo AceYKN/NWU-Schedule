@@ -57,6 +57,61 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('shows and dismisses a non-blocking calendar revision notice',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final today = dateOnly(CampusClock.now());
+    final week1 = today.subtract(Duration(days: today.weekday - 1));
+    final calendar = CalendarDefinition(
+      id: 'widget-calendar-revision',
+      school: 'NWU',
+      academicYear: '2026-2027',
+      term: 1,
+      semesterStartDate: week1,
+      week1StartDate: week1,
+      semesterEndDate: week1.add(const Duration(days: 20 * 7 - 1)),
+      totalWeeks: 20,
+      revision: 2,
+      dateOverrides: const [],
+    );
+    await repository.saveSemester(
+      Semester(
+        id: calendar.id,
+        academicYear: calendar.academicYear,
+        term: SemesterTerm.first,
+        label: '2026-2027 第一学期',
+        calendarId: calendar.id,
+        calendarRevision: 1,
+        createdAt: today,
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          bundledCalendarRepositoryProvider.overrideWithValue(
+            _FixedCalendarRepository(calendar),
+          ),
+        ],
+        child: const MaterialApp(home: HomePage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('西北大学校历已更新'), findsOneWidget);
+    expect(find.byTooltip('关闭提示'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('关闭提示'));
+    await tester.pumpAndSettle();
+    expect(find.text('西北大学校历已更新'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('renders the real Home, Week, Month, and Detail pages',
       (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
