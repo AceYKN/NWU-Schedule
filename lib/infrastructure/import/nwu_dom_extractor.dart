@@ -331,6 +331,108 @@ class NwuDomExtractor {
     });
   };
 
+  const firstFontWithIcon = (node, iconClass) => {
+    if (!node || typeof node.querySelectorAll !== 'function') return null;
+    const fonts = Array.from(node.querySelectorAll('font'));
+    for (let index = 0; index < fonts.length; index++) {
+      if (fonts[index].querySelector('.' + iconClass)) return fonts[index];
+    }
+    return null;
+  };
+
+  const splitStructuredLocation = (value) => {
+    const normalized = normalize(value);
+    const match = /^(.+?校区)\s*(.*)$/u.exec(normalized);
+    if (!match) {
+      return { campus: normalized, room: null };
+    }
+    return {
+      campus: normalize(match[1]),
+      room: normalize(match[2]) || null,
+    };
+  };
+
+  const structuredWeekText = (value) => {
+    const normalized = normalize(value);
+    const closingParenthesis = normalized.indexOf(')');
+    return normalize(
+      closingParenthesis >= 0
+        ? normalized.slice(closingParenthesis + 1)
+        : normalized,
+    );
+  };
+
+  const parseStructuredCourseInfo = ({
+    node,
+    weekday,
+    startSection,
+    endSection,
+    path,
+    details,
+    courseGroupKey,
+    identityHint,
+  }) => {
+    const titleNode = typeof node.querySelector === 'function'
+      ? node.querySelector('.title')
+      : null;
+    const paragraph = typeof node.querySelector === 'function'
+      ? node.querySelector('p')
+      : null;
+    const scheduleNode = firstFontWithIcon(paragraph, 'glyphicon-calendar');
+    const locationNode = firstFontWithIcon(paragraph, 'glyphicon-map-marker');
+    const teacherNode = firstFontWithIcon(paragraph, 'glyphicon-user');
+
+    if (!titleNode || !text(titleNode)) {
+      issue(path + '.courseName', '课程名结构无法识别，已跳过该行', 'error', details);
+      return;
+    }
+    if (!scheduleNode || !text(scheduleNode)) {
+      issue(path + '.weeks', '周次结构无法识别，已跳过该行', 'error', details);
+      return;
+    }
+    if (!locationNode || !text(locationNode)) {
+      issue(path + '.location', '上课地点结构无法识别，已跳过该行', 'error', details);
+      return;
+    }
+    if (!teacherNode || !text(teacherNode)) {
+      issue(path + '.teacher', '教师结构无法识别，已跳过该行', 'error', details);
+      return;
+    }
+
+    const rawName = text(titleNode);
+    const name = normalize(
+      rawName
+        .replace(/^(?:【调】|\[自修\])\s*/u, '')
+        .replace(/[◎★〇◆■☆]+$/u, ''),
+    );
+    const weekText = structuredWeekText(text(scheduleNode));
+    const location = splitStructuredLocation(text(locationNode));
+    const teacher = text(teacherNode);
+    if (!name) {
+      issue(path + '.courseName', '课程名为空，已跳过该行', 'error', details);
+      return;
+    }
+    if (!weekText) {
+      issue(path + '.weeks', '周次为空，已跳过该行', 'error', details);
+      return;
+    }
+
+    addMeeting({
+      courseGroupKey: courseGroupKey + '|name|' + name,
+      name: name,
+      weekday: weekday,
+      startSection: startSection,
+      endSection: endSection,
+      teacher: teacher || null,
+      campus: location.campus || null,
+      room: location.room || null,
+      weekText: weekText,
+      path: path,
+      details: details,
+      identityHint: identityHint,
+    });
+  };
+
   const parseVerifiedListTable = () => {
     const table =
       typeof document.querySelector === 'function'
@@ -414,48 +516,76 @@ class NwuDomExtractor {
         // A broken section cell can leave the row without a valid range. It
         // is still recognisable as a course row from its detail labels, and
         // must reach the section validation below instead of disappearing.
-        return /(?:周数\s*[:：]|校区\s*[:：]|上课地点\s*[:：]|教师\s*[:：])/.test(value);
+        const hasStructuredCourse =
+          typeof cell.querySelector === 'function' &&
+          cell.querySelector('.timetable_con') != null;
+        return hasStructuredCourse ||
+          /(?:周数\s*[:：]|校区\s*[:：]|上课地点\s*[:：]|教师\s*[:：])/.test(value);
       });
 
       for (let infoIndex = 0; infoIndex < infoCells.length; infoIndex++) {
-        const infoText = text(infoCells[infoIndex]);
-        const path =
-          'tables#kblist_table.rows[' + rowIndex + '].courses[' + infoIndex + ']';
-        const details = {
-          tableId: 'kblist_table',
-          rowIndex: rowIndex,
-          courseIndex: infoIndex,
-        };
-        sawCourseInfo = true;
+        const infoCell = infoCells[infoIndex];
+        const structuredNodes = typeof infoCell.querySelectorAll === 'function'
+          ? Array.from(infoCell.querySelectorAll('.timetable_con'))
+          : [];
+        const nodes = structuredNodes.length ? structuredNodes : [null];
 
-        if (
-          currentWeekday == null ||
-          currentWeekday < 1 ||
-          currentWeekday > 7
-        ) {
-          issue(path + '.weekday', '星期上下文无法识别，已跳过该行', 'error', details);
-          continue;
-        }
-        if (
-          currentRange == null ||
-          currentRange.startSection < 1 ||
-          currentRange.endSection > maxSupportedSections ||
-          currentRange.endSection < currentRange.startSection
-        ) {
-          issue(path + '.sections', '节次上下文无法识别，已跳过该行', 'error', details);
-          continue;
-        }
+        for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
+          const node = nodes[nodeIndex];
+          const infoText = text(infoCell);
+          const path =
+            'tables#kblist_table.rows[' + rowIndex + '].courses[' +
+            infoIndex + '].items[' + nodeIndex + ']';
+          const details = {
+            tableId: 'kblist_table',
+            rowIndex: rowIndex,
+            courseIndex: infoIndex,
+            itemIndex: nodeIndex,
+          };
+          sawCourseInfo = true;
 
-        parseListCourseInfo({
-          source: infoText,
-          weekday: currentWeekday,
-          startSection: currentRange.startSection,
-          endSection: currentRange.endSection,
-          path: path,
-          details: details,
-          courseGroupKey: currentGroupKey || 'verified-row-' + rowIndex,
-          identityHint: currentIdentityHint,
-        });
+          if (
+            currentWeekday == null ||
+            currentWeekday < 1 ||
+            currentWeekday > 7
+          ) {
+            issue(path + '.weekday', '星期上下文无法识别，已跳过该行', 'error', details);
+            continue;
+          }
+          if (
+            currentRange == null ||
+            currentRange.startSection < 1 ||
+            currentRange.endSection > maxSupportedSections ||
+            currentRange.endSection < currentRange.startSection
+          ) {
+            issue(path + '.sections', '节次上下文无法识别，已跳过该行', 'error', details);
+            continue;
+          }
+
+          if (node) {
+            parseStructuredCourseInfo({
+              node: node,
+              weekday: currentWeekday,
+              startSection: currentRange.startSection,
+              endSection: currentRange.endSection,
+              path: path,
+              details: details,
+              courseGroupKey: currentGroupKey || 'verified-row-' + rowIndex,
+              identityHint: currentIdentityHint,
+            });
+          } else {
+            parseListCourseInfo({
+              source: infoText,
+              weekday: currentWeekday,
+              startSection: currentRange.startSection,
+              endSection: currentRange.endSection,
+              path: path,
+              details: details,
+              courseGroupKey: currentGroupKey || 'verified-row-' + rowIndex,
+              identityHint: currentIdentityHint,
+            });
+          }
+        }
       }
 
       if (currentRangeRowsRemaining > 0) {

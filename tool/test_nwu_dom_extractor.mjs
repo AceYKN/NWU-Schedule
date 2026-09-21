@@ -137,6 +137,197 @@ const runExtraction = (html, { legacyArrayCallbacks = false } = {}) => {
   };
 };
 
+const makeStructuredElement = ({
+  tagName = 'div',
+  id = '',
+  className = '',
+  rowSpan = 1,
+  colSpan = 1,
+  ownText = '',
+  children = [],
+}) => {
+  const element = {
+    tagName: tagName.toUpperCase(),
+    id,
+    className,
+    rowSpan,
+    colSpan,
+    children,
+    parentElement: null,
+    get innerText() {
+      return ownText + children.map((child) => child.innerText).join('');
+    },
+    get textContent() {
+      return this.innerText;
+    },
+    querySelectorAll(selector) {
+      const matches = [];
+      const selectors = selector.split(',').map((item) => item.trim());
+      const matchesSelector = (candidate, item) => {
+        if (item.startsWith('.')) {
+          return candidate.className.split(/\s+/).includes(item.slice(1));
+        }
+        return candidate.tagName.toLowerCase() === item.toLowerCase();
+      };
+      const visit = (candidate) => {
+        for (const item of selectors) {
+          if (matchesSelector(candidate, item)) {
+            matches.push(candidate);
+            break;
+          }
+        }
+        for (const child of candidate.children) visit(child);
+      };
+      for (const child of children) visit(child);
+      return matches;
+    },
+    querySelector(selector) {
+      return this.querySelectorAll(selector)[0] ?? null;
+    },
+  };
+  for (const child of children) child.parentElement = element;
+  return element;
+};
+
+const makeStructuredCourse = (title, schedule, location, teacher) => {
+  const icon = (name) => makeStructuredElement({
+    tagName: 'span',
+    className: 'glyphicon ' + name,
+  });
+  const field = (iconName, value, extraIconName = null) =>
+    makeStructuredElement({
+      tagName: 'font',
+      children: [
+        icon(iconName),
+        ...(extraIconName ? [icon(extraIconName)] : []),
+      ],
+      ownText: value,
+    });
+  return makeStructuredElement({
+    className: 'timetable_con text-left',
+    children: [
+      makeStructuredElement({
+        tagName: 'span',
+        className: 'title',
+        ownText: title,
+      }),
+      makeStructuredElement({
+        tagName: 'p',
+        children: [
+          field('glyphicon-calendar', schedule),
+          field('glyphicon-tower', location, 'glyphicon-map-marker'),
+          field('glyphicon-user', teacher),
+        ],
+      }),
+    ],
+  });
+};
+
+const runStructuredExtraction = () => {
+  const makeRow = (cells) => ({ cells, parentElement: null });
+  const firstWeekday = makeStructuredElement({
+    tagName: 'td',
+    id: 'xq_rowspan_1',
+  });
+  const section = makeStructuredElement({
+    tagName: 'td',
+    id: 'jc_1-1-2',
+    rowSpan: 2,
+  });
+  const rows = [
+    makeRow([makeStructuredElement({ tagName: 'td' })]),
+    makeRow([makeStructuredElement({ tagName: 'td' })]),
+    makeRow([firstWeekday]),
+    makeRow([
+      section,
+      makeStructuredElement({
+        tagName: 'td',
+        children: [
+          makeStructuredCourse(
+            '结构课程★',
+            '(1-2节)1-8周,10-18周',
+            '长安校区 321',
+            '教师甲',
+          ),
+        ],
+      }),
+    ]),
+    makeRow([
+      makeStructuredElement({
+        tagName: 'td',
+        children: [
+          makeStructuredCourse(
+            '结构课程★',
+            '(1-2节)9周',
+            '长安校区 321',
+            '教师乙',
+          ),
+        ],
+      }),
+    ]),
+  ];
+  const group = { rows };
+  for (const row of rows) {
+    row.parentElement = group;
+    for (const cell of row.cells) cell.parentElement = row;
+  }
+  const table = {
+    id: 'kblist_table',
+    rows,
+    querySelectorAll: (selector) => selector === 'tr' ? rows : [],
+  };
+  const document = {
+    body: { innerText: '2026-2027学年第1学期结构化课表' },
+    querySelector: (selector) => selector === '#kblist_table' ? table : null,
+    querySelectorAll: () => [],
+  };
+  const context = {
+    window: {},
+    location: { pathname: '/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html' },
+    document,
+  };
+  return JSON.parse(vm.runInNewContext(extractionScript, context));
+};
+
+const structured = runStructuredExtraction();
+assert.equal(structured.courses.length, 1);
+assert.equal(structured.courses[0].name, '结构课程');
+assert.deepEqual(
+  structured.courses[0].meetings.map((meeting) => ({
+    weekday: meeting.weekday,
+    startSection: meeting.startSection,
+    endSection: meeting.endSection,
+    weekText: meeting.weekText,
+    campus: meeting.campus,
+    room: meeting.room,
+    teacher: meeting.teacher,
+  })),
+  [
+    {
+      weekday: 1,
+      startSection: 1,
+      endSection: 2,
+      weekText: '1-8周,10-18周',
+      campus: '长安校区',
+      room: '321',
+      teacher: '教师甲',
+    },
+    {
+      weekday: 1,
+      startSection: 1,
+      endSection: 2,
+      weekText: '9周',
+      campus: '长安校区',
+      room: '321',
+      teacher: '教师乙',
+    },
+  ],
+);
+assert.equal(
+  structured.issues.filter((issue) => issue.severity === 'error').length,
+  0,
+);
+
 // Keep the generic merged-cell fallback covered for variants that do not expose
 // NWU's verified #kblist_table list view.
 const genericFixture = fs.readFileSync(
