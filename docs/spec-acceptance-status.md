@@ -24,9 +24,9 @@
 | 隐私边界、无统计/广告依赖、merged manifest | privacy/manifest validators 与 CI | PASS（自动化） |
 | 课表显示设置的实时预览 | `widget_test.dart`、`schedule_display_settings_page.dart` | PASS（自动化） |
 | UI、Golden、无障碍 | `test/widget`、`test/golden`、`accessibility_test.dart` | PASS（自动化） |
-| Android 构建 | [GitHub Actions Run 35593121935](https://github.com/AceYKN/NWU-Schedule/actions/runs/35593121935)：debug/release APK 与 merged manifest 校验 | PASS |
+| Android 构建 | [GitHub Actions Run 35606613860](https://github.com/AceYKN/NWU-Schedule/actions/runs/35606613860)：debug/release APK 与 merged manifest 校验 | PASS |
 
-最近一次本地全量检查（`main` 提交 `2efec61`）：校历校验、隐私校验、当前 V9 DOM fixture、`flutter analyze`、195 项 `flutter test` 和本地 debug APK 构建均通过。新增身份回归覆盖：同一 `sourceMeetingKey` 优先于竞争结构匹配、重复精确键保持歧义并拒绝自动合并、多安排采用一对一保守匹配。`d4b299c` 已补上当前真实页面的 `.timetable_con` 结构解析，`2efec61` 已补上身份匹配回归；[GitHub Actions Run 35599326440](https://github.com/AceYKN/NWU-Schedule/actions/runs/35599326440) 已以 `34417fd` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
+最近一次本地全量检查（`main` 提交 `dc3f2d8`）：校历校验、隐私校验、当前 V9 DOM fixture、`flutter analyze`、195 项 `flutter test` 和本地 debug APK 构建均通过。`dc3f2d8` 修复了真实 V9 页面 `周数：` 展示前缀和 Android WebView 下拉选项误取学年的问题，并完成真实读取、Preview、确认导入和重启回读。此前的身份回归覆盖仍包括：同一 `sourceMeetingKey` 优先于竞争结构匹配、重复精确键保持歧义并拒绝自动合并、多安排采用一对一保守匹配。[GitHub Actions Run 35606613860](https://github.com/AceYKN/NWU-Schedule/actions/runs/35606613860) 已以 `dc3f2d8` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
 
 ## 设备上已核对但不等同于真实集成通过
 
