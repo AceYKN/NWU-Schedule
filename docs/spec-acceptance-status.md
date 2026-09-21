@@ -24,9 +24,9 @@
 | 隐私边界、无统计/广告依赖、merged manifest | privacy/manifest validators 与 CI | PASS（自动化） |
 | 课表显示设置的实时预览 | `widget_test.dart`、`schedule_display_settings_page.dart` | PASS（自动化） |
 | UI、Golden、无障碍 | `test/widget`、`test/golden`、`accessibility_test.dart` | PASS（自动化） |
-| Android 构建 | [GitHub Actions Run 35606613860](https://github.com/AceYKN/NWU-Schedule/actions/runs/35606613860)：debug/release APK 与 merged manifest 校验 | PASS |
+| Android 构建 | [GitHub Actions Run 35609291647](https://github.com/AceYKN/NWU-Schedule/actions/runs/35609291647)：debug/release APK 与 merged manifest 校验 | PASS |
 
-最近一次本地全量检查（`main` 提交 `dc3f2d8`）：校历校验、隐私校验、当前 V9 DOM fixture、`flutter analyze`、195 项 `flutter test` 和本地 debug APK 构建均通过。`dc3f2d8` 修复了真实 V9 页面 `周数：` 展示前缀和 Android WebView 下拉选项误取学年的问题，并完成真实读取、Preview、确认导入和重启回读。此前的身份回归覆盖仍包括：同一 `sourceMeetingKey` 优先于竞争结构匹配、重复精确键保持歧义并拒绝自动合并、多安排采用一对一保守匹配。[GitHub Actions Run 35606613860](https://github.com/AceYKN/NWU-Schedule/actions/runs/35606613860) 已以 `dc3f2d8` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
+最近一次本地全量检查（代码提交 `dc3f2d8`，当前 `main` 文档提交 `1681b7c`）：校历校验、隐私校验、当前 V9 DOM fixture、`flutter analyze`、195 项 `flutter test` 和本地 debug APK 构建均通过。`dc3f2d8` 修复了真实 V9 页面 `周数：` 展示前缀和 Android WebView 下拉选项误取学年的问题，并完成真实读取、Preview、确认导入和重启回读。此前的身份回归覆盖仍包括：同一 `sourceMeetingKey` 优先于竞争结构匹配、重复精确键保持歧义并拒绝自动合并、多安排采用一对一保守匹配。[GitHub Actions Run 35609291647](https://github.com/AceYKN/NWU-Schedule/actions/runs/35609291647) 已以当前 `main` 完成全部 CI 检查，包括 debug/release APK 构建与最终 merged manifest 校验。
 
 ## 设备上已核对但不等同于真实集成通过
 
@@ -50,6 +50,7 @@
 - 通过系统权限控制器完成了通知权限拒绝/重新允许流程：拒绝后权限为 `granted=false`，设置页显示“未获得通知权限，提醒未开启”，已排程 ID 清空；重新允许后权限为 `granted=true`，课程提醒恢复排程。随后重复关闭/开启一次，排程 ID 数量仍为 16，未产生重复 Alarm；`dumpsys alarm` 中的历史取消记录属于系统审计记录，不是活动 Alarm。
 - 2026-09-21 使用已登录的 NWU WebView 在当前 V9 页面完成了真实读取与保存：点击“读取课表”后出现 Preview，显示 23 门课程、28 个上课安排，学期识别为页面当前选择的 `2026-2027`；修复前曾被错误识别为下拉选项中的 `2032-2033`，修复后未再出现。继续点击“确认导入”后返回本地页面，强制停止并重启 App 后本地课表仍可回读。整个过程 App 进程保持存活，抽样 logcat 未发现 `FATAL EXCEPTION` 或 `am_crash`。未在本记录保存账号、密码、原始课表或诊断文件。
 - 完成确认导入后再次进入“从教务系统导入”，WebView 已回到 NWU 用户登录表单，不再保留已登录课表页面；验证了导入页退出时的会话清理。
+- 对当前真实 V9 列表页只做脱敏结构核对：`#kblist_table` 有 28 个课程单元，其中 6 个包含 `321`；按页面的“校区”分隔符切分后，这 6 个值全部落在教室段，校区段、教师段和周次段均未命中。未输出或保存课程文本、姓名、学号或原始 DOM。
 
 以上证据只覆盖设备烟测的子集，仍不等同于真实 NWU 账号导入或完整 Widget 验收。
 
@@ -58,7 +59,7 @@
 | 项目 | 状态 | 缺少的直接证据 |
 | --- | --- | --- |
 | NWU 登录 → 选课 → 个人课表查询 → 读取 → Preview → 保存 | PASS（模拟器真实会话） | 已完成真实读取、Preview、确认导入、重启后回读；发布前可再用实体设备复核 |
-| 教室 `321` 在真实页面中的最终字段归属 | BLOCKED（需设备 Owner） | 脱敏诊断或人工抽查，不能上传原始课表 |
+| 教室 `321` 在真实页面中的最终字段归属 | PASS（真实 V9 页面脱敏结构核对 + DOM 回归） | 已确认 6 个包含 `321` 的页面值均位于教室段；未保存原始课表 |
 | 真实 endpoint、`gnmkdm`、POST 参数、响应 schema、稳定远端 ID | PARTIAL（form boundary 已观察） | 已记录 action 与 `xnm`/`xqm` 字段；独立 JSON schema、运行时参数值和稳定远端 ID 尚未确认 |
 | 关闭导入后必须重新登录 | PASS（模拟器真实会话） | 确认导入后重新进入 Import 已回到 NWU 登录表单 |
 | 通知权限拒绝/允许、实际触发、点击、无重复 | PARTIAL（模拟器已覆盖拒绝/重新允许、触发、点击和无重复） | 仍缺少真实设备记录 |
