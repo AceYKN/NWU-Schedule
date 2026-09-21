@@ -28,6 +28,10 @@
 *.sqlite-shm
 *.sqlite-wal
 .env
+/android/key.properties
+*.jks
+*.keystore
+*.p12
 
 # OS files
 Thumbs.db
