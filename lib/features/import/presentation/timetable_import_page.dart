@@ -202,8 +202,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   Future<Map<String, dynamic>> _readPayload() async {
     final currentUrl = await _controller.currentUrl() ?? _currentUrl;
     final uri = currentUrl == null ? null : Uri.tryParse(currentUrl);
-    if (uri == null ||
-        !NwuZhengfangV9Importer.isTrustedTimetableUri(uri)) {
+    if (uri == null || !NwuZhengfangV9Importer.isTrustedTimetableUri(uri)) {
       throw TimetableImportFailure(
         '当前不是个人课表页面',
         ImportDiagnostic(
