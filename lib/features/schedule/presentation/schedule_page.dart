@@ -433,7 +433,7 @@ class _WeekContentState extends State<_WeekContent> {
                   children: [
                     if (!showWeekend && hasWeekendCourse)
                       WeekendCourseNotice(
-                        count: pageModel.activeWeekendCount,
+                        message: weekendCourseNoticeMessage(pageModel),
                         onPressed: widget.onWeekendExpanded,
                       ),
                     ScheduleWeekGrid(
@@ -620,12 +620,12 @@ class TeachingWeekPicker extends StatelessWidget {
 
 class WeekendCourseNotice extends StatelessWidget {
   const WeekendCourseNotice({
-    required this.count,
+    required this.message,
     required this.onPressed,
     super.key,
   });
 
-  final int count;
+  final String message;
   final VoidCallback onPressed;
 
   @override
@@ -637,7 +637,7 @@ class WeekendCourseNotice extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
         child: Row(
           children: [
-            Expanded(child: Text('本周周末有 $count 节课')),
+            Expanded(child: Text(message)),
             TextButton(
               onPressed: onPressed,
               child: const Text('查看周末 ›'),
@@ -647,6 +647,21 @@ class WeekendCourseNotice extends StatelessWidget {
       ),
     );
   }
+}
+
+String weekendCourseNoticeMessage(WeekScheduleViewModel model) {
+  final activeWeekendDays = model.entries
+      .where((entry) => entry.active && entry.weekday >= DateTime.saturday)
+      .map((entry) => entry.weekday)
+      .toSet();
+  final makeupDays = model.days.where(
+    (day) => day.marker == '补' && activeWeekendDays.contains(day.weekday),
+  );
+  if (makeupDays.length == 1) {
+    return '本周${makeupDays.single.label}有补课安排';
+  }
+  if (makeupDays.isNotEmpty) return '本周周末有补课安排';
+  return '本周周末有 ${model.activeWeekendCount} 节课';
 }
 
 enum _AddCourseAction { manual, exception }

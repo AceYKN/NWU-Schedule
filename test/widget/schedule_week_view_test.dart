@@ -7,6 +7,7 @@ import 'package:nwu_schedule/domain/schedule/effective_course_instance.dart';
 import 'package:nwu_schedule/domain/schedule/week_schedule_view_model.dart';
 import 'package:nwu_schedule/domain/settings/schedule_display_preferences.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/course_block.dart';
+import 'package:nwu_schedule/features/schedule/presentation/schedule_page.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/schedule_week_grid.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/schedule_week_display_filter.dart';
 import 'package:nwu_schedule/features/shared/presentation/course_color_resolver.dart';
@@ -304,6 +305,24 @@ void main() {
       CourseColorResolver.schedulePaletteIndex('same-course'),
     );
   });
+
+  test('weekend makeup notice takes priority over the generic course count',
+      () {
+    final model = _model(
+      entries: [
+        _entry(
+          id: 'makeup-course',
+          name: '周六补课',
+          weekday: DateTime.saturday,
+          startSection: 1,
+          endSection: 2,
+        ),
+      ],
+      dayMarkers: const {DateTime.saturday: '补'},
+    );
+
+    expect(weekendCourseNoticeMessage(model), '本周六有补课安排');
+  });
 }
 
 Future<void> _pumpGrid(
@@ -359,6 +378,7 @@ Future<void> _pumpBlock(
 WeekScheduleViewModel _model({
   required List<ScheduleGridEntry> entries,
   int? today,
+  Map<int, String> dayMarkers = const {},
 }) {
   final monday = DateTime(2026, 9, 7);
   final days = List.generate(7, (index) {
@@ -367,7 +387,7 @@ WeekScheduleViewModel _model({
       weekday: date.weekday,
       date: date,
       label: '一二三四五六日'[index],
-      marker: null,
+      marker: dayMarkers[date.weekday],
       isToday: date.weekday == today,
     );
   });

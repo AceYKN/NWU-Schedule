@@ -172,7 +172,8 @@ class ScheduleEngine {
           label: _weekdayLabel(date.weekday),
           marker: switch (resolved.override?.type) {
             CalendarOverrideType.holiday => '休',
-            CalendarOverrideType.useScheduleOf => '调',
+            CalendarOverrideType.useScheduleOf =>
+              date.weekday >= DateTime.saturday ? '补' : '调',
             null => null,
           },
           isToday: isSameDate(date, campusNow),

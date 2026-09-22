@@ -118,6 +118,32 @@ void main() {
     expect(courses.single.isException, isFalse);
   });
 
+  test('marks weekend makeup days separately from weekday adjustments', () {
+    final engine = makeEngine(
+      calendar: makeCalendar(
+        overrides: [
+          CalendarDateOverride(
+            date: DateTime(2026, 9, 8),
+            type: CalendarOverrideType.useScheduleOf,
+            sourceDate: DateTime(2026, 9, 7),
+            label: '调课',
+          ),
+          CalendarDateOverride(
+            date: DateTime(2026, 9, 12),
+            type: CalendarOverrideType.useScheduleOf,
+            sourceDate: DateTime(2026, 9, 7),
+            label: '补课',
+          ),
+        ],
+      ),
+    );
+
+    final week = engine.getWeekViewModel(1);
+
+    expect(week.days[1].marker, '调');
+    expect(week.days[5].marker, '补');
+  });
+
   test('makeup day keeps the source teaching week', () {
     final engine = makeEngine(
       calendar: makeCalendar(
