@@ -45,14 +45,21 @@ class CourseColorResolver {
         onContainer: _onColor(base, scheme),
       );
     }
-    final palette = [
-      scheme.primaryContainer,
-      scheme.secondaryContainer,
-      scheme.tertiaryContainer,
-      scheme.surfaceContainerHigh,
-      scheme.surfaceContainerHighest,
-    ];
-    final base = palette[_stableHash(course.id) % palette.length];
+    final baseHue = HSLColor.fromColor(scheme.primary).hue;
+    const hueOffsets = [0.0, 34.0, -34.0, 72.0, -72.0, 142.0, 208.0, 286.0];
+    final hue =
+        ((baseHue + hueOffsets[_stableHash(course.id) % hueOffsets.length]) %
+                    360 +
+                360) %
+            360;
+    final tone = scheme.brightness == Brightness.light ? .86 : .30;
+    final saturation = scheme.brightness == Brightness.light ? .42 : .48;
+    final accent = HSLColor.fromAHSL(1, hue, saturation, tone).toColor();
+    final base = Color.lerp(
+      scheme.surface,
+      accent,
+      scheme.brightness == Brightness.light ? .72 : .78,
+    )!;
     return CourseColorPair(
       container: base,
       onContainer: _bestContrastColor(base, scheme),

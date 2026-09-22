@@ -7,6 +7,7 @@ import '../../../../core/utils/date_utils.dart';
 import '../../../../domain/schedule/week_schedule_view_model.dart';
 import '../../../../domain/settings/schedule_display_preferences.dart';
 import 'course_block.dart';
+import 'schedule_layout_engine.dart';
 
 class ScheduleWeekGrid extends StatelessWidget {
   const ScheduleWeekGrid({
@@ -22,12 +23,11 @@ class ScheduleWeekGrid extends StatelessWidget {
   final ScheduleDisplayPreferences preferences;
   final DateTime now;
 
-  static const double headerHeight = 50;
-  static const double periodHeight = 64;
-
   @override
   Widget build(BuildContext context) {
-    final periodWidth = preferences.showPeriodTimes ? 48.0 : 34.0;
+    final periodWidth = preferences.showPeriodTimes
+        ? ScheduleGridMetrics.timeRailWidth
+        : ScheduleGridMetrics.compactTimeRailWidth;
     final periodCount = NwuPeriodRepository.all.length;
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -35,173 +35,137 @@ class ScheduleWeekGrid extends StatelessWidget {
           1,
           (constraints.maxWidth - periodWidth) / visibleDays.length,
         );
-        final height = headerHeight + periodCount * periodHeight;
-        final placed = _placeEntries();
+        final layout = ScheduleLayoutEngine.place(
+          visibleDays: visibleDays,
+          entries: viewModel.entries,
+        );
         final current =
             preferences.highlightCurrentPeriod ? _currentPeriod() : null;
         final scheme = Theme.of(context).colorScheme;
-        return SizedBox(
-          height: height,
-          child: Stack(
-            clipBehavior: Clip.hardEdge,
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _ScheduleGridPainter(
+        final canvasHeight = ScheduleGridMetrics.canvasHeight(periodCount);
+
+        return Container(
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: .28),
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(
+            height: canvasHeight,
+            child: Stack(
+              clipBehavior: Clip.hardEdge,
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _ScheduleGridPainter(
+                      periodWidth: periodWidth,
+                      dayWidth: dayWidth,
+                      dayCount: visibleDays.length,
+                      periodCount: periodCount,
+                      lineColor: scheme.outlineVariant,
+                    ),
+                  ),
+                ),
+                for (var index = 0; index < visibleDays.length; index++)
+                  Positioned(
+                    left: periodWidth + index * dayWidth,
+                    top: 0,
+                    width: dayWidth,
+                    height: ScheduleGridMetrics.headerHeight,
+                    child: ScheduleDayHeader(day: visibleDays[index]),
+                  ),
+                for (var section = 1; section <= periodCount; section++)
+                  Positioned(
+                    left: 0,
+                    top: ScheduleGridMetrics.sectionTop(section),
+                    width: periodWidth,
+                    height: ScheduleGridMetrics.periodHeight,
+                    child: ScheduleTimeAxis(
+                      section: section,
+                      showTime: preferences.showPeriodTimes,
+                    ),
+                  ),
+                for (final item in layout)
+                  _buildLayoutItem(
+                    context,
+                    item: item,
                     periodWidth: periodWidth,
                     dayWidth: dayWidth,
-                    dayCount: visibleDays.length,
-                    periodCount: periodCount,
-                    headerHeight: headerHeight,
-                    rowHeight: periodHeight,
-                    lineColor: scheme.outlineVariant,
-                  ),
-                ),
-              ),
-              for (var index = 0; index < visibleDays.length; index++)
-                Positioned(
-                  left: periodWidth + index * dayWidth,
-                  top: 0,
-                  width: dayWidth,
-                  height: headerHeight,
-                  child: ScheduleDayHeader(day: visibleDays[index]),
-                ),
-              for (var section = 1; section <= periodCount; section++)
-                Positioned(
-                  left: 0,
-                  top: headerHeight + (section - 1) * periodHeight,
-                  width: periodWidth,
-                  height: periodHeight,
-                  child: ScheduleTimeAxis(
-                    section: section,
-                    showTime: preferences.showPeriodTimes,
-                  ),
-                ),
-              for (final item in placed)
-                Positioned(
-                  left: periodWidth +
-                      item.dayIndex * dayWidth +
-                      item.lane * (dayWidth / item.laneCount) +
-                      2,
-                  top: headerHeight +
-                      (item.entry.startSection - 1) * periodHeight +
-                      2,
-                  width: math.max<double>(
-                    8,
-                    dayWidth / item.laneCount - 4,
-                  ),
-                  height: math.max<double>(
-                    24,
-                    (item.entry.endSection - item.entry.startSection + 1) *
-                            periodHeight -
-                        4,
-                  ),
-                  child: CourseBlock(
-                    entry: item.entry,
-                    preferences: preferences,
-                    width: dayWidth / item.laneCount - 4,
-                    height: math.max<double>(
-                      24,
-                      (item.entry.endSection - item.entry.startSection + 1) *
-                              periodHeight -
-                          4,
-                    ),
                     visibleDayCount: visibleDays.length,
-                    isCurrent: current != null &&
-                        item.entry.active &&
-                        item.entry.weekday == current.weekday &&
-                        item.entry.startSection <= current.section &&
-                        current.section <= item.entry.endSection,
                   ),
-                ),
-              if (current != null)
-                Positioned(
-                  left: periodWidth + current.dayIndex * dayWidth,
-                  width: dayWidth,
-                  top: headerHeight + (current.section - 1) * periodHeight + 1,
-                  child: IgnorePointer(
-                    child: Container(
-                      height: 2,
-                      color: scheme.primary,
-                    ),
+                if (current != null)
+                  Positioned(
+                    left: periodWidth + current.dayIndex * dayWidth,
+                    width: dayWidth,
+                    top: current.top - 9,
+                    height: 18,
+                    child: CurrentTimeIndicator(label: current.label),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  List<_PlacedScheduleEntry> _placeEntries() {
-    final placed = <_PlacedScheduleEntry>[];
-    for (var dayIndex = 0; dayIndex < visibleDays.length; dayIndex++) {
-      final day = visibleDays[dayIndex];
-      final entries = viewModel.entries
-          .where((entry) => entry.weekday == day.weekday)
-          .toList()
-        ..sort((left, right) {
-          final byStart = left.startSection.compareTo(right.startSection);
-          if (byStart != 0) return byStart;
-          return right.endSection.compareTo(left.endSection);
-        });
-      final group = <ScheduleGridEntry>[];
-      var groupEnd = 0;
-      for (final entry in entries) {
-        if (group.isNotEmpty && entry.startSection > groupEnd) {
-          _placeOverlapGroup(
-            group,
-            dayIndex: dayIndex,
-            placed: placed,
-          );
-          group.clear();
-        }
-        group.add(entry);
-        groupEnd = math.max(groupEnd, entry.endSection);
-      }
-      _placeOverlapGroup(
-        group,
-        dayIndex: dayIndex,
-        placed: placed,
-      );
-    }
-    return placed;
-  }
-
-  void _placeOverlapGroup(
-    List<ScheduleGridEntry> group, {
-    required int dayIndex,
-    required List<_PlacedScheduleEntry> placed,
+  Widget _buildLayoutItem(
+    BuildContext context, {
+    required ScheduleLayoutItem item,
+    required double periodWidth,
+    required double dayWidth,
+    required int visibleDayCount,
   }) {
-    if (group.isEmpty) return;
+    final width = math.max<double>(
+      8,
+      dayWidth / item.laneCount - ScheduleGridMetrics.eventGap,
+    );
+    final height = math.max<double>(
+      24,
+      ScheduleGridMetrics.sectionHeight(
+            item.effectiveStartSection,
+            item.effectiveEndSection,
+          ) -
+          ScheduleGridMetrics.eventGap,
+    );
+    final left = periodWidth +
+        item.dayIndex * dayWidth +
+        item.lane * (dayWidth / item.laneCount) +
+        ScheduleGridMetrics.eventGap / 2;
+    final top = ScheduleGridMetrics.sectionTop(item.effectiveStartSection) +
+        ScheduleGridMetrics.eventGap / 2;
 
-    final lanes = <List<ScheduleGridEntry>>[];
-    final startIndex = placed.length;
-    for (final entry in group) {
-      var lane = 0;
-      while (lane < lanes.length &&
-          lanes[lane].any((other) => _overlaps(other, entry))) {
-        lane++;
-      }
-      if (lane == lanes.length) lanes.add([]);
-      lanes[lane].add(entry);
-      placed.add(
-        _PlacedScheduleEntry(
-          entry: entry,
-          dayIndex: dayIndex,
-          lane: lane,
-          laneCount: lanes.length,
-        ),
-      );
-    }
-    for (var index = startIndex; index < placed.length; index++) {
-      placed[index] = placed[index].copyWith(laneCount: lanes.length);
-    }
+    return Positioned(
+      left: left,
+      top: top,
+      width: width,
+      height: height,
+      child: item.isOverflow
+          ? OverflowCourseBlock(
+              entries: item.overflowEntries,
+              height: height,
+            )
+          : CourseBlock(
+              entry: item.entry!,
+              preferences: preferences,
+              width: width,
+              height: height,
+              visibleDayCount: visibleDayCount,
+              isCurrent: _isCurrentEntry(item.entry!),
+            ),
+    );
   }
 
-  static bool _overlaps(ScheduleGridEntry left, ScheduleGridEntry right) {
-    return left.startSection <= right.endSection &&
-        right.startSection <= left.endSection;
+  bool _isCurrentEntry(ScheduleGridEntry entry) {
+    final current = _currentPeriod();
+    return current != null &&
+        entry.active &&
+        entry.weekday == visibleDays[current.dayIndex].weekday &&
+        entry.startSection <= current.section &&
+        current.section <= entry.endSection;
   }
 
   _CurrentPeriod? _currentPeriod() {
@@ -214,9 +178,10 @@ class ScheduleWeekGrid extends StatelessWidget {
     for (final period in NwuPeriodRepository.all) {
       if (minutes >= period.startMinutes && minutes < period.endMinutes) {
         return _CurrentPeriod(
-          weekday: visibleDays[dayIndex].weekday,
           dayIndex: dayIndex,
           section: period.number,
+          top: ScheduleGridMetrics.currentTimeTop(period.number, minutes),
+          label: formatMinutes(minutes),
         );
       }
     }
@@ -226,35 +191,77 @@ class ScheduleWeekGrid extends StatelessWidget {
 
 class _CurrentPeriod {
   const _CurrentPeriod({
-    required this.weekday,
     required this.dayIndex,
     required this.section,
+    required this.top,
+    required this.label,
   });
 
-  final int weekday;
   final int dayIndex;
   final int section;
+  final double top;
+  final String label;
 }
 
-class _PlacedScheduleEntry {
-  const _PlacedScheduleEntry({
-    required this.entry,
-    required this.dayIndex,
-    required this.lane,
-    required this.laneCount,
-  });
+class CurrentTimeIndicator extends StatelessWidget {
+  const CurrentTimeIndicator({required this.label, super.key});
 
-  final ScheduleGridEntry entry;
-  final int dayIndex;
-  final int lane;
-  final int laneCount;
+  final String label;
 
-  _PlacedScheduleEntry copyWith({int? laneCount}) => _PlacedScheduleEntry(
-        entry: entry,
-        dayIndex: dayIndex,
-        lane: lane,
-        laneCount: laneCount ?? this.laneCount,
-      );
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return IgnorePointer(
+      child: Stack(
+        clipBehavior: Clip.hardEdge,
+        children: [
+          Positioned(
+            left: 4,
+            right: 0,
+            top: 8,
+            child: Divider(color: color, thickness: 1.5, height: 1),
+          ),
+          Positioned(
+            left: 0,
+            top: 5,
+            child: Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+          ),
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 30,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ScheduleGridPainter extends CustomPainter {
@@ -263,8 +270,6 @@ class _ScheduleGridPainter extends CustomPainter {
     required this.dayWidth,
     required this.dayCount,
     required this.periodCount,
-    required this.headerHeight,
-    required this.rowHeight,
     required this.lineColor,
   });
 
@@ -272,44 +277,53 @@ class _ScheduleGridPainter extends CustomPainter {
   final double dayWidth;
   final int dayCount;
   final int periodCount;
-  final double headerHeight;
-  final double rowHeight;
   final Color lineColor;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = lineColor.withValues(alpha: .45)
+    final lightPaint = Paint()
+      ..color = lineColor.withValues(alpha: .22)
       ..strokeWidth = .7;
+    final groupPaint = Paint()
+      ..color = lineColor.withValues(alpha: .42)
+      ..strokeWidth = 1;
+    final verticalPaint = Paint()
+      ..color = lineColor.withValues(alpha: .12)
+      ..strokeWidth = .7;
+
+    canvas.drawLine(
+      Offset(0, ScheduleGridMetrics.headerHeight),
+      Offset(size.width, ScheduleGridMetrics.headerHeight),
+      groupPaint,
+    );
+    for (var section = 1; section <= periodCount; section++) {
+      final y = ScheduleGridMetrics.sectionTop(section) +
+          ScheduleGridMetrics.periodHeight;
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        section == 4 || section == 8 ? groupPaint : lightPaint,
+      );
+    }
     canvas.drawLine(
       Offset(periodWidth, 0),
       Offset(periodWidth, size.height),
-      paint,
+      groupPaint,
     );
     for (var day = 1; day < dayCount; day++) {
       final x = periodWidth + day * dayWidth;
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    canvas.drawLine(
-      Offset(periodWidth, headerHeight),
-      Offset(size.width, headerHeight),
-      paint,
-    );
-    for (var section = 1; section <= periodCount; section++) {
-      final y = headerHeight + section * rowHeight;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), verticalPaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _ScheduleGridPainter oldDelegate) =>
-      oldDelegate.periodWidth != periodWidth ||
-      oldDelegate.dayWidth != dayWidth ||
-      oldDelegate.dayCount != dayCount ||
-      oldDelegate.periodCount != periodCount ||
-      oldDelegate.headerHeight != headerHeight ||
-      oldDelegate.rowHeight != rowHeight ||
-      oldDelegate.lineColor != lineColor;
+  bool shouldRepaint(covariant _ScheduleGridPainter oldDelegate) {
+    return oldDelegate.periodWidth != periodWidth ||
+        oldDelegate.dayWidth != dayWidth ||
+        oldDelegate.dayCount != dayCount ||
+        oldDelegate.periodCount != periodCount ||
+        oldDelegate.lineColor != lineColor;
+  }
 }
 
 class ScheduleDayHeader extends StatelessWidget {
@@ -325,46 +339,76 @@ class ScheduleDayHeader extends StatelessWidget {
       container: true,
       label:
           '星期${day.label}，${day.date.month}月${day.date.day}日${day.marker == null ? '' : '，${day.marker}'}',
-      child: Container(
-        color: day.isToday ? scheme.primaryContainer : scheme.surface,
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                day.label,
-                maxLines: 1,
-                style: const TextStyle(
-                  fontSize: 12,
-                  height: 1,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                '${day.date.day}',
-                maxLines: 1,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      fontSize: 10,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = math.min(
+            44.0,
+            math.max(30.0, constraints.maxWidth - 4),
+          );
+          return Center(
+            child: Container(
+              width: width,
+              height: 46,
+              decoration: day.isToday
+                  ? BoxDecoration(
+                      color: scheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    )
+                  : null,
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    day.label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: day.isToday ? scheme.onPrimaryContainer : null,
+                      fontSize: 12,
                       height: 1,
+                      fontWeight: FontWeight.w700,
                     ),
-              ),
-              if (day.marker != null)
-                Text(
-                  day.marker!,
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: markerColor,
-                    fontSize: 9,
-                    height: 1,
-                    fontWeight: FontWeight.w700,
                   ),
-                ),
-            ],
-          ),
-        ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${day.date.day}',
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: day.isToday ? scheme.onPrimaryContainer : null,
+                          fontSize: 11,
+                          height: 1,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (day.marker != null) ...[
+                        const SizedBox(width: 2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            color: markerColor.withValues(alpha: .16),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            day.marker!,
+                            style: TextStyle(
+                              color: markerColor,
+                              fontSize: 8,
+                              height: 1.2,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -383,17 +427,41 @@ class ScheduleTimeAxis extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final period = const NwuPeriodRepository().byNumber(section);
-    return Container(
-      color: Theme.of(context).colorScheme.surface,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 1),
-      child: Text(
-        showTime
-            ? '$section\n${period.startLabel}\n${period.endLabel}'
-            : '$section',
-        textAlign: TextAlign.center,
-        maxLines: showTime ? 3 : 1,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 9),
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, right: 5, top: 4),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.topRight,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '$section',
+              style: textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                height: 1,
+              ),
+            ),
+            if (showTime) ...[
+              const SizedBox(height: 2),
+              Text(
+                period.startLabel,
+                style: textTheme.labelSmall?.copyWith(fontSize: 9, height: 1),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                period.endLabel,
+                style: textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 9,
+                  height: 1,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

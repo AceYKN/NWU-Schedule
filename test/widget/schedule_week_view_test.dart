@@ -119,6 +119,78 @@ void main() {
     expect(widest, greaterThan(narrowest * 1.5));
   });
 
+  testWidgets('three overlapping courses collapse into an overflow affordance',
+      (tester) async {
+    final model = _model(
+      entries: [
+        _entry(
+          id: 'overlap-a',
+          name: '课程 A',
+          weekday: DateTime.monday,
+          startSection: 1,
+          endSection: 2,
+        ),
+        _entry(
+          id: 'overlap-b',
+          name: '课程 B',
+          weekday: DateTime.monday,
+          startSection: 1,
+          endSection: 2,
+        ),
+        _entry(
+          id: 'overlap-c',
+          name: '课程 C',
+          weekday: DateTime.monday,
+          startSection: 1,
+          endSection: 2,
+        ),
+      ],
+    );
+
+    await _pumpGrid(tester, model, model.days.take(5).toList());
+
+    expect(find.byType(CourseBlock), findsOneWidget);
+    expect(find.byType(OverflowCourseBlock), findsOneWidget);
+    expect(find.text('+2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('current period is marked only on today column', (tester) async {
+    final model = _model(
+      entries: [
+        _entry(
+          id: 'current-course',
+          name: '当前课程',
+          weekday: DateTime.monday,
+          startSection: 1,
+          endSection: 2,
+        ),
+      ],
+      today: DateTime.monday,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: Material(
+          child: SizedBox(
+            width: 360,
+            child: ScheduleWeekGrid(
+              visibleDays: model.days.take(5).toList(),
+              viewModel: model,
+              preferences: const ScheduleDisplayPreferences.defaults(),
+              now: DateTime(2026, 9, 7, 8, 20),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CurrentTimeIndicator), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('inactive course blocks remain ghost-like and concise',
       (tester) async {
     final entry = _entry(
@@ -189,7 +261,10 @@ Future<void> _pumpBlock(
   await tester.pumpAndSettle();
 }
 
-WeekScheduleViewModel _model({required List<ScheduleGridEntry> entries}) {
+WeekScheduleViewModel _model({
+  required List<ScheduleGridEntry> entries,
+  int? today,
+}) {
   final monday = DateTime(2026, 9, 7);
   final days = List.generate(7, (index) {
     final date = monday.add(Duration(days: index));
@@ -198,7 +273,7 @@ WeekScheduleViewModel _model({required List<ScheduleGridEntry> entries}) {
       date: date,
       label: '一二三四五六日'[index],
       marker: null,
-      isToday: false,
+      isToday: date.weekday == today,
     );
   });
   return WeekScheduleViewModel(

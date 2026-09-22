@@ -65,7 +65,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         final maxWeek = engine.totalWeeks;
         final week = (selectedWeek ?? currentWeek).clamp(1, maxWeek);
         return Material(
-          color: Theme.of(context).scaffoldBackgroundColor,
+          color: Theme.of(context).colorScheme.surfaceContainerLowest,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -86,9 +86,6 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                 right: 16,
                 bottom: 16,
                 child: _ScheduleFabRow(
-                  showBackToCurrentWeek: preferences.showBackToCurrentWeekFab &&
-                      week != currentWeek,
-                  onBackToCurrentWeek: () => _selectWeek(currentWeek),
                   onAdd: () => _showAddSheet(
                     engine: engine,
                     week: week,
@@ -135,13 +132,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
 
 class _ScheduleFabRow extends StatelessWidget {
   const _ScheduleFabRow({
-    required this.showBackToCurrentWeek,
-    required this.onBackToCurrentWeek,
     required this.onAdd,
   });
 
-  final bool showBackToCurrentWeek;
-  final VoidCallback onBackToCurrentWeek;
   final VoidCallback onAdd;
 
   @override
@@ -149,25 +142,16 @@ class _ScheduleFabRow extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (showBackToCurrentWeek) ...[
-          Semantics(
-            button: true,
-            label: '回到当前周',
-            child: FloatingActionButton.small(
-              heroTag: null,
-              onPressed: onBackToCurrentWeek,
-              child: const Icon(Icons.my_location_outlined),
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
         Semantics(
           button: true,
           label: '添加课程',
-          child: FloatingActionButton(
+          child: FloatingActionButton.small(
             heroTag: null,
             onPressed: onAdd,
-            child: const Icon(Icons.add),
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+            elevation: 2,
+            child: const Icon(Icons.add_rounded),
           ),
         ),
       ],
@@ -244,8 +228,13 @@ class _WeekContentState extends State<_WeekContent> {
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
           child: WeekPageHeader(
             week: widget.week,
+            currentWeek: widget.currentWeek,
             maxWeek: widget.maxWeek,
             definition: widget.engine.calendarDefinition,
+            showBackToCurrentWeek:
+                widget.preferences.showBackToCurrentWeekFab &&
+                    widget.week != widget.currentWeek,
+            onBackToCurrentWeek: () => widget.onWeekChanged(widget.currentWeek),
             onWeekChanged: widget.onWeekChanged,
           ),
         ),
@@ -303,58 +292,85 @@ class _WeekContentState extends State<_WeekContent> {
 class WeekPageHeader extends StatelessWidget {
   const WeekPageHeader({
     required this.week,
+    required this.currentWeek,
     required this.maxWeek,
     required this.definition,
+    required this.showBackToCurrentWeek,
+    required this.onBackToCurrentWeek,
     required this.onWeekChanged,
     super.key,
   });
 
   final int week;
+  final int currentWeek;
   final int maxWeek;
   final CalendarDefinition definition;
+  final bool showBackToCurrentWeek;
+  final VoidCallback onBackToCurrentWeek;
   final ValueChanged<int> onWeekChanged;
 
   @override
   Widget build(BuildContext context) {
     final start = definition.weekStart(week);
     final end = start.add(const Duration(days: 6));
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final dateRange = '${start.month}月${start.day}日 - '
+        '${end.month}月${end.day}日';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
                 '周课表',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontSize: 22,
                       fontWeight: FontWeight.w700,
                     ),
               ),
-              Text('${start.month}/${start.day} – ${end.month}/${end.day}'),
-            ],
-          ),
-        ),
-        Semantics(
-          button: true,
-          label: '选择教学周，当前第$week周',
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: () => _openPicker(context),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '第$week周',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const Icon(Icons.keyboard_arrow_down, size: 20),
-                ],
+            ),
+            Semantics(
+              button: true,
+              label: '选择教学周，当前第$week周',
+              child: FilledButton.tonalIcon(
+                onPressed: () => _openPicker(context),
+                icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+                label: Text(
+                  '第$week周${week == currentWeek ? ' · 本周' : ''}',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 36),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  visualDensity: VisualDensity.compact,
+                ),
               ),
             ),
-          ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                dateRange,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+            if (showBackToCurrentWeek)
+              TextButton.icon(
+                onPressed: onBackToCurrentWeek,
+                icon: const Icon(Icons.my_location_outlined, size: 16),
+                label: Text('回到第$currentWeek周'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                ),
+              ),
+          ],
         ),
       ],
     );
@@ -365,7 +381,8 @@ class WeekPageHeader extends StatelessWidget {
       context: context,
       showDragHandle: true,
       builder: (context) => TeachingWeekPicker(
-        currentWeek: week,
+        selectedWeek: week,
+        currentWeek: currentWeek,
         maxWeek: maxWeek,
         definition: definition,
       ),
@@ -376,12 +393,14 @@ class WeekPageHeader extends StatelessWidget {
 
 class TeachingWeekPicker extends StatelessWidget {
   const TeachingWeekPicker({
+    required this.selectedWeek,
     required this.currentWeek,
     required this.maxWeek,
     required this.definition,
     super.key,
   });
 
+  final int selectedWeek;
   final int currentWeek;
   final int maxWeek;
   final CalendarDefinition definition;
@@ -406,10 +425,10 @@ class TeachingWeekPicker extends StatelessWidget {
             final start = definition.weekStart(item);
             final end = start.add(const Duration(days: 6));
             return ListTile(
-              selected: item == currentWeek,
+              selected: item == selectedWeek,
               leading: SizedBox(
                 width: 32,
-                child: item == currentWeek
+                child: item == selectedWeek
                     ? Icon(
                         Icons.check,
                         color: Theme.of(context).colorScheme.primary,
@@ -417,8 +436,10 @@ class TeachingWeekPicker extends StatelessWidget {
                     : null,
               ),
               title: Text('第$item周'),
-              subtitle:
-                  Text('${start.month}/${start.day} – ${end.month}/${end.day}'),
+              subtitle: Text(
+                '${start.month}/${start.day} – ${end.month}/${end.day}'
+                '${item == currentWeek ? ' · 本周' : ''}',
+              ),
               onTap: () => Navigator.of(context).pop(item),
             );
           },

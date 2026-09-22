@@ -233,9 +233,12 @@ class ScheduleThemeDefinition {
       ),
       textTheme: _textTheme(Brightness.light),
       extensions: [_tokens()],
-      navigationBarTheme: const NavigationBarThemeData(
+      navigationBarTheme: NavigationBarThemeData(
         height: 72,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        elevation: 0,
+        backgroundColor: scheme.surface,
+        indicatorColor: scheme.primaryContainer,
       ),
     );
   }
@@ -264,7 +267,12 @@ class ScheduleThemeDefinition {
       ),
       textTheme: _textTheme(Brightness.dark),
       extensions: [_tokens()],
-      navigationBarTheme: const NavigationBarThemeData(height: 72),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 72,
+        elevation: 0,
+        backgroundColor: scheme.surface,
+        indicatorColor: scheme.primaryContainer,
+      ),
     );
   }
 
