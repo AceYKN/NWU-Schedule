@@ -1,21 +1,15 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
-import '../../../app/theme/schedule_theme.dart';
-import '../../../core/nwu/periods.dart';
 import '../../../core/time/campus_clock.dart';
-import '../../../core/utils/date_utils.dart';
 import '../../../domain/calendar/calendar_definition.dart';
 import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/schedule_engine.dart';
-import '../../../domain/schedule/week_schedule_view_model.dart';
 import '../../../domain/settings/schedule_display_preferences.dart';
+import 'widgets/schedule_week_grid.dart';
 import '../../shared/presentation/course_card.dart';
-import '../../shared/presentation/course_color_resolver.dart';
 
 class SchedulePage extends ConsumerStatefulWidget {
   const SchedulePage({super.key, this.now});
@@ -30,6 +24,7 @@ class SchedulePage extends ConsumerStatefulWidget {
 
 class _SchedulePageState extends ConsumerState<SchedulePage> {
   int? selectedWeek;
+  bool temporaryWeekendExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -40,9 +35,27 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         child: Text(nwuUserMessage(error, action: '读取本地课表失败')),
       ),
       data: (value) {
+        if (value is ScheduleNoSemester) {
+          return _ScheduleEmptyState(
+            onImport: () => context.go('/import'),
+            onManual: () => context.go('/course/new'),
+          );
+        }
+        if (value is ScheduleCalendarMissing) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                '${value.semester.label}暂无可用校历，请先更新校历数据。',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
         if (value is! ScheduleReady) {
           return const Center(child: Text('当前没有可展示的课表'));
         }
+
         final engine = value.engine;
         final now = widget.now ?? DateTime.now().toUtc();
         final preferences =
@@ -51,33 +64,113 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         final currentWeek = engine.teachingWeekAt(now) ?? 1;
         final maxWeek = engine.totalWeeks;
         final week = (selectedWeek ?? currentWeek).clamp(1, maxWeek);
-        return Scaffold(
-          body: _WeekContent(
-            week: week,
-            currentWeek: currentWeek,
-            maxWeek: maxWeek,
-            engine: engine,
-            preferences: preferences,
-            now: now,
-            onWeekChanged: (value) => setState(() => selectedWeek = value),
-            onAddCourse: () => context.go('/course/new'),
-            onAddException: () => showStandaloneAddException(
-              pageContext: context,
-              ref: ref,
-              semesterId: engine.semesterId,
-              initialDate: engine.weekStart(week),
-            ),
+        return Material(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _WeekContent(
+                week: week,
+                currentWeek: currentWeek,
+                maxWeek: maxWeek,
+                engine: engine,
+                preferences: preferences,
+                now: now,
+                temporaryWeekendExpanded: temporaryWeekendExpanded,
+                onWeekChanged: _selectWeek,
+                onWeekendExpanded: () {
+                  setState(() => temporaryWeekendExpanded = true);
+                },
+              ),
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: _ScheduleFabRow(
+                  showBackToCurrentWeek: preferences.showBackToCurrentWeekFab &&
+                      week != currentWeek,
+                  onBackToCurrentWeek: () => _selectWeek(currentWeek),
+                  onAdd: () => _showAddSheet(
+                    engine: engine,
+                    week: week,
+                  ),
+                ),
+              ),
+            ],
           ),
-          floatingActionButton: preferences.showBackToCurrentWeekFab &&
-                  week != currentWeek
-              ? FloatingActionButton.extended(
-                  onPressed: () => setState(() => selectedWeek = currentWeek),
-                  icon: const Icon(Icons.my_location_outlined),
-                  label: const Text('本周'),
-                )
-              : null,
         );
       },
+    );
+  }
+
+  void _selectWeek(int week) {
+    setState(() {
+      selectedWeek = week;
+      temporaryWeekendExpanded = false;
+    });
+  }
+
+  Future<void> _showAddSheet({
+    required ScheduleEngine engine,
+    required int week,
+  }) async {
+    final action = await showModalBottomSheet<_AddCourseAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => const _AddCourseSheet(),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _AddCourseAction.manual:
+        context.go('/course/new');
+      case _AddCourseAction.exception:
+        await showStandaloneAddException(
+          pageContext: context,
+          ref: ref,
+          semesterId: engine.semesterId,
+          initialDate: engine.weekStart(week),
+        );
+    }
+  }
+}
+
+class _ScheduleFabRow extends StatelessWidget {
+  const _ScheduleFabRow({
+    required this.showBackToCurrentWeek,
+    required this.onBackToCurrentWeek,
+    required this.onAdd,
+  });
+
+  final bool showBackToCurrentWeek;
+  final VoidCallback onBackToCurrentWeek;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (showBackToCurrentWeek) ...[
+          Semantics(
+            button: true,
+            label: '回到当前周',
+            child: FloatingActionButton.small(
+              heroTag: null,
+              onPressed: onBackToCurrentWeek,
+              child: const Icon(Icons.my_location_outlined),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        Semantics(
+          button: true,
+          label: '添加课程',
+          child: FloatingActionButton(
+            heroTag: null,
+            onPressed: onAdd,
+            child: const Icon(Icons.add),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -90,9 +183,9 @@ class _WeekContent extends StatefulWidget {
     required this.engine,
     required this.preferences,
     required this.now,
+    required this.temporaryWeekendExpanded,
     required this.onWeekChanged,
-    required this.onAddCourse,
-    required this.onAddException,
+    required this.onWeekendExpanded,
   });
 
   final int week;
@@ -101,9 +194,9 @@ class _WeekContent extends StatefulWidget {
   final ScheduleEngine engine;
   final ScheduleDisplayPreferences preferences;
   final DateTime now;
+  final bool temporaryWeekendExpanded;
   final ValueChanged<int> onWeekChanged;
-  final VoidCallback onAddCourse;
-  final VoidCallback onAddException;
+  final VoidCallback onWeekendExpanded;
 
   @override
   State<_WeekContent> createState() => _WeekContentState();
@@ -121,15 +214,18 @@ class _WeekContentState extends State<_WeekContent> {
   @override
   void didUpdateWidget(covariant _WeekContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.week != widget.week) {
-      if (_pageController.hasClients &&
-          (_pageController.page ?? 0).round() != widget.week - 1) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _pageController.hasClients) {
-            _pageController.jumpToPage(widget.week - 1);
-          }
-        });
-      }
+    if (oldWidget.week != widget.week &&
+        _pageController.hasClients &&
+        (_pageController.page ?? 0).round() != widget.week - 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pageController.hasClients) {
+          _pageController.animateToPage(
+            widget.week - 1,
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      });
     }
   }
 
@@ -141,24 +237,16 @@ class _WeekContentState extends State<_WeekContent> {
 
   @override
   Widget build(BuildContext context) {
-    final themeTokens = scheduleThemeTokensOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: EdgeInsets.fromLTRB(
-            themeTokens.pagePadding,
-            18,
-            themeTokens.pagePadding,
-            8,
-          ),
-          child: _WeekToolbar(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+          child: WeekPageHeader(
             week: widget.week,
             maxWeek: widget.maxWeek,
             definition: widget.engine.calendarDefinition,
             onWeekChanged: widget.onWeekChanged,
-            onAddCourse: widget.onAddCourse,
-            onAddException: widget.onAddException,
           ),
         ),
         Expanded(
@@ -176,24 +264,22 @@ class _WeekContentState extends State<_WeekContent> {
                 includeInactive: widget.preferences.showInactiveCourses,
                 now: widget.now,
               );
-              final hasWeekendCourse = pageModel.activeEntries.any(
-                (entry) => entry.weekday >= DateTime.saturday,
-              );
-              final showWeekend =
-                  widget.preferences.showWeekend || hasWeekendCourse;
+              final showWeekend = widget.preferences.showWeekend ||
+                  (widget.temporaryWeekendExpanded && pageWeek == widget.week);
               final visibleDays = showWeekend
                   ? pageModel.days
                   : pageModel.days.take(5).toList(growable: false);
+              final hasWeekendCourse = pageModel.hasHiddenWeekendCourses;
               return SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  themeTokens.pagePadding,
-                  0,
-                  themeTokens.pagePadding,
-                  32,
-                ),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 112),
                 child: Column(
                   children: [
-                    _ScheduleGrid(
+                    if (!showWeekend && hasWeekendCourse)
+                      WeekendCourseNotice(
+                        count: pageModel.activeWeekendCount,
+                        onPressed: widget.onWeekendExpanded,
+                      ),
+                    ScheduleWeekGrid(
                       visibleDays: visibleDays,
                       viewModel: pageModel,
                       preferences: widget.preferences,
@@ -201,7 +287,7 @@ class _WeekContentState extends State<_WeekContent> {
                     ),
                     if (pageModel.activeEntries.isEmpty) ...[
                       const SizedBox(height: 24),
-                      const Text('本周没有课程'),
+                      const Text('本周暂无课程'),
                     ],
                   ],
                 ),
@@ -214,459 +300,254 @@ class _WeekContentState extends State<_WeekContent> {
   }
 }
 
-class _WeekToolbar extends StatelessWidget {
-  const _WeekToolbar({
+class WeekPageHeader extends StatelessWidget {
+  const WeekPageHeader({
     required this.week,
     required this.maxWeek,
     required this.definition,
     required this.onWeekChanged,
-    required this.onAddCourse,
-    required this.onAddException,
+    super.key,
   });
 
   final int week;
   final int maxWeek;
   final CalendarDefinition definition;
   final ValueChanged<int> onWeekChanged;
-  final VoidCallback onAddCourse;
-  final VoidCallback onAddException;
 
   @override
   Widget build(BuildContext context) {
-    final themeTokens = scheduleThemeTokensOf(context);
     final start = definition.weekStart(week);
     final end = start.add(const Duration(days: 6));
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '周课表',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              Text('${start.month}/${start.day} – ${end.month}/${end.day}'),
+            ],
+          ),
+        ),
+        Semantics(
+          button: true,
+          label: '选择教学周，当前第$week周',
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => _openPicker(context),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '周课表',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                    '第$week周',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
-                  Text('${start.month}/${start.day} – ${end.month}/${end.day}'),
+                  const Icon(Icons.keyboard_arrow_down, size: 20),
                 ],
               ),
             ),
-            DropdownButtonHideUnderline(
-              child: DropdownButton<int>(
-                value: week,
-                isDense: true,
-                items: [
-                  for (var item = 1; item <= maxWeek; item++)
-                    DropdownMenuItem(
-                      value: item,
-                      child: Text('第 $item 周'),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) onWeekChanged(value);
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: themeTokens.gridGap,
-          runSpacing: themeTokens.gridGap,
-          alignment: WrapAlignment.end,
-          children: [
-            OutlinedButton.icon(
-              onPressed: onAddException,
-              icon: const Icon(Icons.event_repeat_outlined),
-              label: const Text('临时加课'),
-            ),
-            FilledButton.icon(
-              onPressed: onAddCourse,
-              icon: const Icon(Icons.add),
-              label: const Text('手动添加课程'),
-            ),
-          ],
+          ),
         ),
       ],
     );
   }
+
+  Future<void> _openPicker(BuildContext context) async {
+    final selected = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => TeachingWeekPicker(
+        currentWeek: week,
+        maxWeek: maxWeek,
+        definition: definition,
+      ),
+    );
+    if (selected != null) onWeekChanged(selected);
+  }
 }
 
-class _ScheduleGrid extends StatelessWidget {
-  const _ScheduleGrid({
-    required this.visibleDays,
-    required this.viewModel,
-    required this.preferences,
-    required this.now,
+class TeachingWeekPicker extends StatelessWidget {
+  const TeachingWeekPicker({
+    required this.currentWeek,
+    required this.maxWeek,
+    required this.definition,
+    super.key,
   });
 
-  final List<WeekDayColumn> visibleDays;
-  final WeekScheduleViewModel viewModel;
-  final ScheduleDisplayPreferences preferences;
-  final DateTime now;
-
-  static const _headerHeight = 44.0;
-  static const _rowHeight = 56.0;
+  final int currentWeek;
+  final int maxWeek;
+  final CalendarDefinition definition;
 
   @override
   Widget build(BuildContext context) {
-    final periodWidth = preferences.showPeriodTimes ? 48.0 : 34.0;
-    final periodCount = NwuPeriodRepository.all.length;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final dayWidth = math.max<double>(
-          1,
-          (constraints.maxWidth - periodWidth) / visibleDays.length,
-        );
-        final height = _headerHeight + periodCount * _rowHeight;
-        final placed = _placeEntries();
-        final currentSection =
-            preferences.highlightCurrentPeriod ? _currentSection() : null;
-        return SizedBox(
-          height: height,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _ScheduleGridPainter(
-                    periodWidth: periodWidth,
-                    dayWidth: dayWidth,
-                    dayCount: visibleDays.length,
-                    periodCount: periodCount,
-                    headerHeight: _headerHeight,
-                    rowHeight: _rowHeight,
-                    lineColor: Theme.of(context).colorScheme.outlineVariant,
-                  ),
+    return SafeArea(
+      child: SizedBox(
+        height: (MediaQuery.sizeOf(context).height * .72).clamp(280, 620),
+        child: ListView.builder(
+          itemCount: maxWeek + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return const ListTile(
+                title: Text(
+                  '选择教学周',
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
+              );
+            }
+            final item = index;
+            final start = definition.weekStart(item);
+            final end = start.add(const Duration(days: 6));
+            return ListTile(
+              selected: item == currentWeek,
+              leading: SizedBox(
+                width: 32,
+                child: item == currentWeek
+                    ? Icon(
+                        Icons.check,
+                        color: Theme.of(context).colorScheme.primary,
+                      )
+                    : null,
               ),
-              for (var index = 0; index < visibleDays.length; index++)
-                Positioned(
-                  left: periodWidth + index * dayWidth,
-                  top: 0,
-                  width: dayWidth,
-                  height: _headerHeight,
-                  child: _DayHeader(day: visibleDays[index]),
-                ),
-              for (var section = 1; section <= periodCount; section++)
-                Positioned(
-                  left: 0,
-                  top: _headerHeight + (section - 1) * _rowHeight,
-                  width: periodWidth,
-                  height: _rowHeight,
-                  child: _PeriodLabel(
-                    section: section,
-                    showTime: preferences.showPeriodTimes,
-                  ),
-                ),
-              for (final item in placed)
-                Positioned(
-                  left: periodWidth +
-                      visibleDays.indexWhere(
-                            (day) => day.weekday == item.entry.weekday,
-                          ) *
-                          dayWidth +
-                      item.lane * (dayWidth / item.laneCount) +
-                      2,
-                  top: _headerHeight +
-                      (item.entry.startSection - 1) * _rowHeight +
-                      2,
-                  width: math.max<double>(8, dayWidth / item.laneCount - 4),
-                  height: math.max<double>(
-                    24,
-                    (item.entry.endSection - item.entry.startSection + 1) *
-                            _rowHeight -
-                        4,
-                  ),
-                  child: _ScheduleBlock(
-                    entry: item.entry,
-                    preferences: preferences,
-                  ),
-                ),
-              if (currentSection != null)
-                Positioned(
-                  left: periodWidth,
-                  right: 0,
-                  top: _headerHeight + (currentSection - 1) * _rowHeight,
-                  child: IgnorePointer(
-                    child: Container(
-                      height: 2,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  List<_PlacedScheduleEntry> _placeEntries() {
-    final placed = <_PlacedScheduleEntry>[];
-    for (final day in visibleDays) {
-      final entries = viewModel.entries
-          .where((entry) => entry.weekday == day.weekday)
-          .toList()
-        ..sort((left, right) {
-          final byStart = left.startSection.compareTo(right.startSection);
-          if (byStart != 0) return byStart;
-          return right.endSection.compareTo(left.endSection);
-        });
-      final lanes = <List<ScheduleGridEntry>>[];
-      final startIndex = placed.length;
-      for (final entry in entries) {
-        var lane = 0;
-        while (lane < lanes.length &&
-            lanes[lane].any((other) => _overlaps(other, entry))) {
-          lane++;
-        }
-        if (lane == lanes.length) lanes.add([]);
-        lanes[lane].add(entry);
-        placed.add(
-          _PlacedScheduleEntry(
-            entry: entry,
-            lane: lane,
-            laneCount: lanes.length,
-          ),
-        );
-      }
-      for (var index = startIndex; index < placed.length; index++) {
-        placed[index] = placed[index].copyWith(laneCount: lanes.length);
-      }
-    }
-    return placed;
-  }
-
-  static bool _overlaps(ScheduleGridEntry left, ScheduleGridEntry right) {
-    return left.startSection <= right.endSection &&
-        right.startSection <= left.endSection;
-  }
-
-  int? _currentSection() {
-    final today = dateOnly(now);
-    final todayColumn = visibleDays
-        .where((day) => day.isToday && isSameDate(day.date, today))
-        .firstOrNull;
-    if (todayColumn == null) return null;
-    final minutes = now.hour * 60 + now.minute;
-    for (final period in NwuPeriodRepository.all) {
-      if (minutes >= period.startMinutes && minutes < period.endMinutes) {
-        return period.number;
-      }
-    }
-    return null;
-  }
-}
-
-class _PlacedScheduleEntry {
-  const _PlacedScheduleEntry({
-    required this.entry,
-    required this.lane,
-    required this.laneCount,
-  });
-
-  final ScheduleGridEntry entry;
-  final int lane;
-  final int laneCount;
-
-  _PlacedScheduleEntry copyWith({int? laneCount}) => _PlacedScheduleEntry(
-        entry: entry,
-        lane: lane,
-        laneCount: laneCount ?? this.laneCount,
-      );
-}
-
-class _ScheduleGridPainter extends CustomPainter {
-  const _ScheduleGridPainter({
-    required this.periodWidth,
-    required this.dayWidth,
-    required this.dayCount,
-    required this.periodCount,
-    required this.headerHeight,
-    required this.rowHeight,
-    required this.lineColor,
-  });
-
-  final double periodWidth;
-  final double dayWidth;
-  final int dayCount;
-  final int periodCount;
-  final double headerHeight;
-  final double rowHeight;
-  final Color lineColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = lineColor
-      ..strokeWidth = 0.7;
-    canvas.drawLine(
-      Offset(0, headerHeight),
-      Offset(size.width, headerHeight),
-      paint,
-    );
-    for (var day = 0; day <= dayCount; day++) {
-      final x = periodWidth + day * dayWidth;
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    canvas.drawLine(const Offset(0, 0), Offset(0, size.height), paint);
-    for (var section = 0; section <= periodCount; section++) {
-      final y = headerHeight + section * rowHeight;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ScheduleGridPainter oldDelegate) =>
-      oldDelegate.periodWidth != periodWidth ||
-      oldDelegate.dayWidth != dayWidth ||
-      oldDelegate.dayCount != dayCount ||
-      oldDelegate.lineColor != lineColor;
-}
-
-class _DayHeader extends StatelessWidget {
-  const _DayHeader({required this.day});
-
-  final WeekDayColumn day;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final markerColor = day.marker == '休' ? scheme.error : scheme.tertiary;
-    return Semantics(
-      container: true,
-      label:
-          '星期${day.label}，${day.date.month}月${day.date.day}日${day.marker == null ? '' : '，${day.marker}'}',
-      child: Container(
-        color: day.isToday ? scheme.primaryContainer : scheme.surfaceContainer,
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(day.label,
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text(
-                '${day.date.day}',
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-              if (day.marker != null)
-                Text(
-                  day.marker!,
-                  style: TextStyle(
-                    color: markerColor,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-            ],
-          ),
+              title: Text('第$item周'),
+              subtitle:
+                  Text('${start.month}/${start.day} – ${end.month}/${end.day}'),
+              onTap: () => Navigator.of(context).pop(item),
+            );
+          },
         ),
       ),
     );
   }
 }
 
-class _PeriodLabel extends StatelessWidget {
-  const _PeriodLabel({required this.section, required this.showTime});
+class WeekendCourseNotice extends StatelessWidget {
+  const WeekendCourseNotice({
+    required this.count,
+    required this.onPressed,
+    super.key,
+  });
 
-  final int section;
-  final bool showTime;
+  final int count;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final period = const NwuPeriodRepository().byNumber(section);
-    return Container(
-      color: Theme.of(context).colorScheme.surfaceContainer,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 1),
-      child: Text(
-        showTime
-            ? '$section\n${period.startLabel}\n${period.endLabel}'
-            : '$section',
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 9),
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: Theme.of(context).colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+        child: Row(
+          children: [
+            Expanded(child: Text('本周周末有 $count 节课')),
+            TextButton(
+              onPressed: onPressed,
+              child: const Text('查看周末 ›'),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ScheduleBlock extends StatelessWidget {
-  const _ScheduleBlock({required this.entry, required this.preferences});
+enum _AddCourseAction { manual, exception }
 
-  final ScheduleGridEntry entry;
-  final ScheduleDisplayPreferences preferences;
+class _AddCourseSheet extends StatelessWidget {
+  const _AddCourseSheet();
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final colors = CourseColorResolver.resolve(entry.course, scheme);
-    final location = entry.instance.location;
-    final lines = [
-      entry.course.name,
-      if (location != null) location,
-      if (preferences.showTeacher && entry.teacher != null) entry.teacher!,
-      if (!entry.active) '非本周',
-    ];
-    final label = [
-      entry.course.name,
-      weekdayName(entry.weekday),
-      '第${entry.startSection}-${entry.endSection}节',
-      if (location != null) location,
-      if (preferences.showTeacher && entry.teacher != null) entry.teacher!,
-      if (!entry.active) '非本周课程',
-    ].join('，');
-    return Semantics(
-      button: true,
-      excludeSemantics: true,
-      label: '$label，点击查看课程详情',
-      onTap: () => showCourseDetails(context, entry.instance),
-      child: InkWell(
-        onTap: () => showCourseDetails(context, entry.instance),
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: entry.active
-                ? colors.container
-                : scheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: scheme.outlineVariant,
-              width: entry.active ? 0.7 : 1,
-            ),
-          ),
-          child: Text(
-            lines.join('\n'),
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  fontSize: _fontSize(context),
-                  height: 1.1,
-                  color: entry.active
-                      ? colors.onContainer
-                      : scheme.onSurfaceVariant,
+    return SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        children: [
+          Text(
+            '添加课程',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
           ),
-        ),
+          const SizedBox(height: 8),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.menu_book_outlined),
+            title: const Text('手动添加课程'),
+            subtitle: const Text('创建长期课程及上课安排'),
+            onTap: () => Navigator.of(context).pop(_AddCourseAction.manual),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.event_repeat_outlined),
+            title: const Text('临时加课'),
+            subtitle: const Text('仅修改指定日期的实际课表'),
+            onTap: () => Navigator.of(context).pop(_AddCourseAction.exception),
+          ),
+        ],
       ),
     );
   }
+}
 
-  double _fontSize(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    return width >= 500
-        ? 11
-        : width >= 390
-            ? 10
-            : 9;
+class _ScheduleEmptyState extends StatelessWidget {
+  const _ScheduleEmptyState({
+    required this.onImport,
+    required this.onManual,
+  });
+
+  final VoidCallback onImport;
+  final VoidCallback onManual;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.calendar_month_outlined,
+              size: 52,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '暂无课表',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            const Text('可以从教务系统导入，或先手动添加课程。'),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: onImport,
+                  icon: const Icon(Icons.download_outlined),
+                  label: const Text('从教务系统导入'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onManual,
+                  icon: const Icon(Icons.add),
+                  label: const Text('手动添加'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -46,7 +46,7 @@ class ScheduleDisplaySettingsPage extends ConsumerWidget {
             children: [
               _PreferenceSwitch(
                 title: '始终显示周末',
-                subtitle: '关闭时，有周末课程的周仍会自动展示周末列',
+                subtitle: '关闭时，有周末课程的周会提示你临时查看周末',
                 value: preferences.showWeekend,
                 onChanged: (value) => _save(ref, 'showWeekend', value),
               ),

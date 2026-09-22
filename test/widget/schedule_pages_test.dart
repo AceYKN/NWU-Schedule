@@ -211,7 +211,18 @@ void main() {
 
     await pumpPage(const SchedulePage());
     expect(find.text('周课表'), findsOneWidget);
+    expect(find.text('六'), findsNothing);
+    expect(find.textContaining('本周周末有 1 节课'), findsOneWidget);
+    await tester.tap(find.textContaining('查看周末'));
+    await tester.pumpAndSettle();
     expect(find.text('六'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.keyboard_arrow_down));
+    await tester.pumpAndSettle();
+    expect(find.text('选择教学周'), findsOneWidget);
+    await tester.tap(find.text('第1周'));
+    await tester.pumpAndSettle();
+    expect(find.text('六'), findsNothing);
+    expect(find.textContaining('本周周末有 1 节课'), findsOneWidget);
     final courseFinder = find.textContaining('软件测试', skipOffstage: false);
     await tester.ensureVisible(courseFinder);
     await tester.pumpAndSettle();

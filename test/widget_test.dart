@@ -77,6 +77,13 @@ void main() {
 
     await tester.tap(find.text('课表'));
     await tester.pumpAndSettle();
+    final addFab = tester.widget<FloatingActionButton>(
+      find.byType(FloatingActionButton).last,
+    );
+    expect(addFab.onPressed, isNotNull);
+    addFab.onPressed!();
+    await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
     await tester.tap(find.text('手动添加课程'));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextFormField, '课程名 *'), '软件测试');

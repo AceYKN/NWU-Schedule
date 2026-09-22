@@ -1,4 +1,5 @@
 import '../course/course.dart';
+import '../course/course_exception.dart';
 import '../course/meeting_rule.dart';
 import 'effective_course_instance.dart';
 
@@ -17,6 +18,7 @@ class ScheduleGridEntry {
   String? get campus => instance.campus;
   String? get teacher => instance.teacher;
   bool get isException => instance.isException;
+  CourseExceptionType? get exceptionType => instance.exceptionType;
 }
 
 class WeekDayColumn {
