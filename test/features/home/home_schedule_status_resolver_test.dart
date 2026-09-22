@@ -203,6 +203,30 @@ void main() {
     expect(state.next?.dayType, AcademicDayType.makeupDay);
   });
 
+  test('tomorrow holiday without class is skipped for the real next class', () {
+    final engine = _engine(
+      calendar: _calendar(
+        overrides: [
+          CalendarDateOverride(
+            date: DateTime(2026, 9, 11),
+            type: CalendarOverrideType.holiday,
+            label: '校历假期',
+          ),
+        ],
+      ),
+      rules: [_rule('software', DateTime.monday, 1, 2)],
+    );
+
+    final state = resolver.resolve(
+      engine: engine,
+      now: _instant(2026, 9, 10, 18),
+    );
+
+    expect(state, isA<HomeNoClassTodayState>());
+    expect(state.next?.daysFromToday, 4);
+    expect(state.next?.course.date, DateTime(2026, 9, 14));
+  });
+
   test('distinguishes dates outside the teaching term', () {
     final engine = _engine(rules: [_rule('software', DateTime.monday, 1, 2)]);
 
