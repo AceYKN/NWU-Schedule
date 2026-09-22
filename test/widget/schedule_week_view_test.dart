@@ -1,0 +1,212 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:nwu_schedule/core/utils/week_mask.dart';
+import 'package:nwu_schedule/domain/course/course.dart';
+import 'package:nwu_schedule/domain/course/meeting_rule.dart';
+import 'package:nwu_schedule/domain/schedule/effective_course_instance.dart';
+import 'package:nwu_schedule/domain/schedule/week_schedule_view_model.dart';
+import 'package:nwu_schedule/domain/settings/schedule_display_preferences.dart';
+import 'package:nwu_schedule/features/schedule/presentation/widgets/course_block.dart';
+import 'package:nwu_schedule/features/schedule/presentation/widgets/schedule_week_grid.dart';
+
+void main() {
+  testWidgets('five and seven day grids fit a narrow phone without overflow',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final model = _model(
+      entries: [
+        _entry(
+          id: 'weekday-course',
+          name: '计算机网络',
+          weekday: DateTime.monday,
+          startSection: 1,
+          endSection: 2,
+        ),
+        _entry(
+          id: 'weekend-course',
+          name: '周末实验课',
+          weekday: DateTime.saturday,
+          startSection: 3,
+          endSection: 4,
+        ),
+      ],
+    );
+
+    await _pumpGrid(tester, model, model.days.take(5).toList());
+    expect(find.text('一'), findsOneWidget);
+    expect(find.text('六'), findsNothing);
+    expect(find.text('计算机网络'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await _pumpGrid(tester, model, model.days);
+    expect(find.text('六'), findsOneWidget);
+    expect(find.text('周末实验课'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('course block content follows the available block height',
+      (tester) async {
+    final entry = _entry(
+      id: 'height-course',
+      name: '机器学习',
+      weekday: DateTime.monday,
+      startSection: 1,
+      endSection: 1,
+      teacher: '教师甲',
+      room: '3406',
+    );
+
+    await _pumpBlock(tester, entry, height: 40);
+    expect(find.text('机器学习'), findsOneWidget);
+    expect(find.text('3406'), findsNothing);
+    expect(find.text('教师甲'), findsNothing);
+
+    await _pumpBlock(tester, entry, height: 64);
+    expect(find.text('机器学习'), findsOneWidget);
+    expect(find.text('3406'), findsOneWidget);
+    expect(find.text('教师甲'), findsNothing);
+
+    await _pumpBlock(tester, entry, height: 128);
+    expect(find.text('机器学习'), findsOneWidget);
+    expect(find.text('3406'), findsOneWidget);
+    expect(find.text('教师甲'), findsOneWidget);
+  });
+
+  testWidgets('inactive course blocks remain ghost-like and concise',
+      (tester) async {
+    final entry = _entry(
+      id: 'inactive-course',
+      name: '数据结构（实验）',
+      weekday: DateTime.tuesday,
+      startSection: 3,
+      endSection: 4,
+      teacher: '教师乙',
+      room: '1310',
+      active: false,
+    );
+
+    await _pumpBlock(tester, entry, height: 128);
+    expect(find.text('数据结构'), findsOneWidget);
+    expect(find.text('教师乙'), findsNothing);
+    expect(find.text('1310'), findsNothing);
+  });
+}
+
+Future<void> _pumpGrid(
+  WidgetTester tester,
+  WeekScheduleViewModel model,
+  List<WeekDayColumn> days,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: ThemeData(useMaterial3: true),
+      home: Material(
+        child: SizedBox(
+          width: 360,
+          child: ScheduleWeekGrid(
+            visibleDays: days,
+            viewModel: model,
+            preferences: const ScheduleDisplayPreferences.defaults(),
+            now: DateTime(2026, 9, 7, 13),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pumpBlock(
+  WidgetTester tester,
+  ScheduleGridEntry entry, {
+  required double height,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: ThemeData(useMaterial3: true),
+      home: Material(
+        child: SizedBox(
+          width: 100,
+          height: height,
+          child: CourseBlock(
+            entry: entry,
+            preferences: const ScheduleDisplayPreferences.defaults(),
+            width: 92,
+            height: height,
+            visibleDayCount: 5,
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+WeekScheduleViewModel _model({required List<ScheduleGridEntry> entries}) {
+  final monday = DateTime(2026, 9, 7);
+  final days = List.generate(7, (index) {
+    final date = monday.add(Duration(days: index));
+    return WeekDayColumn(
+      weekday: date.weekday,
+      date: date,
+      label: '一二三四五六日'[index],
+      marker: null,
+      isToday: false,
+    );
+  });
+  return WeekScheduleViewModel(
+    week: 1,
+    days: days,
+    entries: entries,
+  );
+}
+
+ScheduleGridEntry _entry({
+  required String id,
+  required String name,
+  required int weekday,
+  required int startSection,
+  required int endSection,
+  String? teacher,
+  String? room,
+  bool active = true,
+}) {
+  final date = DateTime(2026, 9, 7).add(Duration(days: weekday - 1));
+  final course = Course(
+    id: id,
+    semesterId: 'test-semester',
+    sourceType: CourseSourceType.manual,
+    name: name,
+  );
+  final rule = MeetingRule(
+    id: '$id-rule',
+    courseId: id,
+    weekday: weekday,
+    startSection: startSection,
+    endSection: endSection,
+    teacher: teacher,
+    room: room,
+    weekMask: const WeekMask(1),
+  );
+  return ScheduleGridEntry(
+    instance: EffectiveCourseInstance(
+      course: course,
+      meetingRule: rule,
+      date: date,
+      templateDate: date,
+      startSection: startSection,
+      endSection: endSection,
+      startTime: DateTime(2026, 9, 7, 8),
+      endTime: DateTime(2026, 9, 7, 9),
+      teacher: teacher,
+      room: room,
+    ),
+    active: active,
+  );
+}
