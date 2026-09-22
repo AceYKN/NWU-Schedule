@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../domain/course/course.dart';
@@ -17,7 +19,7 @@ class CourseColorResolver {
       final base = Color(course.colorOverride!);
       return CourseColorPair(
         container: base,
-        onContainer: _onColor(base, scheme),
+        onContainer: _bestContrastColor(base, scheme),
       );
     }
     return CourseColorPair(
@@ -53,7 +55,7 @@ class CourseColorResolver {
     final base = palette[_stableHash(course.id) % palette.length];
     return CourseColorPair(
       container: base,
-      onContainer: _onColor(base, scheme),
+      onContainer: _bestContrastColor(base, scheme),
     );
   }
 
@@ -69,5 +71,37 @@ class CourseColorResolver {
   static Color _onColor(Color background, ColorScheme scheme) {
     final dark = background.computeLuminance() < 0.42;
     return dark ? scheme.onInverseSurface : scheme.onSurface;
+  }
+
+  static Color _bestContrastColor(Color background, ColorScheme scheme) {
+    final candidates = [
+      scheme.onSurface,
+      scheme.onSurfaceVariant,
+      scheme.onInverseSurface,
+      scheme.onPrimary,
+      scheme.onSecondary,
+      scheme.onTertiary,
+      scheme.onPrimaryContainer,
+      scheme.onSecondaryContainer,
+      scheme.onTertiaryContainer,
+    ];
+    return candidates.reduce(
+      (best, candidate) => _contrastRatio(background, candidate) >
+              _contrastRatio(background, best)
+          ? candidate
+          : best,
+    );
+  }
+
+  static double _contrastRatio(Color background, Color foreground) {
+    final lighter = math.max(
+      background.computeLuminance(),
+      foreground.computeLuminance(),
+    );
+    final darker = math.min(
+      background.computeLuminance(),
+      foreground.computeLuminance(),
+    );
+    return (lighter + .05) / (darker + .05);
   }
 }
