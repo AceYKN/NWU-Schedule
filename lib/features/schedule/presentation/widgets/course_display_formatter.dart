@@ -2,29 +2,19 @@ import '../../../../domain/schedule/week_schedule_view_model.dart';
 
 /// Presentation-only formatting for the dense week grid.
 ///
-/// The stored course name and location are never changed. These helpers only
-/// remove common display noise or choose the most useful short value when a
-/// course cell is narrow.
+/// The stored course name and location are never changed. The grid keeps the
+/// complete display values and lets the card scale them to its available
+/// width instead of silently removing meaningful information.
 class CourseDisplayFormatter {
   const CourseDisplayFormatter._();
 
   static String title(String value) {
     final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (normalized.isEmpty) return value;
-    final withoutSuffix = normalized
-        .replaceAll(RegExp(r'（[^）]*）'), '')
-        .replaceAll(RegExp(r'\([^)]*\)'), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    return withoutSuffix.isEmpty ? normalized : withoutSuffix;
+    return normalized.isEmpty ? value : normalized;
   }
 
   static String? location(ScheduleGridEntry entry) {
-    final room = entry.room?.trim();
-    if (room != null && room.isNotEmpty) return room;
-    final campus = entry.campus?.trim();
-    if (campus != null && campus.isNotEmpty) return campus;
-    return null;
+    return entry.instance.location;
   }
 
   static String semanticsLabel(ScheduleGridEntry entry) {

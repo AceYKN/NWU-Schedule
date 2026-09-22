@@ -66,12 +66,17 @@ class CourseEventCard extends StatelessWidget {
     final status = _statusLabel(entry.exceptionType);
     final title = CourseDisplayFormatter.title(entry.course.name);
     final location = CourseDisplayFormatter.location(entry);
+    final background = ghost
+        ? Color.lerp(scheme.surface, colors.container, .56)!
+        : colors.container;
     final foreground = ghost
-        ? scheme.onSurfaceVariant.withValues(alpha: .48)
+        ? Color.lerp(background, colors.onContainer, .68)!
         : colors.onContainer;
-    final background = ghost ? Colors.transparent : colors.container;
+    final secondaryForeground = ghost
+        ? Color.lerp(background, colors.onContainer, .56)!
+        : foreground.withValues(alpha: .78);
     final border = ghost
-        ? BorderSide(color: scheme.outlineVariant.withValues(alpha: .48))
+        ? BorderSide(color: colors.onContainer.withValues(alpha: .34))
         : isCurrent
             ? BorderSide(color: scheme.primary, width: 2)
             : BorderSide.none;
@@ -97,15 +102,13 @@ class CourseEventCard extends StatelessWidget {
             children: [
               Container(
                 width: 3,
-                color: ghost
-                    ? scheme.outlineVariant.withValues(alpha: .42)
-                    : colors.onContainer.withValues(alpha: .72),
+                color: colors.onContainer.withValues(alpha: ghost ? .44 : .72),
               ),
               Expanded(
                 child: Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: visibleDayCount >= 7 || width < 68 ? 4 : 6,
-                    vertical: visibleDayCount >= 7 || width < 68 ? 4 : 5,
+                    vertical: visibleDayCount >= 7 || width < 68 ? 3 : 4,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -115,11 +118,10 @@ class CourseEventCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: _line(
+                            child: _fullLine(
                               title,
                               foreground,
                               title: true,
-                              maxLines: height >= 92 && width >= 58 ? 2 : 1,
                             ),
                           ),
                           if (status != null) ...[
@@ -131,17 +133,14 @@ class CourseEventCard extends StatelessWidget {
                           ],
                         ],
                       ),
-                      if (!ghost && height >= 52 && location != null)
-                        _line(location, foreground, title: false),
-                      if (!ghost &&
-                          height >= 92 &&
-                          preferences.showTeacher &&
+                      if (location != null)
+                        _fullLine(location, secondaryForeground),
+                      if (preferences.showTeacher &&
                           entry.teacher != null &&
                           entry.teacher!.trim().isNotEmpty)
-                        _line(
+                        _fullLine(
                           entry.teacher!.trim(),
-                          foreground.withValues(alpha: .78),
-                          title: false,
+                          secondaryForeground,
                         ),
                     ],
                   ),
@@ -154,23 +153,32 @@ class CourseEventCard extends StatelessWidget {
     );
   }
 
-  Widget _line(
+  Widget _fullLine(
     String value,
     Color color, {
-    required bool title,
-    int maxLines = 1,
+    bool title = false,
   }) {
     final compact = width < 58;
-    return Text(
-      value,
-      maxLines: compact ? 1 : maxLines,
-      softWrap: !compact && maxLines > 1,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        color: color,
-        fontSize: title ? (compact ? 10.5 : 12) : (compact ? 9 : 10),
-        height: title ? 1.12 : 1.15,
-        fontWeight: title ? FontWeight.w700 : FontWeight.w500,
+    return SizedBox(
+      height: title ? (compact ? 14 : 16) : (compact ? 11 : 13),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+            style: TextStyle(
+              color: color,
+              fontSize: title ? (compact ? 10.5 : 12) : (compact ? 8.5 : 10),
+              height: 1,
+              fontWeight: title ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
       ),
     );
   }

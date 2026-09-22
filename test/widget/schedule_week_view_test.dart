@@ -60,23 +60,25 @@ void main() {
       startSection: 1,
       endSection: 1,
       teacher: '教师甲',
+      campus: '长安校区',
       room: '3406',
     );
 
     await _pumpBlock(tester, entry, height: 40);
     expect(find.text('机器学习'), findsOneWidget);
-    expect(find.text('3406'), findsNothing);
-    expect(find.text('教师甲'), findsNothing);
+    expect(find.text('长安校区 · 3406'), findsOneWidget);
+    expect(find.text('教师甲'), findsOneWidget);
 
     await _pumpBlock(tester, entry, height: 64);
     expect(find.text('机器学习'), findsOneWidget);
-    expect(find.text('3406'), findsOneWidget);
-    expect(find.text('教师甲'), findsNothing);
+    expect(find.text('长安校区 · 3406'), findsOneWidget);
+    expect(find.text('教师甲'), findsOneWidget);
 
     await _pumpBlock(tester, entry, height: 128);
     expect(find.text('机器学习'), findsOneWidget);
-    expect(find.text('3406'), findsOneWidget);
+    expect(find.text('长安校区 · 3406'), findsOneWidget);
     expect(find.text('教师甲'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('only overlapping courses share the available day width',
@@ -206,9 +208,18 @@ void main() {
     );
 
     await _pumpBlock(tester, entry, height: 128);
-    expect(find.text('数据结构'), findsOneWidget);
-    expect(find.text('教师乙'), findsNothing);
-    expect(find.text('1310'), findsNothing);
+    expect(find.text('数据结构（实验）'), findsOneWidget);
+    expect(find.text('教师乙'), findsOneWidget);
+    expect(find.text('1310'), findsOneWidget);
+    final material = tester.widget<Material>(
+      find
+          .descendant(
+            of: find.byType(CourseEventCard),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    expect(material.color, isNot(Colors.transparent));
   });
 
   test('inactive entries that overlap active entries are hidden', () {
@@ -332,6 +343,7 @@ ScheduleGridEntry _entry({
   required int startSection,
   required int endSection,
   String? teacher,
+  String? campus,
   String? room,
   bool active = true,
 }) {
@@ -349,6 +361,7 @@ ScheduleGridEntry _entry({
     startSection: startSection,
     endSection: endSection,
     teacher: teacher,
+    campus: campus,
     room: room,
     weekMask: const WeekMask(1),
   );
@@ -363,6 +376,7 @@ ScheduleGridEntry _entry({
       startTime: DateTime(2026, 9, 7, 8),
       endTime: DateTime(2026, 9, 7, 9),
       teacher: teacher,
+      campus: campus,
       room: room,
     ),
     active: active,
