@@ -78,6 +78,47 @@ void main() {
     expect(find.text('教师甲'), findsOneWidget);
   });
 
+  testWidgets('only overlapping courses share the available day width',
+      (tester) async {
+    final model = _model(
+      entries: [
+        _entry(
+          id: 'overlap-a',
+          name: '课程 A',
+          weekday: DateTime.monday,
+          startSection: 1,
+          endSection: 2,
+        ),
+        _entry(
+          id: 'overlap-b',
+          name: '课程 B',
+          weekday: DateTime.monday,
+          startSection: 1,
+          endSection: 1,
+        ),
+        _entry(
+          id: 'later-course',
+          name: '后续课程',
+          weekday: DateTime.monday,
+          startSection: 4,
+          endSection: 4,
+        ),
+      ],
+    );
+
+    await _pumpGrid(tester, model, model.days.take(5).toList());
+
+    final blocks = tester.renderObjectList<RenderBox>(
+      find.byType(CourseBlock),
+    );
+    expect(blocks, hasLength(3));
+    final widths = blocks.map((box) => box.size.width).toList();
+    final widest = widths.reduce((left, right) => left > right ? left : right);
+    final narrowest =
+        widths.reduce((left, right) => left < right ? left : right);
+    expect(widest, greaterThan(narrowest * 1.5));
+  });
+
   testWidgets('inactive course blocks remain ghost-like and concise',
       (tester) async {
     final entry = _entry(

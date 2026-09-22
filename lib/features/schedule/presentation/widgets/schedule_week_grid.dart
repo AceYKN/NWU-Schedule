@@ -145,30 +145,58 @@ class ScheduleWeekGrid extends StatelessWidget {
           if (byStart != 0) return byStart;
           return right.endSection.compareTo(left.endSection);
         });
-      final lanes = <List<ScheduleGridEntry>>[];
-      final startIndex = placed.length;
+      final group = <ScheduleGridEntry>[];
+      var groupEnd = 0;
       for (final entry in entries) {
-        var lane = 0;
-        while (lane < lanes.length &&
-            lanes[lane].any((other) => _overlaps(other, entry))) {
-          lane++;
-        }
-        if (lane == lanes.length) lanes.add([]);
-        lanes[lane].add(entry);
-        placed.add(
-          _PlacedScheduleEntry(
-            entry: entry,
+        if (group.isNotEmpty && entry.startSection > groupEnd) {
+          _placeOverlapGroup(
+            group,
             dayIndex: dayIndex,
-            lane: lane,
-            laneCount: lanes.length,
-          ),
-        );
+            placed: placed,
+          );
+          group.clear();
+        }
+        group.add(entry);
+        groupEnd = math.max(groupEnd, entry.endSection);
       }
-      for (var index = startIndex; index < placed.length; index++) {
-        placed[index] = placed[index].copyWith(laneCount: lanes.length);
-      }
+      _placeOverlapGroup(
+        group,
+        dayIndex: dayIndex,
+        placed: placed,
+      );
     }
     return placed;
+  }
+
+  void _placeOverlapGroup(
+    List<ScheduleGridEntry> group, {
+    required int dayIndex,
+    required List<_PlacedScheduleEntry> placed,
+  }) {
+    if (group.isEmpty) return;
+
+    final lanes = <List<ScheduleGridEntry>>[];
+    final startIndex = placed.length;
+    for (final entry in group) {
+      var lane = 0;
+      while (lane < lanes.length &&
+          lanes[lane].any((other) => _overlaps(other, entry))) {
+        lane++;
+      }
+      if (lane == lanes.length) lanes.add([]);
+      lanes[lane].add(entry);
+      placed.add(
+        _PlacedScheduleEntry(
+          entry: entry,
+          dayIndex: dayIndex,
+          lane: lane,
+          laneCount: lanes.length,
+        ),
+      );
+    }
+    for (var index = startIndex; index < placed.length; index++) {
+      placed[index] = placed[index].copyWith(laneCount: lanes.length);
+    }
   }
 
   static bool _overlaps(ScheduleGridEntry left, ScheduleGridEntry right) {
