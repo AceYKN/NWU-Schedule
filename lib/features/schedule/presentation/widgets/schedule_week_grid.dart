@@ -15,6 +15,7 @@ class ScheduleWeekGrid extends StatelessWidget {
     required this.viewModel,
     required this.preferences,
     required this.now,
+    this.onEntryTap,
     super.key,
   });
 
@@ -22,6 +23,7 @@ class ScheduleWeekGrid extends StatelessWidget {
   final WeekScheduleViewModel viewModel;
   final ScheduleDisplayPreferences preferences;
   final DateTime now;
+  final ValueChanged<ScheduleGridEntry>? onEntryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -147,6 +149,7 @@ class ScheduleWeekGrid extends StatelessWidget {
           ? OverflowCourseBlock(
               entries: item.overflowEntries,
               height: height,
+              onEntryTap: onEntryTap,
             )
           : CourseBlock(
               entry: item.entry!,
@@ -155,6 +158,7 @@ class ScheduleWeekGrid extends StatelessWidget {
               height: height,
               visibleDayCount: visibleDayCount,
               isCurrent: _isCurrentEntry(item.entry!),
+              onTap: onEntryTap == null ? null : () => onEntryTap!(item.entry!),
             ),
     );
   }

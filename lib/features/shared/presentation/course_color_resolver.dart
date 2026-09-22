@@ -46,7 +46,18 @@ class CourseColorResolver {
       );
     }
     final baseHue = HSLColor.fromColor(scheme.primary).hue;
-    const hueOffsets = [0.0, 34.0, -34.0, 72.0, -72.0, 142.0, 208.0, 286.0];
+    const hueOffsets = [
+      0.0,
+      34.0,
+      -34.0,
+      72.0,
+      -72.0,
+      142.0,
+      180.0,
+      208.0,
+      286.0,
+      324.0,
+    ];
     final hue =
         ((baseHue + hueOffsets[_stableHash(course.id) % hueOffsets.length]) %
                     360 +

@@ -17,6 +17,7 @@ class CourseBlock extends StatelessWidget {
     required this.height,
     required this.visibleDayCount,
     this.isCurrent = false,
+    this.onTap,
     super.key,
   });
 
@@ -26,6 +27,7 @@ class CourseBlock extends StatelessWidget {
   final double height;
   final int visibleDayCount;
   final bool isCurrent;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +38,7 @@ class CourseBlock extends StatelessWidget {
       height: height,
       visibleDayCount: visibleDayCount,
       isCurrent: isCurrent,
+      onTap: onTap,
     );
   }
 }
@@ -48,6 +51,7 @@ class CourseEventCard extends StatelessWidget {
     required this.height,
     required this.visibleDayCount,
     this.isCurrent = false,
+    this.onTap,
     super.key,
   });
 
@@ -57,6 +61,7 @@ class CourseEventCard extends StatelessWidget {
   final double height;
   final int visibleDayCount;
   final bool isCurrent;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +91,7 @@ class CourseEventCard extends StatelessWidget {
       button: true,
       excludeSemantics: true,
       label: '$label，点击查看课程详情',
-      onTap: () => showCourseDetails(context, entry.instance),
+      onTap: () => _handleTap(context),
       child: Material(
         color: background,
         elevation: isCurrent && !ghost ? 1 : 0,
@@ -96,63 +101,52 @@ class CourseEventCard extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => showCourseDetails(context, entry.instance),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 3,
-                color: colors.onContainer.withValues(alpha: ghost ? .44 : .72),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: visibleDayCount >= 7 || width < 68 ? 4 : 6,
-                    vertical: visibleDayCount >= 7 || width < 68 ? 3 : 4,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _wrappedLine(
-                              title,
-                              foreground,
-                              title: true,
-                              maxLines: height >= 100 ? 3 : 2,
-                            ),
-                          ),
-                          if (status != null) ...[
-                            const SizedBox(width: 2),
-                            _StatusBadge(
-                              label: status.label,
-                              color: status.color(scheme),
-                            ),
-                          ],
-                        ],
+          onTap: () => _handleTap(context),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: visibleDayCount >= 7 || width < 68 ? 4 : 6,
+              vertical: visibleDayCount >= 7 || width < 68 ? 3 : 4,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _wrappedLine(
+                        title,
+                        foreground,
+                        title: true,
+                        maxLines: height >= 100 ? 3 : 2,
                       ),
-                      if (location != null)
-                        _wrappedLine(
-                          location,
-                          secondaryForeground,
-                          maxLines: 2,
-                        ),
-                      if (preferences.showTeacher &&
-                          entry.teacher != null &&
-                          entry.teacher!.trim().isNotEmpty)
-                        _wrappedLine(
-                          entry.teacher!.trim(),
-                          secondaryForeground,
-                          maxLines: height >= 100 ? 2 : 1,
-                        ),
+                    ),
+                    if (status != null) ...[
+                      const SizedBox(width: 2),
+                      _StatusBadge(
+                        label: status.label,
+                        color: status.color(scheme),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
-              ),
-            ],
+                if (location != null)
+                  _wrappedLine(
+                    location,
+                    secondaryForeground,
+                    maxLines: 2,
+                  ),
+                if (preferences.showTeacher &&
+                    entry.teacher != null &&
+                    entry.teacher!.trim().isNotEmpty)
+                  _wrappedLine(
+                    entry.teacher!.trim(),
+                    secondaryForeground,
+                    maxLines: height >= 100 ? 2 : 1,
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -179,6 +173,14 @@ class CourseEventCard extends StatelessWidget {
     );
   }
 
+  void _handleTap(BuildContext context) {
+    if (onTap != null) {
+      onTap!();
+    } else {
+      showCourseDetails(context, entry.instance);
+    }
+  }
+
   _CourseStatus? _statusLabel(CourseExceptionType? type) {
     return switch (type) {
       CourseExceptionType.add => const _CourseStatus('加', _StatusKind.add),
@@ -194,11 +196,13 @@ class OverflowCourseBlock extends StatelessWidget {
   const OverflowCourseBlock({
     required this.entries,
     required this.height,
+    this.onEntryTap,
     super.key,
   });
 
   final List<ScheduleGridEntry> entries;
   final double height;
+  final ValueChanged<ScheduleGridEntry>? onEntryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -265,7 +269,11 @@ class OverflowCourseBlock extends StatelessWidget {
       ),
     );
     if (context.mounted && selected != null) {
-      showCourseDetails(context, selected.instance);
+      if (onEntryTap != null) {
+        onEntryTap!(selected);
+      } else {
+        showCourseDetails(context, selected.instance);
+      }
     }
   }
 }

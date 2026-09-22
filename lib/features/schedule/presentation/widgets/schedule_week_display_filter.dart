@@ -9,6 +9,20 @@ import '../../../../domain/schedule/week_schedule_view_model.dart';
 class ScheduleWeekDisplayFilter {
   const ScheduleWeekDisplayFilter._();
 
+  static WeekScheduleViewModel hideCourses(
+    WeekScheduleViewModel model,
+    Set<String> hiddenCourseIds,
+  ) {
+    if (hiddenCourseIds.isEmpty) return model;
+    return WeekScheduleViewModel(
+      week: model.week,
+      days: model.days,
+      entries: model.entries
+          .where((entry) => !hiddenCourseIds.contains(entry.course.id))
+          .toList(growable: false),
+    );
+  }
+
   static WeekScheduleViewModel hideConflictingInactive(
     WeekScheduleViewModel model,
   ) {

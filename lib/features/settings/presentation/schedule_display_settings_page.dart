@@ -13,6 +13,13 @@ class ScheduleDisplaySettingsPage extends ConsumerWidget {
     final preferences =
         ref.watch(scheduleDisplayPreferencesProvider).asData?.value ??
             const ScheduleDisplayPreferences.defaults();
+    final courseNames = <String, String>{};
+    final loaded = ref.watch(scheduleLoadProvider).asData?.value;
+    if (loaded is ScheduleReady) {
+      for (final course in loaded.engine.courses) {
+        courseNames[course.id] = course.name;
+      }
+    }
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
       children: [
@@ -85,6 +92,15 @@ class ScheduleDisplaySettingsPage extends ConsumerWidget {
             ],
           ),
         ),
+        if (preferences.hiddenCourseIds.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          _HiddenCoursesCard(
+            courseIds: preferences.hiddenCourseIds,
+            courseNames: courseNames,
+            onRestore: (courseId) => _restoreHidden(ref, courseId),
+            onRestoreAll: () => _restoreAllHidden(ref),
+          ),
+        ],
       ],
     );
   }
@@ -95,6 +111,66 @@ class ScheduleDisplaySettingsPage extends ConsumerWidget {
           value.toString(),
         );
     ref.invalidate(scheduleDisplayPreferencesProvider);
+  }
+
+  Future<void> _restoreHidden(WidgetRef ref, String courseId) async {
+    final key = scheduleDisplaySettingKeys['hiddenCourseIds']!;
+    final repository = ref.read(scheduleDataRepositoryProvider);
+    final hidden = decodeHiddenCourseIds(await repository.getSetting(key))
+      ..remove(courseId);
+    await repository.setSetting(key, encodeHiddenCourseIds(hidden));
+    ref.invalidate(scheduleDisplayPreferencesProvider);
+  }
+
+  Future<void> _restoreAllHidden(WidgetRef ref) async {
+    await ref.read(scheduleDataRepositoryProvider).setSetting(
+          scheduleDisplaySettingKeys['hiddenCourseIds']!,
+          encodeHiddenCourseIds(const <String>[]),
+        );
+    ref.invalidate(scheduleDisplayPreferencesProvider);
+  }
+}
+
+class _HiddenCoursesCard extends StatelessWidget {
+  const _HiddenCoursesCard({
+    required this.courseIds,
+    required this.courseNames,
+    required this.onRestore,
+    required this.onRestoreAll,
+  });
+
+  final Set<String> courseIds;
+  final Map<String, String> courseNames;
+  final ValueChanged<String> onRestore;
+  final VoidCallback onRestoreAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final ids = courseIds.toList()..sort();
+    return Card(
+      child: Column(
+        children: [
+          ListTile(
+            title: const Text('已隐藏课程'),
+            subtitle: Text('${ids.length} 门课程不会出现在周课表中'),
+            trailing: TextButton(
+              onPressed: onRestoreAll,
+              child: const Text('全部恢复'),
+            ),
+          ),
+          for (var index = 0; index < ids.length; index++) ...[
+            if (index > 0) const Divider(height: 1),
+            ListTile(
+              title: Text(courseNames[ids[index]] ?? ids[index]),
+              trailing: TextButton(
+                onPressed: () => onRestore(ids[index]),
+                child: const Text('显示'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -187,11 +263,7 @@ class _SchedulePreview extends StatelessWidget {
                   children: [
                     SizedBox(
                       width: 30,
-                      child: Text(
-                        preferences.showPeriodTimes ? '节\n时' : '节',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
+                      child: const SizedBox.shrink(),
                     ),
                     for (var index = 0; index < days.length; index++)
                       Expanded(
@@ -333,30 +405,16 @@ class _PreviewBlock extends StatelessWidget {
               : Colors.transparent,
         ),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            width: 2,
-            color: muted
-                ? scheme.outlineVariant.withValues(alpha: .55)
-                : scheme.primary,
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              '$title\n$detail',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: muted
-                        ? scheme.onSurfaceVariant.withValues(alpha: .55)
-                        : scheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
+      child: Text(
+        '$title\n$detail',
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: muted
+                  ? scheme.onSurfaceVariant.withValues(alpha: .55)
+                  : scheme.onPrimaryContainer,
+              fontWeight: FontWeight.w700,
             ),
-          ),
-        ],
       ),
     );
   }

@@ -114,8 +114,9 @@ class CourseCard extends StatelessWidget {
 
 void showCourseDetails(
   BuildContext context,
-  EffectiveCourseInstance instance,
-) {
+  EffectiveCourseInstance instance, {
+  Future<void> Function()? onHideCourse,
+}) {
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -224,8 +225,19 @@ void showCourseDetails(
                                 label: const Text('编辑整门课程'),
                               ),
                               OutlinedButton.icon(
-                                onPressed: () => _hideCourse(context,
-                                    sheetContext, ref, instance.course.id),
+                                onPressed: onHideCourse == null
+                                    ? () => _hideCourse(
+                                          context,
+                                          sheetContext,
+                                          ref,
+                                          instance.course.id,
+                                        )
+                                    : () async {
+                                        await onHideCourse();
+                                        if (sheetContext.mounted) {
+                                          Navigator.of(sheetContext).pop();
+                                        }
+                                      },
                                 icon: const Icon(Icons.visibility_off_outlined),
                                 label: const Text('隐藏课程'),
                               ),

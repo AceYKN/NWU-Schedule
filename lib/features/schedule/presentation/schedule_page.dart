@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,10 +8,13 @@ import '../../../app/bootstrap.dart';
 import '../../../core/time/campus_clock.dart';
 import '../../../domain/calendar/calendar_definition.dart';
 import '../../../domain/errors/app_error.dart';
+import '../../../domain/schedule/effective_course_instance.dart';
 import '../../../domain/schedule/schedule_engine.dart';
 import '../../../domain/settings/schedule_display_preferences.dart';
+import '../../../domain/schedule/week_schedule_view_model.dart';
 import 'widgets/schedule_week_grid.dart';
 import 'widgets/schedule_week_display_filter.dart';
+import 'widgets/schedule_quick_detail_sheet.dart';
 import '../../shared/presentation/course_card.dart';
 
 class SchedulePage extends ConsumerStatefulWidget {
@@ -79,6 +84,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                 now: now,
                 temporaryWeekendExpanded: temporaryWeekendExpanded,
                 onWeekChanged: _selectWeek,
+                onEntryTap: (pageWeek, entry) => _showQuickDetail(
+                  engine: engine,
+                  selectedWeek: pageWeek,
+                  entry: entry,
+                ),
                 onWeekendExpanded: () {
                   setState(() => temporaryWeekendExpanded = true);
                 },
@@ -129,6 +139,62 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         );
     }
   }
+
+  Future<void> _showQuickDetail({
+    required ScheduleEngine engine,
+    required int selectedWeek,
+    required ScheduleGridEntry entry,
+  }) {
+    return showScheduleQuickDetail(
+      context: context,
+      engine: engine,
+      entry: entry,
+      selectedWeek: selectedWeek,
+      onHideCourse: _hideCourseFromWeek,
+    );
+  }
+
+  Future<void> _hideCourseFromWeek(
+    EffectiveCourseInstance instance,
+  ) async {
+    final repository = ref.read(scheduleDataRepositoryProvider);
+    final key = scheduleDisplaySettingKeys['hiddenCourseIds']!;
+    final hidden = decodeHiddenCourseIds(await repository.getSetting(key))
+      ..add(instance.course.id);
+    await repository.setSetting(key, encodeHiddenCourseIds(hidden));
+    ref.invalidate(scheduleDisplayPreferencesProvider);
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('已隐藏“${instance.courseName}”'),
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () {
+            unawaited(_restoreCourseFromWeek(instance));
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restoreCourseFromWeek(
+    EffectiveCourseInstance instance,
+  ) async {
+    final repository = ref.read(scheduleDataRepositoryProvider);
+    final key = scheduleDisplaySettingKeys['hiddenCourseIds']!;
+    final hidden = decodeHiddenCourseIds(await repository.getSetting(key))
+      ..remove(instance.course.id);
+    await repository.setSetting(key, encodeHiddenCourseIds(hidden));
+    ref.invalidate(scheduleDisplayPreferencesProvider);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已恢复“${instance.courseName}”')),
+    );
+  }
 }
 
 class _ScheduleFabRow extends StatelessWidget {
@@ -170,6 +236,7 @@ class _WeekContent extends StatefulWidget {
     required this.now,
     required this.temporaryWeekendExpanded,
     required this.onWeekChanged,
+    required this.onEntryTap,
     required this.onWeekendExpanded,
   });
 
@@ -181,6 +248,7 @@ class _WeekContent extends StatefulWidget {
   final DateTime now;
   final bool temporaryWeekendExpanded;
   final ValueChanged<int> onWeekChanged;
+  final void Function(int week, ScheduleGridEntry entry) onEntryTap;
   final VoidCallback onWeekendExpanded;
 
   @override
@@ -249,13 +317,18 @@ class _WeekContentState extends State<_WeekContent> {
             },
             itemBuilder: (context, index) {
               final pageWeek = index + 1;
+              final unfilteredModel = widget.engine.getWeekViewModel(
+                pageWeek,
+                includeInactive: widget.preferences.showInactiveCourses,
+                now: widget.now,
+              );
+              final visibleModel = ScheduleWeekDisplayFilter.hideCourses(
+                unfilteredModel,
+                widget.preferences.hiddenCourseIds,
+              );
               final pageModel =
                   ScheduleWeekDisplayFilter.hideConflictingInactive(
-                widget.engine.getWeekViewModel(
-                  pageWeek,
-                  includeInactive: widget.preferences.showInactiveCourses,
-                  now: widget.now,
-                ),
+                visibleModel,
               );
               final showWeekend = widget.preferences.showWeekend ||
                   (widget.temporaryWeekendExpanded && pageWeek == widget.week);
@@ -277,6 +350,7 @@ class _WeekContentState extends State<_WeekContent> {
                       viewModel: pageModel,
                       preferences: widget.preferences,
                       now: CampusClock.toCampusWallTime(widget.now),
+                      onEntryTap: (entry) => widget.onEntryTap(pageWeek, entry),
                     ),
                     if (pageModel.activeEntries.isEmpty) ...[
                       const SizedBox(height: 24),

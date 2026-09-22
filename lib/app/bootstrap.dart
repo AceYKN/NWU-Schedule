@@ -105,6 +105,7 @@ const scheduleDisplaySettingKeys = {
   'showPeriodTimes': 'schedule.weekView.showPeriodTimes',
   'highlightCurrentPeriod': 'schedule.weekView.highlightCurrentPeriod',
   'showBackToCurrentWeekFab': 'schedule.weekView.showBackToCurrentWeekFab',
+  'hiddenCourseIds': 'schedule.weekView.hiddenCourseIds',
 };
 
 final scheduleDisplayPreferencesProvider =
@@ -124,6 +125,10 @@ final scheduleDisplayPreferencesProvider =
     showPeriodTimes: await read('showPeriodTimes', true),
     highlightCurrentPeriod: await read('highlightCurrentPeriod', true),
     showBackToCurrentWeekFab: await read('showBackToCurrentWeekFab', true),
+    hiddenCourseIds: decodeHiddenCourseIds(
+      await repository
+          .getSetting(scheduleDisplaySettingKeys['hiddenCourseIds']!),
+    ),
   );
 });
 
