@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -97,8 +99,17 @@ class ScheduleDisplaySettingsPage extends ConsumerWidget {
           _HiddenCoursesCard(
             courseIds: preferences.hiddenCourseIds,
             courseNames: courseNames,
-            onRestore: (courseId) => _restoreHidden(ref, courseId),
-            onRestoreAll: () => _restoreAllHidden(ref),
+            onRestore: (courseId) => _restoreHidden(
+              context,
+              ref,
+              courseId,
+              courseNames[courseId] ?? courseId,
+            ),
+            onRestoreAll: () => _restoreAllHidden(
+              context,
+              ref,
+              preferences.hiddenCourseIds,
+            ),
           ),
         ],
       ],
@@ -113,19 +124,69 @@ class ScheduleDisplaySettingsPage extends ConsumerWidget {
     ref.invalidate(scheduleDisplayPreferencesProvider);
   }
 
-  Future<void> _restoreHidden(WidgetRef ref, String courseId) async {
+  Future<void> _restoreHidden(
+    BuildContext context,
+    WidgetRef ref,
+    String courseId,
+    String courseName,
+  ) async {
     final key = scheduleDisplaySettingKeys['hiddenCourseIds']!;
     final repository = ref.read(scheduleDataRepositoryProvider);
     final hidden = decodeHiddenCourseIds(await repository.getSetting(key))
+        .toSet()
       ..remove(courseId);
+    await repository.setSetting(key, encodeHiddenCourseIds(hidden));
+    ref.invalidate(scheduleDisplayPreferencesProvider);
+    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('已恢复“$courseName”'),
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () => unawaited(_addHidden(ref, courseId)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restoreAllHidden(
+    BuildContext context,
+    WidgetRef ref,
+    Set<String> previousHidden,
+  ) async {
+    await _setHidden(ref, const <String>{});
+    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('已恢复 ${previousHidden.length} 门课程'),
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () => unawaited(_setHidden(ref, previousHidden)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addHidden(WidgetRef ref, String courseId) async {
+    final key = scheduleDisplaySettingKeys['hiddenCourseIds']!;
+    final repository = ref.read(scheduleDataRepositoryProvider);
+    final hidden = decodeHiddenCourseIds(await repository.getSetting(key))
+        .toSet()
+      ..add(courseId);
     await repository.setSetting(key, encodeHiddenCourseIds(hidden));
     ref.invalidate(scheduleDisplayPreferencesProvider);
   }
 
-  Future<void> _restoreAllHidden(WidgetRef ref) async {
+  Future<void> _setHidden(WidgetRef ref, Set<String> hidden) async {
     await ref.read(scheduleDataRepositoryProvider).setSetting(
           scheduleDisplaySettingKeys['hiddenCourseIds']!,
-          encodeHiddenCourseIds(const <String>[]),
+          encodeHiddenCourseIds(hidden),
         );
     ref.invalidate(scheduleDisplayPreferencesProvider);
   }
@@ -394,14 +455,20 @@ class _PreviewBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final background = muted
+        ? Color.lerp(scheme.surface, scheme.secondaryContainer, .68)!
+        : scheme.primaryContainer;
+    final foreground = muted
+        ? Color.lerp(background, scheme.onSecondaryContainer, .75)!
+        : scheme.onPrimaryContainer;
     return Container(
       padding: const EdgeInsets.fromLTRB(7, 5, 4, 5),
       decoration: BoxDecoration(
-        color: muted ? Colors.transparent : scheme.primaryContainer,
+        color: background,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
           color: muted
-              ? scheme.outlineVariant.withValues(alpha: .42)
+              ? scheme.secondary.withValues(alpha: .28)
               : Colors.transparent,
         ),
       ),
@@ -410,9 +477,7 @@ class _PreviewBlock extends StatelessWidget {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: muted
-                  ? scheme.onSurfaceVariant.withValues(alpha: .55)
-                  : scheme.onPrimaryContainer,
+              color: foreground,
               fontWeight: FontWeight.w700,
             ),
       ),

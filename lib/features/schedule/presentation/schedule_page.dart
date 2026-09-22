@@ -274,7 +274,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final repository = ref.read(scheduleDataRepositoryProvider);
     final key = scheduleDisplaySettingKeys['hiddenCourseIds']!;
     final hiddenCourseIds =
-        decodeHiddenCourseIds(await repository.getSetting(key));
+        decodeHiddenCourseIds(await repository.getSetting(key)).toSet();
     if (hidden) {
       hiddenCourseIds.add(courseId);
     } else {
