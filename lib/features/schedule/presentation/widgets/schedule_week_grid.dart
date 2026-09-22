@@ -442,7 +442,7 @@ class ScheduleDayHeader extends StatelessWidget {
                     ),
                   ),
                   if (day.marker != null) ...[
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       decoration: BoxDecoration(
@@ -453,8 +453,8 @@ class ScheduleDayHeader extends StatelessWidget {
                         day.marker!,
                         style: TextStyle(
                           color: markerForeground,
-                          fontSize: 8,
-                          height: 1.2,
+                          fontSize: 7,
+                          height: 1,
                           fontWeight: FontWeight.w800,
                         ),
                       ),

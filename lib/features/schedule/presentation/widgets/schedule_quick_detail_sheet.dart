@@ -24,6 +24,7 @@ Future<void> showScheduleQuickDetail({
     startSection: entry.startSection,
     endSection: entry.endSection,
   );
+  final pageContext = context;
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -33,7 +34,8 @@ Future<void> showScheduleQuickDetail({
       initialChildSize: .68,
       minChildSize: .45,
       maxChildSize: .92,
-      builder: (context, scrollController) => _QuickDetailContent(
+      builder: (_, scrollController) => _QuickDetailContent(
+        pageContext: pageContext,
         entry: entry,
         selectedWeek: selectedWeek,
         schedule: semesterSchedule,
@@ -46,6 +48,7 @@ Future<void> showScheduleQuickDetail({
 
 class _QuickDetailContent extends StatelessWidget {
   const _QuickDetailContent({
+    required this.pageContext,
     required this.entry,
     required this.selectedWeek,
     required this.schedule,
@@ -53,6 +56,7 @@ class _QuickDetailContent extends StatelessWidget {
     this.onHideCourse,
   });
 
+  final BuildContext pageContext;
   final ScheduleGridEntry entry;
   final int selectedWeek;
   final TimeslotSemesterSchedule schedule;
@@ -147,7 +151,7 @@ class _QuickDetailContent extends StatelessWidget {
                 onPressed: () {
                   Navigator.of(context).pop();
                   showCourseDetails(
-                    context,
+                    pageContext,
                     instance,
                     onHideCourse: onHideCourse == null
                         ? null

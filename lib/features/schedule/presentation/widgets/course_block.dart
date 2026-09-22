@@ -81,16 +81,16 @@ class CourseEventCard extends StatelessWidget {
     final title = CourseDisplayFormatter.title(entry.course.name);
     final location = CourseDisplayFormatter.location(entry);
     final background = ghost
-        ? Color.lerp(scheme.surface, colors.container, .56)!
+        ? Color.lerp(scheme.surface, colors.container, .68)!
         : colors.container;
     final foreground = ghost
-        ? Color.lerp(background, colors.onContainer, .68)!
+        ? Color.lerp(background, colors.onContainer, .75)!
         : colors.onContainer;
     final secondaryForeground = ghost
-        ? Color.lerp(background, colors.onContainer, .56)!
+        ? Color.lerp(background, colors.onContainer, .62)!
         : foreground.withValues(alpha: .78);
     final border = ghost
-        ? BorderSide(color: colors.onContainer.withValues(alpha: .34))
+        ? BorderSide(color: colors.onContainer.withValues(alpha: .40))
         : isCurrent
             ? BorderSide(color: scheme.primary, width: 2)
             : BorderSide.none;
