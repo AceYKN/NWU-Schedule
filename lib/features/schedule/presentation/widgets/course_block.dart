@@ -95,6 +95,7 @@ class CourseEventCard extends StatelessWidget {
             ? BorderSide(color: scheme.primary, width: 2)
             : BorderSide.none;
     final label = CourseDisplayFormatter.semanticsLabel(entry);
+    final compactHeight = height < 70;
 
     return Semantics(
       button: true,
@@ -129,6 +130,7 @@ class CourseEventCard extends StatelessWidget {
                         foreground,
                         title: true,
                         maxLines: height >= 100 ? 3 : 2,
+                        compactHeight: compactHeight,
                       ),
                     ),
                     if (status != null) ...[
@@ -140,20 +142,26 @@ class CourseEventCard extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (location != null)
+                if (location != null) ...[
+                  if (!compactHeight) const SizedBox(height: 2),
                   _wrappedLine(
                     location,
                     secondaryForeground,
                     maxLines: 2,
+                    compactHeight: compactHeight,
                   ),
+                ],
                 if (preferences.showTeacher &&
                     entry.teacher != null &&
-                    entry.teacher!.trim().isNotEmpty)
+                    entry.teacher!.trim().isNotEmpty) ...[
+                  if (!compactHeight) const SizedBox(height: 1),
                   _wrappedLine(
                     entry.teacher!.trim(),
                     secondaryForeground,
                     maxLines: height >= 100 ? 2 : 1,
+                    compactHeight: compactHeight,
                   ),
+                ],
               ],
             ),
           ),
@@ -167,6 +175,7 @@ class CourseEventCard extends StatelessWidget {
     Color color, {
     bool title = false,
     required int maxLines,
+    required bool compactHeight,
   }) {
     return Text(
       value,
@@ -176,7 +185,7 @@ class CourseEventCard extends StatelessWidget {
       style: TextStyle(
         color: color,
         fontSize: title ? 12 : 10,
-        height: title ? 1.05 : 1,
+        height: compactHeight ? 1.08 : (title ? 1.2 : 1.3),
         fontWeight: title ? FontWeight.w700 : FontWeight.w500,
       ),
     );

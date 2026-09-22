@@ -210,7 +210,8 @@ void main() {
     expect(find.text('软件测试'), findsWidgets);
 
     await pumpPage(const SchedulePage());
-    expect(find.text('周课表'), findsOneWidget);
+    expect(find.text('周课表'), findsNothing);
+    expect(find.byType(WeekPageHeader), findsOneWidget);
     expect(find.text('六'), findsNothing);
     expect(find.textContaining('本周周末有 1 节课'), findsOneWidget);
     await tester.tap(find.textContaining('查看周末'));

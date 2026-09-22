@@ -62,7 +62,7 @@ class CourseColorResolver {
       final base = Color(course.colorOverride!);
       return CourseColorPair(
         container: base,
-        onContainer: _onColor(base, scheme),
+        onContainer: _neutralScheduleForeground(base, scheme),
       );
     }
     final baseHue = HSLColor.fromColor(scheme.primary).hue;
@@ -80,7 +80,7 @@ class CourseColorResolver {
     )!;
     return CourseColorPair(
       container: base,
-      onContainer: _bestContrastColor(base, scheme),
+      onContainer: _neutralScheduleForeground(base, scheme),
     );
   }
 
@@ -93,9 +93,17 @@ class CourseColorResolver {
     return hash;
   }
 
-  static Color _onColor(Color background, ColorScheme scheme) {
-    final dark = background.computeLuminance() < 0.42;
-    return dark ? scheme.onInverseSurface : scheme.onSurface;
+  static Color _neutralScheduleForeground(
+    Color background,
+    ColorScheme scheme,
+  ) {
+    const lightForeground = Color(0xFF17181B);
+    const darkForeground = Color(0xFFF3F4F6);
+    final preferred = scheme.brightness == Brightness.light
+        ? lightForeground
+        : darkForeground;
+    if (_contrastRatio(background, preferred) >= 4.5) return preferred;
+    return background.computeLuminance() > .45 ? Colors.black : Colors.white;
   }
 
   static Color _bestContrastColor(Color background, ColorScheme scheme) {

@@ -48,68 +48,63 @@ class ScheduleWeekGrid extends StatelessWidget {
         final scheme = Theme.of(context).colorScheme;
         final canvasHeight = ScheduleGridMetrics.canvasHeight(periodCount);
 
-        return Container(
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: scheme.outlineVariant.withValues(alpha: .28),
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
+        return ColoredBox(
+          color: scheme.surface,
           child: SizedBox(
             height: canvasHeight,
-            child: Stack(
-              clipBehavior: Clip.hardEdge,
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _ScheduleGridPainter(
+            child: ClipRect(
+              child: Stack(
+                clipBehavior: Clip.hardEdge,
+                children: [
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _ScheduleGridPainter(
+                        periodWidth: periodWidth,
+                        dayWidth: dayWidth,
+                        dayCount: visibleDays.length,
+                        periodCount: periodCount,
+                        lineColor: scheme.outlineVariant,
+                      ),
+                    ),
+                  ),
+                  for (var index = 0; index < visibleDays.length; index++)
+                    Positioned(
+                      left: periodWidth + index * dayWidth,
+                      top: 0,
+                      width: dayWidth,
+                      height: ScheduleGridMetrics.headerHeight,
+                      child: ScheduleDayHeader(day: visibleDays[index]),
+                    ),
+                  for (var section = 1; section <= periodCount; section++)
+                    Positioned(
+                      left: 0,
+                      top: ScheduleGridMetrics.sectionTop(section),
+                      width: periodWidth,
+                      height: ScheduleGridMetrics.periodHeight,
+                      child: ScheduleTimeAxis(
+                        section: section,
+                        showTime: preferences.showPeriodTimes,
+                      ),
+                    ),
+                  for (final item in layout)
+                    _buildLayoutItem(
+                      context,
+                      item: item,
                       periodWidth: periodWidth,
                       dayWidth: dayWidth,
-                      dayCount: visibleDays.length,
-                      periodCount: periodCount,
-                      lineColor: scheme.outlineVariant,
+                      visibleDayCount: visibleDays.length,
+                      colorIndices: colorIndices,
                     ),
-                  ),
-                ),
-                for (var index = 0; index < visibleDays.length; index++)
-                  Positioned(
-                    left: periodWidth + index * dayWidth,
-                    top: 0,
-                    width: dayWidth,
-                    height: ScheduleGridMetrics.headerHeight,
-                    child: ScheduleDayHeader(day: visibleDays[index]),
-                  ),
-                for (var section = 1; section <= periodCount; section++)
-                  Positioned(
-                    left: 0,
-                    top: ScheduleGridMetrics.sectionTop(section),
-                    width: periodWidth,
-                    height: ScheduleGridMetrics.periodHeight,
-                    child: ScheduleTimeAxis(
-                      section: section,
-                      showTime: preferences.showPeriodTimes,
+                  if (current != null)
+                    Positioned(
+                      left: periodWidth + current.dayIndex * dayWidth,
+                      width: dayWidth,
+                      top: current.top - 9,
+                      height: 18,
+                      child: CurrentTimeIndicator(label: current.label),
                     ),
-                  ),
-                for (final item in layout)
-                  _buildLayoutItem(
-                    context,
-                    item: item,
-                    periodWidth: periodWidth,
-                    dayWidth: dayWidth,
-                    visibleDayCount: visibleDays.length,
-                    colorIndices: colorIndices,
-                  ),
-                if (current != null)
-                  Positioned(
-                    left: periodWidth + current.dayIndex * dayWidth,
-                    width: dayWidth,
-                    top: current.top - 9,
-                    height: 18,
-                    child: CurrentTimeIndicator(label: current.label),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         );

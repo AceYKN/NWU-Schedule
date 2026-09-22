@@ -306,6 +306,37 @@ void main() {
     );
   });
 
+  test('schedule course text stays neutral and meets contrast in both themes',
+      () {
+    final course = Course(
+      id: 'contrast-course',
+      semesterId: 'test-semester',
+      sourceType: CourseSourceType.manual,
+      name: '软件测试',
+    );
+
+    for (final brightness in Brightness.values) {
+      final scheme = ColorScheme.fromSeed(
+        seedColor: Colors.indigo,
+        brightness: brightness,
+      );
+      for (var index = 0;
+          index < CourseColorResolver.schedulePaletteLength();
+          index++) {
+        final colors = CourseColorResolver.resolveSchedule(
+          course,
+          scheme,
+          paletteIndex: index,
+        );
+        expect(
+          _contrastRatio(colors.container, colors.onContainer),
+          greaterThanOrEqualTo(4.5),
+        );
+        expect(_channelSpread(colors.onContainer), lessThanOrEqualTo(4));
+      }
+    }
+  });
+
   test('weekend makeup notice takes priority over the generic course count',
       () {
     final model = _model(
@@ -443,4 +474,26 @@ ScheduleGridEntry _entry({
     ),
     active: active,
   );
+}
+
+double _contrastRatio(Color background, Color foreground) {
+  final backgroundLuminance = background.computeLuminance();
+  final foregroundLuminance = foreground.computeLuminance();
+  final lighter = backgroundLuminance > foregroundLuminance
+      ? backgroundLuminance
+      : foregroundLuminance;
+  final darker = backgroundLuminance < foregroundLuminance
+      ? backgroundLuminance
+      : foregroundLuminance;
+  return (lighter + .05) / (darker + .05);
+}
+
+int _channelSpread(Color color) {
+  final value = color.toARGB32();
+  final channels = [
+    (value >> 16) & 0xff,
+    (value >> 8) & 0xff,
+    value & 0xff,
+  ]..sort();
+  return channels.last - channels.first;
 }

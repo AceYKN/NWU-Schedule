@@ -385,7 +385,7 @@ class _WeekContentState extends State<_WeekContent> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+          padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
           child: WeekPageHeader(
             week: widget.week,
             currentWeek: widget.currentWeek,
@@ -428,7 +428,7 @@ class _WeekContentState extends State<_WeekContent> {
                   : pageModel.days.take(5).toList(growable: false);
               final hasWeekendCourse = pageModel.hasHiddenWeekendCourses;
               return SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 112),
+                padding: const EdgeInsets.fromLTRB(6, 0, 6, 96),
                 child: Column(
                   children: [
                     if (!showWeekend && hasWeekendCourse)
@@ -482,66 +482,58 @@ class WeekPageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final start = definition.weekStart(week);
     final end = start.add(const Duration(days: 6));
-    final dateRange = '${start.month}月${start.day}日 - '
-        '${end.month}月${end.day}日';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Text(
-                '周课表',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
+    final dateRange = '${start.month}/${start.day} - '
+        '${end.month}/${end.day}';
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 40,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              dateRange,
+              maxLines: 1,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
-            Semantics(
-              button: true,
-              label: '选择教学周，当前第$week周',
-              child: FilledButton.tonalIcon(
-                onPressed: () => _openPicker(context),
-                icon: const Icon(Icons.keyboard_arrow_down, size: 18),
-                label: Text(
-                  '第$week周${week == currentWeek ? ' · 本周' : ''}',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 36),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  visualDensity: VisualDensity.compact,
-                ),
+          ),
+          if (showBackToCurrentWeek)
+            TextButton(
+              onPressed: onBackToCurrentWeek,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
+              child: Text('回到第$currentWeek周'),
             ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                dateRange,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ),
-            if (showBackToCurrentWeek)
-              TextButton.icon(
-                onPressed: onBackToCurrentWeek,
-                icon: const Icon(Icons.my_location_outlined, size: 16),
-                label: Text('回到第$currentWeek周'),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+          const SizedBox(width: 4),
+          Semantics(
+            button: true,
+            label: '选择教学周，当前第$week周',
+            child: FilledButton.tonalIcon(
+              onPressed: () => _openPicker(context),
+              iconAlignment: IconAlignment.end,
+              icon: const Icon(Icons.keyboard_arrow_down, size: 17),
+              label: Text(
+                '第$week周${week == currentWeek ? ' · 本周' : ''}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-          ],
-        ),
-      ],
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -630,20 +622,35 @@ class WeekendCourseNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      color: Theme.of(context).colorScheme.secondaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
-        child: Row(
-          children: [
-            Expanded(child: Text(message)),
-            TextButton(
-              onPressed: onPressed,
-              child: const Text('查看周末 ›'),
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      height: 40,
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(left: 10, right: 2),
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              message,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
             ),
-          ],
-        ),
+          ),
+          TextButton(
+            onPressed: onPressed,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 32),
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+            child: const Text('查看周末 ›'),
+          ),
+        ],
       ),
     );
   }
