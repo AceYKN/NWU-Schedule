@@ -153,7 +153,8 @@ class TimeslotSemesterScheduleBuilder {
         }
         return rule.weekday == weekday &&
             rule.startSection == startSection &&
-            rule.endSection == endSection;
+            rule.endSection == endSection &&
+            rule.includesWeek(week);
       });
       if (sourceRule.isNotEmpty) {
         return exception.type == CourseExceptionType.cancel ? '停课' : '调课';

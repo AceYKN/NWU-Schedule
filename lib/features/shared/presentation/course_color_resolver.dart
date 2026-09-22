@@ -14,6 +14,25 @@ class CourseColorPair {
 class CourseColorResolver {
   const CourseColorResolver._();
 
+  static const _scheduleHueOffsets = [
+    0.0,
+    34.0,
+    -34.0,
+    72.0,
+    -72.0,
+    142.0,
+    180.0,
+    208.0,
+    286.0,
+    324.0,
+  ];
+
+  static int schedulePaletteLength() => _scheduleHueOffsets.length;
+
+  static int schedulePaletteIndex(String courseId) {
+    return _stableHash(courseId) % _scheduleHueOffsets.length;
+  }
+
   static CourseColorPair resolve(Course course, ColorScheme scheme) {
     if (course.colorOverride != null) {
       final base = Color(course.colorOverride!);
@@ -36,8 +55,9 @@ class CourseColorResolver {
   /// introducing hard-coded light/dark colors.
   static CourseColorPair resolveSchedule(
     Course course,
-    ColorScheme scheme,
-  ) {
+    ColorScheme scheme, {
+    int? paletteIndex,
+  }) {
     if (course.colorOverride != null) {
       final base = Color(course.colorOverride!);
       return CourseColorPair(
@@ -46,23 +66,10 @@ class CourseColorResolver {
       );
     }
     final baseHue = HSLColor.fromColor(scheme.primary).hue;
-    const hueOffsets = [
-      0.0,
-      34.0,
-      -34.0,
-      72.0,
-      -72.0,
-      142.0,
-      180.0,
-      208.0,
-      286.0,
-      324.0,
-    ];
-    final hue =
-        ((baseHue + hueOffsets[_stableHash(course.id) % hueOffsets.length]) %
-                    360 +
-                360) %
-            360;
+    final hueOffset = _scheduleHueOffsets[
+        (paletteIndex ?? schedulePaletteIndex(course.id)) %
+            _scheduleHueOffsets.length];
+    final hue = ((baseHue + hueOffset) % 360 + 360) % 360;
     final tone = scheme.brightness == Brightness.light ? .86 : .30;
     final saturation = scheme.brightness == Brightness.light ? .42 : .48;
     final accent = HSLColor.fromAHSL(1, hue, saturation, tone).toColor();

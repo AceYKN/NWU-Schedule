@@ -6,6 +6,7 @@ import '../../../../core/nwu/periods.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../domain/schedule/week_schedule_view_model.dart';
 import '../../../../domain/settings/schedule_display_preferences.dart';
+import '../../../shared/presentation/course_color_resolver.dart';
 import 'course_block.dart';
 import 'schedule_layout_engine.dart';
 
@@ -41,6 +42,7 @@ class ScheduleWeekGrid extends StatelessWidget {
           visibleDays: visibleDays,
           entries: viewModel.entries,
         );
+        final colorIndices = _assignCourseColors(viewModel.entries);
         final current =
             preferences.highlightCurrentPeriod ? _currentPeriod() : null;
         final scheme = Theme.of(context).colorScheme;
@@ -97,6 +99,7 @@ class ScheduleWeekGrid extends StatelessWidget {
                     periodWidth: periodWidth,
                     dayWidth: dayWidth,
                     visibleDayCount: visibleDays.length,
+                    colorIndices: colorIndices,
                   ),
                 if (current != null)
                   Positioned(
@@ -120,6 +123,7 @@ class ScheduleWeekGrid extends StatelessWidget {
     required double periodWidth,
     required double dayWidth,
     required int visibleDayCount,
+    required Map<String, int> colorIndices,
   }) {
     final width = math.max<double>(
       8,
@@ -158,9 +162,51 @@ class ScheduleWeekGrid extends StatelessWidget {
               height: height,
               visibleDayCount: visibleDayCount,
               isCurrent: _isCurrentEntry(item.entry!),
+              colorIndex: colorIndices[item.entry!.course.id],
               onTap: onEntryTap == null ? null : () => onEntryTap!(item.entry!),
             ),
     );
+  }
+
+  Map<String, int> _assignCourseColors(
+    Iterable<ScheduleGridEntry> entries,
+  ) {
+    final assigned = <String, int>{};
+    for (final day in visibleDays) {
+      final dayEntries = entries
+          .where((entry) => entry.weekday == day.weekday)
+          .toList(growable: false)
+        ..sort((left, right) {
+          final byStart = left.startSection.compareTo(right.startSection);
+          if (byStart != 0) return byStart;
+          return left.endSection.compareTo(right.endSection);
+        });
+      for (final entry in dayEntries) {
+        if (assigned.containsKey(entry.course.id)) continue;
+        final neighboringColors = {
+          for (final other in dayEntries)
+            if (other != entry &&
+                other.startSection <= entry.endSection + 1 &&
+                entry.startSection <= other.endSection + 1)
+              if (assigned[other.course.id] != null) assigned[other.course.id]!,
+        };
+        final preferred =
+            CourseColorResolver.schedulePaletteIndex(entry.course.id);
+        var selected = preferred;
+        for (var offset = 0;
+            offset < CourseColorResolver.schedulePaletteLength();
+            offset++) {
+          final candidate = (preferred + offset) %
+              CourseColorResolver.schedulePaletteLength();
+          if (!neighboringColors.contains(candidate)) {
+            selected = candidate;
+            break;
+          }
+        }
+        assigned[entry.course.id] = selected;
+      }
+    }
+    return assigned;
   }
 
   bool _isCurrentEntry(ScheduleGridEntry entry) {

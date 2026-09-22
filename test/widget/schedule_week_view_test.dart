@@ -9,6 +9,7 @@ import 'package:nwu_schedule/domain/settings/schedule_display_preferences.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/course_block.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/schedule_week_grid.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/schedule_week_display_filter.dart';
+import 'package:nwu_schedule/features/shared/presentation/course_color_resolver.dart';
 
 void main() {
   testWidgets('five and seven day grids fit a narrow phone without overflow',
@@ -291,6 +292,17 @@ void main() {
     expect(
         filtered.entries.map((entry) => entry.course.id), ['visible-course']);
     expect(model.entries, hasLength(2));
+  });
+
+  test('schedule course colors are stable across the week view', () {
+    expect(
+      CourseColorResolver.schedulePaletteLength(),
+      greaterThanOrEqualTo(8),
+    );
+    expect(
+      CourseColorResolver.schedulePaletteIndex('same-course'),
+      CourseColorResolver.schedulePaletteIndex('same-course'),
+    );
   });
 }
 

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nwu_schedule/domain/calendar/calendar_definition.dart';
 import 'package:nwu_schedule/domain/calendar/calendar_engine.dart';
@@ -5,6 +6,8 @@ import 'package:nwu_schedule/domain/course/course.dart';
 import 'package:nwu_schedule/domain/course/course_exception.dart';
 import 'package:nwu_schedule/domain/course/meeting_rule.dart';
 import 'package:nwu_schedule/domain/schedule/schedule_engine.dart';
+import 'package:nwu_schedule/domain/schedule/effective_course_instance.dart';
+import 'package:nwu_schedule/features/schedule/presentation/widgets/schedule_quick_detail_sheet.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/timeslot_semester_schedule.dart';
 import 'package:nwu_schedule/core/utils/week_mask.dart';
 
@@ -85,6 +88,49 @@ void main() {
       [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
     ]);
     expect(result.groups[1].statusLabel, '调课');
+  });
+
+  testWidgets('quick detail shows the semester context and hide callback',
+      (tester) async {
+    final engine = _engine(
+      courses: [_course('a', '软件测试')],
+      rules: [_rule('a-rule', 'a', WeekMask.all(20))],
+    );
+    final entry = engine.getWeekViewModel(1).entries.single;
+    var hidden = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => showScheduleQuickDetail(
+                context: context,
+                engine: engine,
+                entry: entry,
+                selectedWeek: 1,
+                onHideCourse: (EffectiveCourseInstance _) async {
+                  hidden = true;
+                },
+              ),
+              child: const Text('打开'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('本节次其他周安排'), findsOneWidget);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -360));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('1-20周'), findsOneWidget);
+    expect(find.text('1-20周 · 当前'), findsOneWidget);
+
+    await tester.tap(find.text('隐藏课程'));
+    await tester.pumpAndSettle();
+    expect(hidden, isTrue);
   });
 }
 

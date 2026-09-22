@@ -17,6 +17,7 @@ class CourseBlock extends StatelessWidget {
     required this.height,
     required this.visibleDayCount,
     this.isCurrent = false,
+    this.colorIndex,
     this.onTap,
     super.key,
   });
@@ -27,6 +28,7 @@ class CourseBlock extends StatelessWidget {
   final double height;
   final int visibleDayCount;
   final bool isCurrent;
+  final int? colorIndex;
   final VoidCallback? onTap;
 
   @override
@@ -38,6 +40,7 @@ class CourseBlock extends StatelessWidget {
       height: height,
       visibleDayCount: visibleDayCount,
       isCurrent: isCurrent,
+      colorIndex: colorIndex,
       onTap: onTap,
     );
   }
@@ -51,6 +54,7 @@ class CourseEventCard extends StatelessWidget {
     required this.height,
     required this.visibleDayCount,
     this.isCurrent = false,
+    this.colorIndex,
     this.onTap,
     super.key,
   });
@@ -61,12 +65,17 @@ class CourseEventCard extends StatelessWidget {
   final double height;
   final int visibleDayCount;
   final bool isCurrent;
+  final int? colorIndex;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final colors = CourseColorResolver.resolveSchedule(entry.course, scheme);
+    final colors = CourseColorResolver.resolveSchedule(
+      entry.course,
+      scheme,
+      paletteIndex: colorIndex,
+    );
     final ghost = !entry.active;
     final status = _statusLabel(entry.exceptionType);
     final title = CourseDisplayFormatter.title(entry.course.name);
