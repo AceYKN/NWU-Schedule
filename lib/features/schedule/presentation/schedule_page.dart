@@ -88,6 +88,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                   engine: engine,
                   selectedWeek: pageWeek,
                   entry: entry,
+                  hiddenCourseIds: preferences.hiddenCourseIds,
                 ),
                 onWeekendExpanded: () {
                   setState(() => temporaryWeekendExpanded = true);
@@ -144,25 +145,23 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     required ScheduleEngine engine,
     required int selectedWeek,
     required ScheduleGridEntry entry,
+    required Set<String> hiddenCourseIds,
   }) {
     return showScheduleQuickDetail(
       context: context,
       engine: engine,
       entry: entry,
       selectedWeek: selectedWeek,
+      hiddenCourseIds: hiddenCourseIds,
       onHideCourse: _hideCourseFromWeek,
+      onRestoreCourse: _restoreHiddenCourseFromWeek,
     );
   }
 
   Future<void> _hideCourseFromWeek(
     EffectiveCourseInstance instance,
   ) async {
-    final repository = ref.read(scheduleDataRepositoryProvider);
-    final key = scheduleDisplaySettingKeys['hiddenCourseIds']!;
-    final hidden = decodeHiddenCourseIds(await repository.getSetting(key))
-      ..add(instance.course.id);
-    await repository.setSetting(key, encodeHiddenCourseIds(hidden));
-    ref.invalidate(scheduleDisplayPreferencesProvider);
+    await _setCourseHidden(instance.course.id, hidden: true);
     if (!mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
@@ -174,26 +173,53 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         action: SnackBarAction(
           label: '撤销',
           onPressed: () {
-            unawaited(_restoreCourseFromWeek(instance));
+            unawaited(_setCourseHidden(instance.course.id, hidden: false));
           },
         ),
       ),
     );
   }
 
-  Future<void> _restoreCourseFromWeek(
+  Future<void> _restoreHiddenCourseFromWeek(
     EffectiveCourseInstance instance,
   ) async {
+    await _setCourseHidden(instance.course.id, hidden: false);
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('已恢复“${instance.courseName}”'),
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () {
+            unawaited(_setCourseHidden(instance.course.id, hidden: true));
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _setCourseHidden(
+    String courseId, {
+    required bool hidden,
+  }) async {
     final repository = ref.read(scheduleDataRepositoryProvider);
     final key = scheduleDisplaySettingKeys['hiddenCourseIds']!;
-    final hidden = decodeHiddenCourseIds(await repository.getSetting(key))
-      ..remove(instance.course.id);
-    await repository.setSetting(key, encodeHiddenCourseIds(hidden));
-    ref.invalidate(scheduleDisplayPreferencesProvider);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已恢复“${instance.courseName}”')),
+    final hiddenCourseIds =
+        decodeHiddenCourseIds(await repository.getSetting(key));
+    if (hidden) {
+      hiddenCourseIds.add(courseId);
+    } else {
+      hiddenCourseIds.remove(courseId);
+    }
+    await repository.setSetting(
+      key,
+      encodeHiddenCourseIds(hiddenCourseIds),
     );
+    ref.invalidate(scheduleDisplayPreferencesProvider);
   }
 }
 

@@ -90,6 +90,65 @@ void main() {
     expect(result.groups[1].statusLabel, '调课');
   });
 
+  test('shows a cancel gap at the source timeslot', () {
+    final exception = CourseException(
+      id: 'cancel-1',
+      semesterId: 'semester',
+      courseId: 'a',
+      sourceMeetingId: 'a-rule',
+      sourceDate: DateTime(2026, 9, 21),
+      type: CourseExceptionType.cancel,
+    );
+    final engine = _engine(
+      courses: [_course('a', '软件测试')],
+      rules: [_rule('a-rule', 'a', WeekMask.all(20))],
+      exceptions: [exception],
+    );
+
+    final result = TimeslotSemesterScheduleBuilder.build(
+      engine: engine,
+      weekday: DateTime.monday,
+      startSection: 3,
+      endSection: 4,
+    );
+
+    expect(result.groups[1].weeks, [3]);
+    expect(result.groups[1].statusLabel, '停课');
+  });
+
+  test('includes a standalone add in its effective target timeslot', () {
+    final exception = CourseException(
+      id: 'add-1',
+      semesterId: 'semester',
+      type: CourseExceptionType.add,
+      targetDate: DateTime(2026, 9, 21),
+      targetStartSection: 3,
+      targetEndSection: 4,
+      addedCourseName: '临时答疑',
+      roomOverride: '教学楼 101',
+    );
+    final engine = _engine(
+      courses: const [],
+      rules: const [],
+      exceptions: [exception],
+    );
+
+    final result = TimeslotSemesterScheduleBuilder.build(
+      engine: engine,
+      weekday: DateTime.monday,
+      startSection: 3,
+      endSection: 4,
+    );
+
+    expect(result.groups, hasLength(1));
+    expect(result.groups.single.weeks, [3]);
+    expect(result.groups.single.meetings.single.courseName, '临时答疑');
+    expect(
+      result.groups.single.meetings.single.exceptionType,
+      CourseExceptionType.add,
+    );
+  });
+
   testWidgets('quick detail shows the semester context and hide callback',
       (tester) async {
     final engine = _engine(
@@ -131,6 +190,52 @@ void main() {
     await tester.tap(find.text('隐藏课程'));
     await tester.pumpAndSettle();
     expect(hidden, isTrue);
+  });
+
+  testWidgets('quick detail marks and restores a hidden contextual course',
+      (tester) async {
+    final engine = _engine(
+      courses: [_course('a', '软件测试'), _course('b', 'Web数据挖掘')],
+      rules: [
+        _rule('a-rule', 'a', WeekMask.fromWeeks([1, 2, 3, 4])),
+        _rule('b-rule', 'b', WeekMask.fromWeeks([5, 6, 7, 8])),
+      ],
+    );
+    final entry = engine.getWeekViewModel(1).entries.single;
+    var restoredCourseId = '';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => showScheduleQuickDetail(
+                context: context,
+                engine: engine,
+                entry: entry,
+                selectedWeek: 1,
+                hiddenCourseIds: const {'b'},
+                onRestoreCourse: (instance) async {
+                  restoredCourseId = instance.course.id;
+                },
+              ),
+              child: const Text('打开'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).last, const Offset(0, -420));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已隐藏'), findsOneWidget);
+    expect(find.text('恢复显示'), findsOneWidget);
+    await tester.tap(find.text('恢复显示'));
+    await tester.pumpAndSettle();
+
+    expect(restoredCourseId, 'b');
   });
 }
 

@@ -16,7 +16,9 @@ Future<void> showScheduleQuickDetail({
   required ScheduleEngine engine,
   required ScheduleGridEntry entry,
   required int selectedWeek,
+  Set<String> hiddenCourseIds = const <String>{},
   Future<void> Function(EffectiveCourseInstance instance)? onHideCourse,
+  Future<void> Function(EffectiveCourseInstance instance)? onRestoreCourse,
 }) {
   final semesterSchedule = TimeslotSemesterScheduleBuilder.build(
     engine: engine,
@@ -40,7 +42,9 @@ Future<void> showScheduleQuickDetail({
         selectedWeek: selectedWeek,
         schedule: semesterSchedule,
         scrollController: scrollController,
+        hiddenCourseIds: hiddenCourseIds,
         onHideCourse: onHideCourse,
+        onRestoreCourse: onRestoreCourse,
       ),
     ),
   );
@@ -53,7 +57,9 @@ class _QuickDetailContent extends StatelessWidget {
     required this.selectedWeek,
     required this.schedule,
     required this.scrollController,
+    required this.hiddenCourseIds,
     this.onHideCourse,
+    this.onRestoreCourse,
   });
 
   final BuildContext pageContext;
@@ -61,7 +67,10 @@ class _QuickDetailContent extends StatelessWidget {
   final int selectedWeek;
   final TimeslotSemesterSchedule schedule;
   final ScrollController scrollController;
+  final Set<String> hiddenCourseIds;
   final Future<void> Function(EffectiveCourseInstance instance)? onHideCourse;
+  final Future<void> Function(EffectiveCourseInstance instance)?
+      onRestoreCourse;
 
   @override
   Widget build(BuildContext context) {
@@ -130,6 +139,8 @@ class _QuickDetailContent extends StatelessWidget {
               _WeekArrangementGroup(
                 group: group,
                 selectedWeek: selectedWeek,
+                hiddenCourseIds: hiddenCourseIds,
+                onRestoreCourse: onRestoreCourse,
               ),
           const SizedBox(height: 18),
           const Divider(),
@@ -173,10 +184,15 @@ class _WeekArrangementGroup extends StatelessWidget {
   const _WeekArrangementGroup({
     required this.group,
     required this.selectedWeek,
+    required this.hiddenCourseIds,
+    this.onRestoreCourse,
   });
 
   final TimeslotWeekGroup group;
   final int selectedWeek;
+  final Set<String> hiddenCourseIds;
+  final Future<void> Function(EffectiveCourseInstance instance)?
+      onRestoreCourse;
 
   @override
   Widget build(BuildContext context) {
@@ -235,11 +251,23 @@ class _WeekArrangementGroup extends StatelessWidget {
                       _GroupWeekLabel(
                         label: '${group.weekLabel}${isCurrent ? ' · 当前' : ''}',
                       ),
-                      Text(
-                        CourseDisplayFormatter.title(meeting.courseName),
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              CourseDisplayFormatter.title(meeting.courseName),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyLarge
+                                  ?.copyWith(fontWeight: FontWeight.w600),
                             ),
+                          ),
+                          if (hiddenCourseIds.contains(meeting.course.id)) ...[
+                            const SizedBox(width: 8),
+                            const _HiddenBadge(),
+                          ],
+                        ],
                       ),
                       Text(
                         [
@@ -252,12 +280,51 @@ class _WeekArrangementGroup extends StatelessWidget {
                                   .onSurfaceVariant,
                             ),
                       ),
+                      if (hiddenCourseIds.contains(meeting.course.id) &&
+                          onRestoreCourse != null)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            onPressed: () async {
+                              await onRestoreCourse!(meeting);
+                              if (context.mounted) Navigator.of(context).pop();
+                            },
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                            ),
+                            child: const Text('恢复显示'),
+                          ),
+                        ),
                     ],
                   ),
                 ),
               ],
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _HiddenBadge extends StatelessWidget {
+  const _HiddenBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        '已隐藏',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
       ),
     );
   }
