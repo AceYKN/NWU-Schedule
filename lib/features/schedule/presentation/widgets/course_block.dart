@@ -81,7 +81,7 @@ class CourseEventCard extends StatelessWidget {
     final title = CourseDisplayFormatter.title(entry.course.name);
     final location = CourseDisplayFormatter.location(entry);
     final background = ghost
-        ? Color.lerp(scheme.surface, colors.container, .68)!
+        ? Color.lerp(scheme.surface, colors.container, .38)!
         : colors.container;
     final foreground = ghost
         ? Color.lerp(background, colors.onContainer, .75)!
@@ -147,7 +147,7 @@ class CourseEventCard extends StatelessWidget {
                   _wrappedLine(
                     location,
                     secondaryForeground,
-                    maxLines: 2,
+                    maxLines: compactHeight ? 2 : null,
                     compactHeight: compactHeight,
                   ),
                 ],
@@ -174,7 +174,7 @@ class CourseEventCard extends StatelessWidget {
     String value,
     Color color, {
     bool title = false,
-    required int maxLines,
+    required int? maxLines,
     required bool compactHeight,
   }) {
     return Text(

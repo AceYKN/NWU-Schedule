@@ -68,18 +68,41 @@ void main() {
 
     await _pumpBlock(tester, entry, height: 40);
     expect(find.text('机器学习'), findsOneWidget);
-    expect(find.text('长安校区 · 3406'), findsOneWidget);
+    expect(find.text('长安校区\n3406'), findsOneWidget);
     expect(find.text('教师甲'), findsOneWidget);
 
     await _pumpBlock(tester, entry, height: 64);
     expect(find.text('机器学习'), findsOneWidget);
-    expect(find.text('长安校区 · 3406'), findsOneWidget);
+    expect(find.text('长安校区\n3406'), findsOneWidget);
     expect(find.text('教师甲'), findsOneWidget);
 
     await _pumpBlock(tester, entry, height: 128);
     expect(find.text('机器学习'), findsOneWidget);
-    expect(find.text('长安校区 · 3406'), findsOneWidget);
+    expect(find.text('长安校区\n3406'), findsOneWidget);
     expect(find.text('教师甲'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('course block location wraps onto every available line',
+      (tester) async {
+    const location = '长安校区\n教学东楼A区四层创新实验中心409室';
+    final entry = _entry(
+      id: 'wrapping-location-course',
+      name: '机器学习',
+      weekday: DateTime.monday,
+      startSection: 1,
+      endSection: 2,
+      campus: '长安校区',
+      room: '教学东楼A区四层创新实验中心409室',
+    );
+
+    await _pumpBlock(tester, entry, height: 128);
+
+    expect(find.text(location), findsOneWidget);
+    final locationText = tester.widget<Text>(find.text(location));
+    expect(locationText.softWrap, isTrue);
+    expect(locationText.maxLines, isNull);
+    expect(tester.getSize(find.text(location)).height, greaterThan(13));
     expect(tester.takeException(), isNull);
   });
 
@@ -221,7 +244,26 @@ void main() {
           )
           .first,
     );
-    expect(material.color, isNot(Colors.transparent));
+    final scheme = ThemeData(useMaterial3: true).colorScheme;
+    final activeColors = CourseColorResolver.resolveSchedule(
+      entry.course,
+      scheme,
+    );
+    expect(
+      material.color,
+      Color.lerp(scheme.surface, activeColors.container, .38),
+    );
+    expect(
+      _contrastRatio(scheme.surface, material.color!),
+      lessThan(_contrastRatio(scheme.surface, activeColors.container)),
+    );
+  });
+
+  test('inactive courses are hidden by default', () {
+    expect(
+      const ScheduleDisplayPreferences.defaults().showInactiveCourses,
+      isFalse,
+    );
   });
 
   test('inactive entries that overlap active entries are hidden', () {

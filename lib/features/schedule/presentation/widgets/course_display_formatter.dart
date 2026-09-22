@@ -14,11 +14,16 @@ class CourseDisplayFormatter {
   }
 
   static String? location(ScheduleGridEntry entry) {
-    return entry.instance.location;
+    final values = [entry.campus, entry.room]
+        .whereType<String>()
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    return values.isEmpty ? null : values.join('\n');
   }
 
   static String semanticsLabel(ScheduleGridEntry entry) {
-    final locationValue = location(entry);
+    final locationValue = entry.instance.location;
     return [
       title(entry.course.name),
       '星期${entry.weekday == 7 ? '日' : '一二三四五六'[entry.weekday - 1]}',
