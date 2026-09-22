@@ -593,6 +593,8 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         final value = rawDisplay[entry.key];
         if (value is bool) {
           result[entry.value] = value.toString();
+        } else if (entry.key == 'hiddenCourseIds' && value is List) {
+          result[entry.value] = jsonEncode(value.whereType<String>().toList());
         }
       }
     }

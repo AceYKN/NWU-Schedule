@@ -41,6 +41,7 @@ const backupScheduleDisplaySettingKeys = <String, String>{
   'showPeriodTimes': 'schedule.weekView.showPeriodTimes',
   'highlightCurrentPeriod': 'schedule.weekView.highlightCurrentPeriod',
   'showBackToCurrentWeekFab': 'schedule.weekView.showBackToCurrentWeekFab',
+  'hiddenCourseIds': 'schedule.weekView.hiddenCourseIds',
 };
 
 DateTime _backupRequiredDate(Map<String, dynamic> json, String key) {
@@ -452,7 +453,17 @@ class ScheduleBackup {
                 'appearance.scheduleDisplay.$key 不是支持的字段',
               );
             }
-            if (displayEntry.value is! bool) {
+            final isHiddenCourseIds = key == 'hiddenCourseIds';
+            if (isHiddenCourseIds &&
+                (displayEntry.value is! List ||
+                    !(displayEntry.value as List).every(
+                      (item) => item is String && item.trim().isNotEmpty,
+                    ))) {
+              throw BackupValidationException(
+                'appearance.scheduleDisplay.$key 必须是字符串数组',
+              );
+            }
+            if (!isHiddenCourseIds && displayEntry.value is! bool) {
               throw BackupValidationException(
                 'appearance.scheduleDisplay.$key 必须是布尔值',
               );

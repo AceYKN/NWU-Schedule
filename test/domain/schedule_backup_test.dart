@@ -74,6 +74,7 @@ void main() {
         'scheduleDisplay': {
           'showWeekend': true,
           'showTeacher': false,
+          'hiddenCourseIds': ['course-1'],
         },
       },
     );
@@ -104,6 +105,10 @@ void main() {
     expect(
       (restored.appearance['scheduleDisplay'] as Map)['showWeekend'],
       isTrue,
+    );
+    expect(
+      (restored.appearance['scheduleDisplay'] as Map)['hiddenCourseIds'],
+      ['course-1'],
     );
   });
 
@@ -201,6 +206,15 @@ void main() {
         ...source,
         'appearance': {
           'scheduleDisplay': {'showWeekend': 'true'},
+        },
+      }),
+      throwsA(isA<BackupValidationException>()),
+    );
+    expect(
+      () => ScheduleBackup.fromJson({
+        ...source,
+        'appearance': {
+          'scheduleDisplay': {'hiddenCourseIds': 'course-1'},
         },
       }),
       throwsA(isA<BackupValidationException>()),

@@ -338,7 +338,18 @@ class ScheduleDayHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final markerColor = day.marker == '休' ? scheme.error : scheme.tertiary;
+    final markerBackground = switch (day.marker) {
+      '休' => scheme.errorContainer,
+      '补' => scheme.tertiaryContainer,
+      '调' => scheme.secondaryContainer,
+      _ => scheme.tertiaryContainer,
+    };
+    final markerForeground = switch (day.marker) {
+      '休' => scheme.onErrorContainer,
+      '补' => scheme.onTertiaryContainer,
+      '调' => scheme.onSecondaryContainer,
+      _ => scheme.onTertiaryContainer,
+    };
     return Semantics(
       container: true,
       label:
@@ -374,40 +385,35 @@ class ScheduleDayHeader extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${day.date.day}',
-                        maxLines: 1,
+                  Text(
+                    '${day.date.day}',
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: day.isToday ? scheme.onPrimaryContainer : null,
+                      fontSize: 11,
+                      height: 1,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (day.marker != null) ...[
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: markerBackground,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text(
+                        day.marker!,
                         style: TextStyle(
-                          color: day.isToday ? scheme.onPrimaryContainer : null,
-                          fontSize: 11,
-                          height: 1,
-                          fontWeight: FontWeight.w600,
+                          color: markerForeground,
+                          fontSize: 8,
+                          height: 1.2,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
-                      if (day.marker != null) ...[
-                        const SizedBox(width: 2),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 2),
-                          decoration: BoxDecoration(
-                            color: markerColor.withValues(alpha: .16),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            day.marker!,
-                            style: TextStyle(
-                              color: markerColor,
-                              fontSize: 8,
-                              height: 1.2,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -433,39 +439,36 @@ class ScheduleTimeAxis extends StatelessWidget {
     final period = const NwuPeriodRepository().byNumber(section);
     final textTheme = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.only(left: 4, right: 5, top: 4),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.topRight,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
+      padding: const EdgeInsets.only(left: 2, right: 3, top: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            '$section',
+            style: textTheme.labelMedium?.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
+          ),
+          if (showTime) ...[
+            const SizedBox(height: 2),
             Text(
-              '$section',
-              style: textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w800,
+              period.startLabel,
+              style: textTheme.labelSmall?.copyWith(fontSize: 9, height: 1),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              period.endLabel,
+              style: textTheme.labelSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 9,
                 height: 1,
               ),
             ),
-            if (showTime) ...[
-              const SizedBox(height: 2),
-              Text(
-                period.startLabel,
-                style: textTheme.labelSmall?.copyWith(fontSize: 9, height: 1),
-              ),
-              const SizedBox(height: 1),
-              Text(
-                period.endLabel,
-                style: textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 9,
-                  height: 1,
-                ),
-              ),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }

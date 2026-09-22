@@ -262,6 +262,36 @@ void main() {
       isNot(contains('冲突的非本周课程')),
     );
   });
+
+  test('hidden course ids are a presentation-only filter', () {
+    final model = _model(
+      entries: [
+        _entry(
+          id: 'visible-course',
+          name: '保留显示',
+          weekday: DateTime.monday,
+          startSection: 1,
+          endSection: 2,
+        ),
+        _entry(
+          id: 'hidden-course',
+          name: '仅隐藏显示',
+          weekday: DateTime.tuesday,
+          startSection: 3,
+          endSection: 4,
+        ),
+      ],
+    );
+
+    final filtered = ScheduleWeekDisplayFilter.hideCourses(
+      model,
+      {'hidden-course'},
+    );
+
+    expect(
+        filtered.entries.map((entry) => entry.course.id), ['visible-course']);
+    expect(model.entries, hasLength(2));
+  });
 }
 
 Future<void> _pumpGrid(

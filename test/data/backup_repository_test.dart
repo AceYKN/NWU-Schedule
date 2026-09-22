@@ -192,6 +192,7 @@ void main() {
           'showWeekend': true,
           'showTeacher': false,
           'showPeriodTimes': false,
+          'hiddenCourseIds': ['manual-backup-course'],
         },
       },
     );
@@ -221,6 +222,10 @@ void main() {
     expect(
       await repository.getSetting('schedule.weekView.showPeriodTimes'),
       'false',
+    );
+    expect(
+      await repository.getSetting('schedule.weekView.hiddenCourseIds'),
+      '["manual-backup-course"]',
     );
     expect(backup.appearance['themeId'], 'cedar-green');
   });

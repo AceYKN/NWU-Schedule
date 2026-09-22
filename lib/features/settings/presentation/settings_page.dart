@@ -423,6 +423,7 @@ Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
           'showPeriodTimes': display.showPeriodTimes,
           'highlightCurrentPeriod': display.highlightCurrentPeriod,
           'showBackToCurrentWeekFab': display.showBackToCurrentWeekFab,
+          'hiddenCourseIds': display.hiddenCourseIds.toList(),
         },
       },
     );
