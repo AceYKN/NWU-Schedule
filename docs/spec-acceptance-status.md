@@ -13,6 +13,7 @@
 | MOVE/CANCEL/ADD | `fixture_schedule_pipeline_test.dart` 串联 DB、ScheduleEngine、通知计划、Widget 快照 | PASS（自动化） |
 | 导入 Preview、Diff、Three-way Merge、tombstone | `import_diff_test.dart`、`three_way_merge_test.dart`、Drift repository 测试 | PASS（自动化） |
 | 关键 DOM 解析与 `rowspan/colspan` | `tool/test_nwu_dom_extractor.mjs`、脱敏 NWU list/grid fixtures；当前 V9 `.timetable_con` 结构回归 | PASS（自动化） |
+| 标记为自修的课程不计入课表 | `nwu_dom_extractor.dart`、`timetable_import.dart`、导入预览与相关回归测试 | PASS（本地与远端 CI） |
 | `321` 教室不进入周次、异常周次 fail-closed | DOM fixture 与 `timetable_import_test.dart` | PASS（自动化） |
 | 不完整 DOM 不触发 destructive import | `drift_schedule_data_repository_test.dart` | PASS（自动化） |
 | 未收录校历的学期仍可导入并显示缺失校历提示 | `drift_schedule_data_repository_test.dart`、`schedule_pages_test.dart` | PASS（自动化） |
@@ -25,9 +26,9 @@
 | 课表显示设置的实时预览 | `widget_test.dart`、`schedule_display_settings_page.dart` | PASS（自动化） |
 | UI、Golden、无障碍 | `test/widget`、`test/golden`、`accessibility_test.dart` | PASS（自动化） |
 | 移动端周课表 5/7 日、周末提示、周滑动、CourseBlock、自适应内容 | `schedule_page.dart`、`schedule_week_view_test.dart`、`schedule_week_view_golden_test.dart` | PASS（本地与远端 CI） |
-| Android 构建 | [GitHub Actions Run 35696866021](https://github.com/AceYKN/NWU-Schedule/actions/runs/35696866021)：debug/release APK、merged manifest 校验与 `nwu-schedule-apks-be0d47d55bff4c95e0a9b62f07d654e4fe06ec73` artifact 上传 | PASS |
+| Android 构建 | [GitHub Actions Run 35700853885](https://github.com/AceYKN/NWU-Schedule/actions/runs/35700853885)：debug/release APK、merged manifest 校验与 `nwu-schedule-apks-3ad7dc58ff4a3e3e228e7476d1f350f0eb0683d5` artifact 上传 | PASS |
 
-最近一次本地全量检查（当前 `main` 提交 `be0d47d`）：校历校验、隐私校验、当前 V9 DOM fixture、`flutter analyze`、207 项 `flutter test`、多尺寸深色/浅色 Golden 和本地 debug APK 构建均通过。对应的 [GitHub Actions Run 35696866021](https://github.com/AceYKN/NWU-Schedule/actions/runs/35696866021) 已完成，Debug/Release APK 与 Release merged manifest 校验均通过，并上传了可供同事下载的 artifact。此前的 `dc3f2d8` 修复了真实 V9 页面 `周数：` 展示前缀和 Android WebView 下拉选项误取学年的问题，并完成真实读取、Preview、确认导入和重启回读。
+最近一次本地全量检查（当前 `main` 提交 `3ad7dc5`）：校历校验、隐私校验、当前 V9 DOM fixture、`flutter analyze`、209 项 `flutter test` 和多尺寸深色/浅色 Golden 均通过。对应的 [GitHub Actions Run 35700853885](https://github.com/AceYKN/NWU-Schedule/actions/runs/35700853885) 已完成，Debug/Release APK 与 Release merged manifest 校验均通过，并上传了可供同事下载的 artifact。此前的 `dc3f2d8` 修复了真实 V9 页面 `周数：` 展示前缀和 Android WebView 下拉选项误取学年的问题，并完成真实读取、Preview、确认导入和重启回读。
 
 ## 设备上已核对但不等同于真实集成通过
 
