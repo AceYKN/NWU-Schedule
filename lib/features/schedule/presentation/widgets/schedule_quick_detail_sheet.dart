@@ -16,16 +16,18 @@ Future<void> showScheduleQuickDetail({
   required ScheduleEngine engine,
   required ScheduleGridEntry entry,
   required int selectedWeek,
+  TimeslotSemesterSchedule? semesterSchedule,
   Set<String> hiddenCourseIds = const <String>{},
   Future<void> Function(EffectiveCourseInstance instance)? onHideCourse,
   Future<void> Function(EffectiveCourseInstance instance)? onRestoreCourse,
 }) {
-  final semesterSchedule = TimeslotSemesterScheduleBuilder.build(
-    engine: engine,
-    weekday: entry.weekday,
-    startSection: entry.startSection,
-    endSection: entry.endSection,
-  );
+  final resolvedSemesterSchedule = semesterSchedule ??
+      TimeslotSemesterScheduleBuilder.build(
+        engine: engine,
+        weekday: entry.weekday,
+        startSection: entry.startSection,
+        endSection: entry.endSection,
+      );
   final pageContext = context;
   return showModalBottomSheet<void>(
     context: context,
@@ -40,7 +42,7 @@ Future<void> showScheduleQuickDetail({
         pageContext: pageContext,
         entry: entry,
         selectedWeek: selectedWeek,
-        schedule: semesterSchedule,
+        schedule: resolvedSemesterSchedule,
         scrollController: scrollController,
         hiddenCourseIds: hiddenCourseIds,
         onHideCourse: onHideCourse,

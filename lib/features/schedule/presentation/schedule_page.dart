@@ -15,6 +15,7 @@ import '../../../domain/schedule/week_schedule_view_model.dart';
 import 'widgets/schedule_week_grid.dart';
 import 'widgets/schedule_week_display_filter.dart';
 import 'widgets/schedule_quick_detail_sheet.dart';
+import 'widgets/timeslot_semester_schedule.dart';
 import '../../shared/presentation/course_card.dart';
 
 class SchedulePage extends ConsumerStatefulWidget {
@@ -31,6 +32,34 @@ class SchedulePage extends ConsumerStatefulWidget {
 class _SchedulePageState extends ConsumerState<SchedulePage> {
   int? selectedWeek;
   bool temporaryWeekendExpanded = false;
+  Timer? _clockTimer;
+  DateTime? _liveNow;
+  ScheduleEngine? _timeslotCacheEngine;
+  final Map<(int, int, int), TimeslotSemesterSchedule> _timeslotCache = {};
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.now == null) {
+      _liveNow = DateTime.now().toUtc();
+      _scheduleNextClockTick();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant SchedulePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.now == widget.now) return;
+    _clockTimer?.cancel();
+    _liveNow = widget.now == null ? DateTime.now().toUtc() : null;
+    if (widget.now == null) _scheduleNextClockTick();
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +92,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         }
 
         final engine = value.engine;
-        final now = widget.now ?? DateTime.now().toUtc();
+        final now = widget.now ?? _liveNow ?? DateTime.now().toUtc();
         final preferences =
             ref.watch(scheduleDisplayPreferencesProvider).asData?.value ??
                 const ScheduleDisplayPreferences.defaults();
@@ -147,15 +176,51 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     required ScheduleGridEntry entry,
     required Set<String> hiddenCourseIds,
   }) {
+    final semesterSchedule = _cachedTimeslotSchedule(engine, entry);
     return showScheduleQuickDetail(
       context: context,
       engine: engine,
       entry: entry,
       selectedWeek: selectedWeek,
+      semesterSchedule: semesterSchedule,
       hiddenCourseIds: hiddenCourseIds,
       onHideCourse: _hideCourseFromWeek,
       onRestoreCourse: _restoreHiddenCourseFromWeek,
     );
+  }
+
+  TimeslotSemesterSchedule _cachedTimeslotSchedule(
+    ScheduleEngine engine,
+    ScheduleGridEntry entry,
+  ) {
+    if (!identical(_timeslotCacheEngine, engine)) {
+      _timeslotCacheEngine = engine;
+      _timeslotCache.clear();
+    }
+    final key = (entry.weekday, entry.startSection, entry.endSection);
+    return _timeslotCache.putIfAbsent(
+      key,
+      () => TimeslotSemesterScheduleBuilder.build(
+        engine: engine,
+        weekday: entry.weekday,
+        startSection: entry.startSection,
+        endSection: entry.endSection,
+      ),
+    );
+  }
+
+  void _scheduleNextClockTick() {
+    final localNow = DateTime.now();
+    final elapsedMinute = Duration(
+      seconds: localNow.second,
+      milliseconds: localNow.millisecond,
+    );
+    final delay = const Duration(minutes: 1) - elapsedMinute;
+    _clockTimer = Timer(delay, () {
+      if (!mounted || widget.now != null) return;
+      setState(() => _liveNow = DateTime.now().toUtc());
+      _scheduleNextClockTick();
+    });
   }
 
   Future<void> _hideCourseFromWeek(
