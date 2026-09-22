@@ -11,9 +11,9 @@ import '../../../domain/calendar/calendar_engine.dart';
 import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
 import '../../../domain/schedule/schedule_engine.dart';
-import '../../../domain/schedule/schedule_now_state.dart';
 import '../../../domain/semester/semester.dart';
 import '../../shared/presentation/course_card.dart';
+import '../application/home_schedule_status_resolver.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key, this.now});
@@ -78,9 +78,13 @@ class _HomePageState extends ConsumerState<HomePage>
         }
         final ready = value as ScheduleReady;
         final now = widget.now ?? DateTime.now().toUtc();
+        final state = const HomeScheduleStatusResolver().resolve(
+          engine: ready.engine,
+          now: now,
+        );
         return _HomeContent(
           engine: ready.engine,
-          state: ready.engine.getStateAt(now),
+          state: state,
           calendarUpdated: ready.calendarUpdated,
           onDismissCalendarUpdate: ready.calendarUpdated
               ? () => _dismissCalendarUpdate(ref, ready)
@@ -230,7 +234,7 @@ class _HomeContent extends StatelessWidget {
   });
 
   final ScheduleEngine engine;
-  final ScheduleNowState state;
+  final HomeScheduleState state;
   final bool calendarUpdated;
   final VoidCallback? onDismissCalendarUpdate;
   final Future<void> Function() onRefresh;
@@ -313,15 +317,15 @@ class _HomeContent extends StatelessWidget {
 
   String? _agendaStatus(
     EffectiveCourseInstance course,
-    ScheduleNowState state,
+    HomeScheduleState state,
   ) {
-    if (state is ScheduleCurrent && state.current == course) {
+    if (state is HomeInClassState && state.current == course) {
       return 'NOW';
     }
-    if (state is ScheduleNext && state.next == course) {
+    if (state is HomeBeforeNextClassState && state.course == course) {
       return 'NEXT';
     }
-    if (course.endTime.isBefore(state.now)) {
+    if (!course.endTime.isAfter(state.now)) {
       return '已结束';
     }
     return null;
@@ -386,47 +390,64 @@ class _HomeHeader extends StatelessWidget {
 class _HeroState extends StatelessWidget {
   const _HeroState({required this.state});
 
-  final ScheduleNowState state;
+  final HomeScheduleState state;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    if (state is ScheduleCurrent) {
-      final currentState = state as ScheduleCurrent;
+    if (state is HomeInClassState) {
+      final currentState = state as HomeInClassState;
       return _HeroCard(
-        eyebrow: 'NOW',
+        eyebrow: '正在上课',
         title: currentState.current.courseName,
-        subtitle: _courseSubtitle(currentState.current),
+        subtitle: _activeCourseSubtitle(
+          currentState.current,
+          trailing: '距离下课 ${_formatDuration(currentState.remaining)}',
+          dayContext: _dayContext(currentState.todayType, currentState.now),
+        ),
         background: scheme.primaryContainer,
       );
     }
-    if (state is ScheduleNext) {
-      final nextState = state as ScheduleNext;
+    if (state is HomeBeforeNextClassState) {
+      final nextState = state as HomeBeforeNextClassState;
       return _HeroCard(
-        eyebrow: 'NEXT',
-        title: nextState.next.courseName,
-        subtitle: _courseSubtitle(nextState.next),
+        eyebrow: '下一节',
+        title: nextState.course.courseName,
+        subtitle: _activeCourseSubtitle(
+          nextState.course,
+          trailing: '还有 ${_formatDuration(nextState.untilStart)}',
+          dayContext: _dayContext(nextState.todayType, nextState.now),
+        ),
         background: scheme.secondaryContainer,
       );
     }
-    if (state is ScheduleFinishedToday) {
-      final finishedState = state as ScheduleFinishedToday;
+    if (state is HomeTodayFinishedState) {
+      final finishedState = state as HomeTodayFinishedState;
       return _HeroCard(
-        eyebrow: 'TODAY DONE',
-        title: '今天的课程已经结束',
-        subtitle: finishedState.next == null
-            ? '当前学期没有更多课程'
-            : '下一节：${_nextDescription(finishedState.next!)}',
+        eyebrow: '今日完成',
+        title: '今天的课程已结束',
+        subtitle: _nextScheduleDescription(finishedState.next),
         background: scheme.surfaceContainerHighest,
       );
     }
-    final noClass = state as ScheduleNoClassToday;
+    if (state is HomeOutsideTeachingTermState) {
+      return _HeroCard(
+        eyebrow: '非教学期',
+        title: '当前不在教学周',
+        subtitle: _nextScheduleDescription(state.next),
+        background: scheme.surfaceContainerHighest,
+      );
+    }
+    final noClass = state as HomeNoClassTodayState;
+    final holiday = noClass.todayType == AcademicDayType.holiday;
     return _HeroCard(
-      eyebrow: 'NO CLASS',
-      title: '今天没有课程',
-      subtitle: noClass.next == null
-          ? '当前学期没有待上课程'
-          : '下一节：${_nextDescription(noClass.next!)}',
+      eyebrow: holiday ? '休息日' : '今日安排',
+      title: holiday ? '今天休息' : '今天暂无课程',
+      subtitle: [
+        if (_dayContext(noClass.todayType, noClass.now) case final context?)
+          context,
+        _nextScheduleDescription(noClass.next),
+      ].join('\n'),
       background: scheme.surfaceContainerHighest,
     );
   }
@@ -504,16 +525,64 @@ class _EmptyAgenda extends StatelessWidget {
   }
 }
 
-String _courseSubtitle(EffectiveCourseInstance course) {
-  final time =
-      '${course.startTime.hour.toString().padLeft(2, '0')}:${course.startTime.minute.toString().padLeft(2, '0')}'
-      '–${course.endTime.hour.toString().padLeft(2, '0')}:${course.endTime.minute.toString().padLeft(2, '0')}';
-  return '$time\n${course.location ?? '地点待补充'}${course.teacher == null ? '' : ' · ${course.teacher}'}';
+String _activeCourseSubtitle(
+  EffectiveCourseInstance course, {
+  required String trailing,
+  String? dayContext,
+}) {
+  final details = [
+    if (course.location case final location?) location,
+    if (course.teacher case final teacher?) teacher,
+  ].join(' · ');
+  return [
+    _courseTimeRange(course),
+    if (details.isNotEmpty) details,
+    trailing,
+    if (dayContext != null) dayContext,
+  ].join('\n');
 }
 
-String _nextDescription(EffectiveCourseInstance course) {
-  final teacher = course.teacher == null ? '' : ' · ${course.teacher}';
-  return '${weekdayName(course.date.weekday)} ${course.startTime.hour.toString().padLeft(2, '0')}:${course.startTime.minute.toString().padLeft(2, '0')} ${course.courseName} · ${course.location ?? '地点待补充'}$teacher';
+String _nextScheduleDescription(NextScheduleSummary? next) {
+  if (next == null) return '暂无近期课程';
+  final course = next.course;
+  final time = _timeLabel(course.startTime);
+  final when = switch (next.daysFromToday) {
+    0 => '今天 $time',
+    1 => '明天 $time',
+    final days => '$days天后 · ${weekdayName(course.date.weekday)} $time',
+  };
+  return [
+    '下一节',
+    '$when · ${course.courseName}',
+    if (course.location case final location?) location,
+    if (_dayContext(next.dayType, course.date) case final context?) context,
+  ].join('\n');
+}
+
+String? _dayContext(AcademicDayType type, DateTime date) {
+  return switch (type) {
+    AcademicDayType.normal => null,
+    AcademicDayType.weekend => weekdayName(date.weekday),
+    AcademicDayType.holiday => '校历：休假',
+    AcademicDayType.makeupDay => '${weekdayName(date.weekday)} · 补课日',
+  };
+}
+
+String _formatDuration(Duration duration) {
+  final minutes = duration.inMinutes.clamp(0, 24 * 60);
+  if (minutes < 60) return '$minutes 分钟';
+  final hours = minutes ~/ 60;
+  final remainder = minutes % 60;
+  return remainder == 0 ? '$hours 小时' : '$hours 小时 $remainder 分钟';
+}
+
+String _courseTimeRange(EffectiveCourseInstance course) {
+  return '${_timeLabel(course.startTime)}–${_timeLabel(course.endTime)}';
+}
+
+String _timeLabel(DateTime value) {
+  return '${value.hour.toString().padLeft(2, '0')}:'
+      '${value.minute.toString().padLeft(2, '0')}';
 }
 
 void _showFullAgenda(
