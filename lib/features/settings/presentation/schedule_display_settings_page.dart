@@ -133,8 +133,14 @@ class _SchedulePreview extends StatelessWidget {
     final days = preferences.showWeekend
         ? const ['一', '二', '三', '四', '五', '六', '日']
         : const ['一', '二', '三', '四', '五'];
-    return Card(
-      color: scheme.surfaceContainerLowest,
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: .35),
+        ),
+      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final dayWidth = (constraints.maxWidth - 20 - 34) / days.length;
@@ -142,6 +148,41 @@ class _SchedulePreview extends StatelessWidget {
             padding: const EdgeInsets.all(10),
             child: Column(
               children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '周课表  ·  第 4 周',
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    if (preferences.showBackToCurrentWeekFab)
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: scheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 3,
+                          ),
+                          child: Text(
+                            '回本周',
+                            style: TextStyle(
+                              color: scheme.onPrimaryContainer,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     SizedBox(
@@ -152,12 +193,31 @@ class _SchedulePreview extends StatelessWidget {
                         style: Theme.of(context).textTheme.labelSmall,
                       ),
                     ),
-                    for (final day in days)
+                    for (var index = 0; index < days.length; index++)
                       Expanded(
                         child: Center(
-                          child: Text(
-                            day,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          child: DecoratedBox(
+                            decoration: index == 1
+                                ? BoxDecoration(
+                                    color: scheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(8),
+                                  )
+                                : const BoxDecoration(),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 4,
+                              ),
+                              child: Text(
+                                days[index],
+                                style: TextStyle(
+                                  color: index == 1
+                                      ? scheme.onPrimaryContainer
+                                      : null,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -193,11 +253,12 @@ class _SchedulePreview extends StatelessWidget {
                                 Expanded(
                                   child: Container(
                                     height: 35,
-                                    margin: const EdgeInsets.all(1),
                                     decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color:
-                                            scheme.outlineVariant.withAlpha(90),
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color: scheme.outlineVariant
+                                              .withValues(alpha: .28),
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -233,25 +294,7 @@ class _SchedulePreview extends StatelessWidget {
                           left: 30,
                           right: 0,
                           top: 69,
-                          child: Container(height: 2, color: scheme.error),
-                        ),
-                      if (preferences.showBackToCurrentWeekFab)
-                        Positioned(
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: scheme.tertiaryContainer,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.my_location,
-                              size: 14,
-                              color: scheme.onTertiaryContainer,
-                            ),
-                          ),
+                          child: Container(height: 2, color: scheme.primary),
                         ),
                     ],
                   ),
@@ -280,21 +323,40 @@ class _PreviewBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.fromLTRB(7, 5, 4, 5),
       decoration: BoxDecoration(
-        color: muted ? scheme.surfaceContainerHighest : scheme.primaryContainer,
+        color: muted ? Colors.transparent : scheme.primaryContainer,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: scheme.outlineVariant),
+        border: Border.all(
+          color: muted
+              ? scheme.outlineVariant.withValues(alpha: .42)
+              : Colors.transparent,
+        ),
       ),
-      child: Text(
-        '$title\n$detail',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color:
-                  muted ? scheme.onSurfaceVariant : scheme.onPrimaryContainer,
-              fontWeight: FontWeight.w700,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: 2,
+            color: muted
+                ? scheme.outlineVariant.withValues(alpha: .55)
+                : scheme.primary,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              '$title\n$detail',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: muted
+                        ? scheme.onSurfaceVariant.withValues(alpha: .55)
+                        : scheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
+          ),
+        ],
       ),
     );
   }

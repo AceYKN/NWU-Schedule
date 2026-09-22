@@ -40,7 +40,7 @@ void main() {
     expect(find.text('预览'), findsOneWidget);
     expect(find.textContaining('A101 · 张老师'), findsOneWidget);
     expect(find.textContaining('09:00'), findsOneWidget);
-    expect(find.byIcon(Icons.my_location), findsOneWidget);
+    expect(find.text('回本周'), findsOneWidget);
     await tester.tap(find.widgetWithText(SwitchListTile, '显示教师'));
     await tester.pumpAndSettle();
     expect(find.textContaining('A101 · 张老师'), findsNothing);
@@ -53,7 +53,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(backToWeekSwitch);
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.my_location), findsNothing);
+    expect(find.text('回本周'), findsNothing);
     appRouter.go('/settings');
     await tester.pumpAndSettle();
     await tester.tap(find.text('新建本地学期'));
