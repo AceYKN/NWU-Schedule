@@ -87,23 +87,37 @@ class ImportedCourse {
       };
 }
 
+/// Returns whether a course name carries Zhengfang's explicit self-study
+/// marker. A normal course whose name merely contains the same characters is
+/// not treated as self-study unless the marker is standalone or delimited.
+bool isSelfStudyCourseName(String value) {
+  final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return RegExp(
+    r'(?:^|[\s【\[（(])自修(?=$|[\s】\]）)◎★〇◆■☆（(])',
+  ).hasMatch(normalized);
+}
+
 class RemoteTimetable {
   const RemoteTimetable({
     required this.semester,
     required this.totalWeeks,
     required this.courses,
     this.issues = const [],
+    this.ignoredSelfStudyCourseCount = 0,
   });
 
   final RemoteSemester semester;
   final int totalWeeks;
   final List<ImportedCourse> courses;
   final List<ImportIssue> issues;
+  final int ignoredSelfStudyCourseCount;
 
   Map<String, Object?> toJson() => {
         'semester': semester.toJson(),
         'totalWeeks': totalWeeks,
         'courses': courses.map((item) => item.toJson()).toList(),
+        if (ignoredSelfStudyCourseCount > 0)
+          'ignoredSelfStudyCourseCount': ignoredSelfStudyCourseCount,
         if (issues.isNotEmpty)
           'issues': issues.map((item) => item.toJson()).toList(),
       };
@@ -256,9 +270,23 @@ class TimetableImportParser {
       throw const FormatException('courses must be a list');
     }
     final courses = <ImportedCourse>[];
+    var ignoredSelfStudyCourseCount = _int(
+      json['ignoredSelfStudyCourseCount'] ?? 0,
+      'ignoredSelfStudyCourseCount',
+    );
+    if (ignoredSelfStudyCourseCount < 0) {
+      throw const FormatException('ignoredSelfStudyCourseCount must be >= 0');
+    }
     for (var index = 0; index < rawCourses.length; index++) {
+      final rawCourse = _map(rawCourses[index]);
+      final candidateName =
+          rawCourse['name'] ?? rawCourse['courseName'] ?? rawCourse['kcmc'];
+      if (candidateName is String && isSelfStudyCourseName(candidateName)) {
+        ignoredSelfStudyCourseCount += 1;
+        continue;
+      }
       courses.add(_parseCourse(
-        _map(rawCourses[index]),
+        rawCourse,
         index: index,
         totalWeeks: totalWeeks,
       ));
@@ -268,6 +296,7 @@ class TimetableImportParser {
       totalWeeks: totalWeeks,
       courses: List.unmodifiable(courses),
       issues: _parseIssues(json['issues']),
+      ignoredSelfStudyCourseCount: ignoredSelfStudyCourseCount,
     );
   }
 
@@ -522,7 +551,14 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
       severity: ImportIssueSeverity.error,
     ));
   }
-  if (timetable.courses.isEmpty) {
+  if (timetable.ignoredSelfStudyCourseCount < 0) {
+    issues.add(const ImportIssue(
+      path: 'ignoredSelfStudyCourseCount',
+      message: '自修课程忽略数量无效',
+      severity: ImportIssueSeverity.error,
+    ));
+  }
+  if (timetable.courses.isEmpty && timetable.ignoredSelfStudyCourseCount == 0) {
     issues.add(const ImportIssue(
       path: 'courses',
       message: '课表没有可导入的课程',

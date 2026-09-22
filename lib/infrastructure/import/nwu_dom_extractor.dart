@@ -44,6 +44,10 @@ class NwuDomExtractor {
 
   const normalize = (value) => String(value == null ? '' : value)
     .replace(/\s+/g, ' ').trim();
+  const isSelfStudyCourseName = (value) =>
+    /(?:^|[\s【\[（(])自修(?=$|[\s】\]）)◎★〇◆■☆（(])/u.test(
+      normalize(value),
+    );
   const text = (node) => normalize(
     node && (node.innerText || node.textContent)
       ? (node.innerText || node.textContent)
@@ -78,6 +82,7 @@ class NwuDomExtractor {
   const courses = [];
   const issues = [];
   let maxWeek = 0;
+  let ignoredSelfStudyCourseCount = 0;
   // NWU's current undergraduate timetable has eleven schedulable periods.
   // Keep malformed DOM section values out of the normalized payload instead
   // of waiting for the Dart validator to reject them later.
@@ -296,9 +301,13 @@ class NwuDomExtractor {
     }
 
     const rawName = normalize(source.slice(0, week.index));
+    if (isSelfStudyCourseName(rawName)) {
+      ignoredSelfStudyCourseCount += 1;
+      return;
+    }
     const name = normalize(
       rawName
-        .replace(/^(?:【调】|\[自修\])\s*/u, '')
+        .replace(/^(?:【调】)\s*/u, '')
         .replace(/[◎★〇◆■☆]+$/u, ''),
     );
     const weekText = normalize(source.slice(week.end, campus.index));
@@ -424,9 +433,13 @@ class NwuDomExtractor {
     }
 
     const rawName = text(titleNode);
+    if (isSelfStudyCourseName(rawName)) {
+      ignoredSelfStudyCourseCount += 1;
+      return;
+    }
     const name = normalize(
       rawName
-        .replace(/^(?:【调】|\[自修\])\s*/u, '')
+        .replace(/^(?:【调】)\s*/u, '')
         .replace(/[◎★〇◆■☆]+$/u, ''),
     );
     const weekText = structuredWeekText(text(scheduleNode));
@@ -664,6 +677,16 @@ class NwuDomExtractor {
         })),
       };
     });
+    const payloadIssues = ignoredSelfStudyCourseCount > 0
+      ? [
+          ...issues,
+          {
+            path: 'courses.selfStudy',
+            message: '已忽略 ' + ignoredSelfStudyCourseCount + ' 门标记为自修的课程',
+            severity: 'warning',
+          },
+        ]
+      : issues;
     return {
       semester: {
         remoteTermKey: academicYear + '-' + term,
@@ -674,7 +697,8 @@ class NwuDomExtractor {
       },
       totalWeeks: totalWeeks,
       courses: normalizedCourses,
-      issues: issues,
+      ignoredSelfStudyCourseCount: ignoredSelfStudyCourseCount,
+      issues: payloadIssues,
     };
   };
 
@@ -944,6 +968,10 @@ class NwuDomExtractor {
 
       const cellAt = (index) => index >= 0 ? normalize(cells[index]) : '';
       const name = cellAt(nameIndex);
+      if (isSelfStudyCourseName(name)) {
+        ignoredSelfStudyCourseCount += 1;
+        continue;
+      }
       const weekday = dayNumber(cellAt(dayIndex));
       const range = sectionRange(cellAt(sectionIndex));
       const weekText = cellAt(weekIndex);

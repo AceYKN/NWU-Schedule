@@ -85,6 +85,35 @@ void main() {
     );
     expect(confirm.onPressed, isNull);
   });
+
+  testWidgets('reports ignored self-study courses separately from errors',
+      (tester) async {
+    final selfStudy = const TimetableImportParser().parse({
+      ...timetable.toJson(),
+      'ignoredSelfStudyCourseCount': 1,
+      'issues': [
+        {
+          'path': 'courses.selfStudy',
+          'message': '已忽略 1 门标记为自修的课程',
+          'severity': 'warning',
+        },
+      ],
+    });
+    final diff = const ImportDiffEngine().build(
+      incoming: selfStudy,
+      local: null,
+      previousImport: null,
+    );
+
+    await _pumpCard(
+      tester,
+      timetable: selfStudy,
+      diff: diff,
+    );
+
+    expect(find.text('已忽略 1 门标记为自修的课程'), findsOneWidget);
+    expect(find.textContaining('发现 '), findsNothing);
+  });
 }
 
 Future<void> _pumpCard(

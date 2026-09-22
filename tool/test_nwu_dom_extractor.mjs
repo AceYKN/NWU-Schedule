@@ -226,6 +226,8 @@ const makeStructuredCourse = (title, schedule, location, teacher) => {
 const runStructuredExtraction = ({
   firstSchedule = '(1-2节)1-8周,10-18周',
   secondSchedule = '(1-2节)9周',
+  firstTitle = '结构课程★',
+  secondTitle = '结构课程★',
   bodyText = '2026-2027学年第1学期结构化课表',
   tableText = '2026-2027学年第1学期结构化课表',
 } = {}) => {
@@ -249,7 +251,7 @@ const runStructuredExtraction = ({
         tagName: 'td',
         children: [
           makeStructuredCourse(
-            '结构课程★',
+            firstTitle,
             firstSchedule,
             '长安校区 321',
             '教师甲',
@@ -262,7 +264,7 @@ const runStructuredExtraction = ({
         tagName: 'td',
         children: [
           makeStructuredCourse(
-            '结构课程★',
+            secondTitle,
             secondSchedule,
             '长安校区 321',
             '教师乙',
@@ -329,6 +331,22 @@ assert.deepEqual(
       teacher: '教师乙',
     },
   ],
+);
+
+const selfStudyOnly = runStructuredExtraction({
+  firstTitle: '[自修]自修课程★',
+  secondTitle: '【自修】另一门自修课程★',
+});
+assert.equal(selfStudyOnly.courses.length, 0);
+assert.equal(selfStudyOnly.ignoredSelfStudyCourseCount, 2);
+assert.equal(
+  selfStudyOnly.issues.filter((issue) => issue.severity === 'error')
+    .length,
+  0,
+);
+assert.equal(
+  selfStudyOnly.issues.some((issue) => issue.path === 'courses.selfStudy'),
+  true,
 );
 assert.equal(
   structured.issues.filter((issue) => issue.severity === 'error').length,

@@ -685,6 +685,9 @@ class TimetableImportPreviewCard extends StatelessWidget {
       0,
       (total, course) => total + course.meetings.length,
     );
+    final dataIssues = timetable.issues
+        .where((issue) => issue.path != 'courses.selfStudy')
+        .toList(growable: false);
     return Card(
       margin: const EdgeInsets.all(12),
       elevation: 5,
@@ -702,25 +705,34 @@ class TimetableImportPreviewCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text('${timetable.courses.length} 门课程 · $meetingCount 个上课安排'),
-            if (timetable.issues.isNotEmpty) ...[
+            if (timetable.ignoredSelfStudyCourseCount > 0) ...[
               const SizedBox(height: 6),
               Text(
-                '发现 ${timetable.issues.length} 条可能异常的数据，已保留可识别的课程。',
+                '已忽略 ${timetable.ignoredSelfStudyCourseCount} 门标记为自修的课程',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+            if (dataIssues.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                '发现 ${dataIssues.length} 条可能异常的数据，已保留可识别的课程。',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.error,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              for (final issue in timetable.issues.take(3))
+              for (final issue in dataIssues.take(3))
                 Text(
                   '· ${issue.message}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
-              if (timetable.issues.length > 3)
+              if (dataIssues.length > 3)
                 Text(
-                  '还有 ${timetable.issues.length - 3} 条异常…',
+                  '还有 ${dataIssues.length - 3} 条异常…',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
             ],

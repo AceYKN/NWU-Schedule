@@ -32,6 +32,60 @@ void main() {
     expect(network.meetings.single.endSection, 6);
   });
 
+  test('ignores explicitly marked self-study courses', () {
+    final timetable = const TimetableImportParser().parse({
+      ...fixture,
+      'courses': [
+        ...(fixture['courses'] as List<Object?>),
+        {
+          'sourceCourseKey': 'self-study',
+          'name': '[自修]自修课程',
+          'meetings': [
+            {
+              'sourceMeetingKey': 'self-study-meeting',
+              'weekday': 1,
+              'startSection': 1,
+              'endSection': 2,
+              'weekText': '1-18周',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(timetable.courses, hasLength(2));
+    expect(
+        timetable.courses.any((course) => course.name.contains('自修')), isFalse);
+    expect(timetable.ignoredSelfStudyCourseCount, 1);
+    expect(validateTimetable(timetable).isValid, isTrue);
+
+    final restored = const TimetableImportParser().parse(timetable.toJson());
+    expect(restored.ignoredSelfStudyCourseCount, 1);
+    expect(restored.courses, hasLength(2));
+
+    final onlySelfStudy = const TimetableImportParser().parse({
+      ...fixture,
+      'courses': [
+        {
+          'sourceCourseKey': 'only-self-study',
+          'name': '自修',
+          'meetings': [
+            {
+              'sourceMeetingKey': 'only-self-study-meeting',
+              'weekday': 2,
+              'startSection': 3,
+              'endSection': 4,
+              'weekText': '1-18周',
+            },
+          ],
+        },
+      ],
+    });
+    expect(onlySelfStudy.courses, isEmpty);
+    expect(onlySelfStudy.ignoredSelfStudyCourseCount, 1);
+    expect(validateTimetable(onlySelfStudy).isValid, isTrue);
+  });
+
   test('preserves parser errors for rows skipped by the DOM fallback', () {
     final timetable = const TimetableImportParser().parse({
       ...fixture,
