@@ -6,6 +6,7 @@ import 'package:drift/drift.dart';
 import '../../core/utils/week_mask.dart';
 import '../../domain/backup/schedule_backup.dart';
 import '../../domain/course/course.dart' as domain;
+import '../../domain/course/course_field_normalizer.dart';
 import '../../domain/course/course_exception.dart' as domain;
 import '../../domain/course/meeting_rule.dart' as domain;
 import '../../domain/import/import_diff.dart';
@@ -71,6 +72,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     final exceptionRows = await (database.select(database.courseExceptions)
           ..where((table) => table.semesterId.equals(semesterId)))
         .get();
+    await _cleanLegacyCourseFields(ruleRows, exceptionRows);
     return ScheduleDataSnapshot(
       semester: semester,
       courses: courseRows
@@ -99,9 +101,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
               weekday: row.weekday,
               startSection: row.startSection,
               endSection: row.endSection,
-              teacher: row.teacher,
-              campus: row.campus,
-              room: row.room,
+              teacher: normalizeTeacherField(row.teacher),
+              campus: normalizeCampusField(row.campus),
+              room: normalizeRoomField(row.room),
               weekMask: WeekMask(row.weekMask, rawText: row.rawWeekText),
             ),
           )
@@ -118,9 +120,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
               targetDate: row.targetDate,
               targetStartSection: row.targetStartSection,
               targetEndSection: row.targetEndSection,
-              teacherOverride: row.teacherOverride,
-              campusOverride: row.campusOverride,
-              roomOverride: row.roomOverride,
+              teacherOverride: normalizeTeacherField(row.teacherOverride),
+              campusOverride: normalizeCampusField(row.campusOverride),
+              roomOverride: normalizeRoomField(row.roomOverride),
               addedCourseName: row.addedCourseName,
               note: row.note,
             ),
@@ -282,9 +284,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
                 weekday: rule.weekday,
                 startSection: rule.startSection,
                 endSection: rule.endSection,
-                teacher: Value(rule.teacher),
-                campus: Value(rule.campus),
-                room: Value(rule.room),
+                teacher: Value(normalizeTeacherField(rule.teacher)),
+                campus: Value(normalizeCampusField(rule.campus)),
+                room: Value(normalizeRoomField(rule.room)),
                 weekMask: rule.weekMask.value,
                 rawWeekText: rule.weekMask.rawText,
               ),
@@ -311,9 +313,11 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             targetDate: Value(exception.targetDate),
             targetStartSection: Value(exception.targetStartSection),
             targetEndSection: Value(exception.targetEndSection),
-            teacherOverride: Value(exception.teacherOverride),
-            campusOverride: Value(exception.campusOverride),
-            roomOverride: Value(exception.roomOverride),
+            teacherOverride:
+                Value(normalizeTeacherField(exception.teacherOverride)),
+            campusOverride:
+                Value(normalizeCampusField(exception.campusOverride)),
+            roomOverride: Value(normalizeRoomField(exception.roomOverride)),
             addedCourseName: Value(exception.addedCourseName),
             note: Value(exception.note),
             createdAt: DateTime.now(),
@@ -326,6 +330,49 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     await (database.delete(database.courseExceptions)
           ..where((table) => table.id.equals(exceptionId)))
         .go();
+  }
+
+  Future<void> _cleanLegacyCourseFields(
+    List<db.MeetingRule> rules,
+    List<db.CourseException> exceptions,
+  ) async {
+    final dirtyRules = rules.where((row) {
+      return normalizeTeacherField(row.teacher) != row.teacher ||
+          normalizeCampusField(row.campus) != row.campus ||
+          normalizeRoomField(row.room) != row.room;
+    }).toList(growable: false);
+    final dirtyExceptions = exceptions.where((row) {
+      return normalizeTeacherField(row.teacherOverride) !=
+              row.teacherOverride ||
+          normalizeCampusField(row.campusOverride) != row.campusOverride ||
+          normalizeRoomField(row.roomOverride) != row.roomOverride;
+    }).toList(growable: false);
+    if (dirtyRules.isEmpty && dirtyExceptions.isEmpty) return;
+
+    await database.transaction(() async {
+      for (final row in dirtyRules) {
+        await (database.update(database.meetingRules)
+              ..where((table) => table.id.equals(row.id)))
+            .write(
+          db.MeetingRulesCompanion(
+            teacher: Value(normalizeTeacherField(row.teacher)),
+            campus: Value(normalizeCampusField(row.campus)),
+            room: Value(normalizeRoomField(row.room)),
+          ),
+        );
+      }
+      for (final row in dirtyExceptions) {
+        await (database.update(database.courseExceptions)
+              ..where((table) => table.id.equals(row.id)))
+            .write(
+          db.CourseExceptionsCompanion(
+            teacherOverride: Value(normalizeTeacherField(row.teacherOverride)),
+            campusOverride: Value(normalizeCampusField(row.campusOverride)),
+            roomOverride: Value(normalizeRoomField(row.roomOverride)),
+          ),
+        );
+      }
+    });
   }
 
   @override

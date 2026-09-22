@@ -32,6 +32,35 @@ void main() {
     expect(network.meetings.single.endSection, 6);
   });
 
+  test('strips imported teacher campus and room labels defensively', () {
+    final timetable = const TimetableImportParser().parse({
+      ...fixture,
+      'courses': [
+        {
+          'sourceCourseKey': 'labeled-fields',
+          'name': '软件测试',
+          'meetings': [
+            {
+              'sourceMeetingKey': 'labeled-fields-meeting',
+              'weekday': 1,
+              'startSection': 3,
+              'endSection': 4,
+              'weekText': '1-18周',
+              'teacher': '教师：  杨建锋',
+              'campus': '校区:长安校区',
+              'room': '上课地点：1405',
+            },
+          ],
+        },
+      ],
+    });
+
+    final meeting = timetable.courses.single.meetings.single;
+    expect(meeting.teacher, '杨建锋');
+    expect(meeting.campus, '长安校区');
+    expect(meeting.room, '1405');
+  });
+
   test('ignores explicitly marked self-study courses', () {
     final timetable = const TimetableImportParser().parse({
       ...fixture,

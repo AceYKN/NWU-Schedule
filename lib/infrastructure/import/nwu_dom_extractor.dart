@@ -44,6 +44,25 @@ class NwuDomExtractor {
 
   const normalize = (value) => String(value == null ? '' : value)
     .replace(/\s+/g, ' ').trim();
+  const cleanLabeledValue = (value, pattern) => {
+    let result = normalize(value);
+    while (result && pattern.test(result)) {
+      result = normalize(result.replace(pattern, ''));
+    }
+    return result;
+  };
+  const cleanTeacher = (value) => cleanLabeledValue(
+    value,
+    /^(?:教师|任课教师|上课教师)\s*[:：]\s*/u,
+  );
+  const cleanCampus = (value) => cleanLabeledValue(
+    value,
+    /^(?:校区|校区名称)\s*[:：]\s*/u,
+  );
+  const cleanRoom = (value) => cleanLabeledValue(
+    value,
+    /^(?:上课地点|教室|地点)\s*[:：]\s*/u,
+  );
   const isSelfStudyCourseName = (value) =>
     /(?:^|[\s【\[（(])自修(?=$|[\s】\]）)◎★〇◆■☆（(])/u.test(
       normalize(value),
@@ -208,9 +227,9 @@ class NwuDomExtractor {
       weekday: weekday,
       startSection: startSection,
       endSection: endSection,
-      teacher: teacher || null,
-      campus: campus || null,
-      room: room || null,
+      teacher: cleanTeacher(teacher) || null,
+      campus: cleanCampus(campus) || null,
+      room: cleanRoom(room) || null,
       weekText: weekText,
     });
   };

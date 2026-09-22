@@ -2,6 +2,7 @@ import '../../core/nwu/periods.dart';
 import 'dart:convert';
 
 import '../../core/utils/week_mask.dart';
+import '../course/course_field_normalizer.dart';
 
 String safeWeekDiagnosticText(String raw) =>
     raw.replaceAll(RegExp(r'[^0-9,，、\-~～—至\s]'), '').trim();
@@ -423,11 +424,15 @@ class TimetableImportParser {
       weekday: weekday,
       startSection: sectionRange.$1,
       endSection: sectionRange.$2,
-      teacher:
-          _optionalString(json['teacher'] ?? json['teacherName'] ?? json['js']),
-      campus:
-          _optionalString(json['campus'] ?? json['campusName'] ?? json['xq']),
-      room: _optionalString(json['room'] ?? json['roomName'] ?? json['jxcd']),
+      teacher: normalizeTeacherField(
+        _optionalString(json['teacher'] ?? json['teacherName'] ?? json['js']),
+      ),
+      campus: normalizeCampusField(
+        _optionalString(json['campus'] ?? json['campusName'] ?? json['xq']),
+      ),
+      room: normalizeRoomField(
+        _optionalString(json['room'] ?? json['roomName'] ?? json['jxcd']),
+      ),
       weekMask: weekMask,
     );
   }

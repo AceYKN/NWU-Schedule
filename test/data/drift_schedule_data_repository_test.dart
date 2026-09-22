@@ -110,6 +110,58 @@ void main() {
     expect((await repository.loadSemester(semester.id)).courses, isEmpty);
   });
 
+  test('cleans labeled legacy meeting values on load and persists the repair',
+      () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    final semester = domain.Semester(
+      id: 'legacy-fields-semester',
+      academicYear: '2026-2027',
+      term: domain.SemesterTerm.first,
+      label: '第一学期',
+      createdAt: DateTime(2026, 9, 1),
+    );
+    final course = domain.Course(
+      id: 'legacy-fields-course',
+      semesterId: semester.id,
+      sourceType: domain.CourseSourceType.manual,
+      name: '软件测试',
+    );
+    final rule = domain.MeetingRule(
+      id: 'legacy-fields-rule',
+      courseId: course.id,
+      weekday: DateTime.monday,
+      startSection: 3,
+      endSection: 4,
+      weekMask: WeekMask.all(20),
+    );
+    await repository.saveSemester(semester);
+    await repository.saveCourse(course, [rule]);
+    await (database.update(database.meetingRules)
+          ..where((table) => table.id.equals(rule.id)))
+        .write(
+      const MeetingRulesCompanion(
+        teacher: Value('教师：杨建锋'),
+        campus: Value('校区:长安校区'),
+        room: Value('上课地点：1405'),
+      ),
+    );
+
+    final snapshot = await repository.loadSemester(semester.id);
+
+    expect(snapshot.meetingRules.single.teacher, '杨建锋');
+    expect(snapshot.meetingRules.single.campus, '长安校区');
+    expect(snapshot.meetingRules.single.room, '1405');
+    final stored = await database.select(database.meetingRules).getSingle();
+    expect(stored.teacher, '杨建锋');
+    expect(stored.campus, '长安校区');
+    expect(stored.room, '1405');
+
+    final second = await repository.loadSemester(semester.id);
+    expect(second.meetingRules.single.teacher, '杨建锋');
+  });
+
   test('clears obsolete course metadata when saving over a legacy row',
       () async {
     final database = AppDatabase(NativeDatabase.memory());
