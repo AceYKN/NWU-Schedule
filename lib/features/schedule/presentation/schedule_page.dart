@@ -9,6 +9,7 @@ import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/schedule_engine.dart';
 import '../../../domain/settings/schedule_display_preferences.dart';
 import 'widgets/schedule_week_grid.dart';
+import 'widgets/schedule_week_display_filter.dart';
 import '../../shared/presentation/course_card.dart';
 
 class SchedulePage extends ConsumerStatefulWidget {
@@ -248,10 +249,13 @@ class _WeekContentState extends State<_WeekContent> {
             },
             itemBuilder: (context, index) {
               final pageWeek = index + 1;
-              final pageModel = widget.engine.getWeekViewModel(
-                pageWeek,
-                includeInactive: widget.preferences.showInactiveCourses,
-                now: widget.now,
+              final pageModel =
+                  ScheduleWeekDisplayFilter.hideConflictingInactive(
+                widget.engine.getWeekViewModel(
+                  pageWeek,
+                  includeInactive: widget.preferences.showInactiveCourses,
+                  now: widget.now,
+                ),
               );
               final showWeekend = widget.preferences.showWeekend ||
                   (widget.temporaryWeekendExpanded && pageWeek == widget.week);

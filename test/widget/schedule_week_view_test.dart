@@ -8,6 +8,7 @@ import 'package:nwu_schedule/domain/schedule/week_schedule_view_model.dart';
 import 'package:nwu_schedule/domain/settings/schedule_display_preferences.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/course_block.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/schedule_week_grid.dart';
+import 'package:nwu_schedule/features/schedule/presentation/widgets/schedule_week_display_filter.dart';
 
 void main() {
   testWidgets('five and seven day grids fit a narrow phone without overflow',
@@ -208,6 +209,47 @@ void main() {
     expect(find.text('数据结构'), findsOneWidget);
     expect(find.text('教师乙'), findsNothing);
     expect(find.text('1310'), findsNothing);
+  });
+
+  test('inactive entries that overlap active entries are hidden', () {
+    final model = _model(
+      entries: [
+        _entry(
+          id: 'active-course',
+          name: '本周课程',
+          weekday: DateTime.monday,
+          startSection: 3,
+          endSection: 4,
+        ),
+        _entry(
+          id: 'conflicting-inactive-course',
+          name: '冲突的非本周课程',
+          weekday: DateTime.monday,
+          startSection: 4,
+          endSection: 5,
+          active: false,
+        ),
+        _entry(
+          id: 'visible-inactive-course',
+          name: '可比较的非本周课程',
+          weekday: DateTime.monday,
+          startSection: 6,
+          endSection: 7,
+          active: false,
+        ),
+      ],
+    );
+
+    final filtered = ScheduleWeekDisplayFilter.hideConflictingInactive(model);
+
+    expect(
+      filtered.entries.map((entry) => entry.course.name),
+      containsAll(<String>['本周课程', '可比较的非本周课程']),
+    );
+    expect(
+      filtered.entries.map((entry) => entry.course.name),
+      isNot(contains('冲突的非本周课程')),
+    );
   });
 }
 
