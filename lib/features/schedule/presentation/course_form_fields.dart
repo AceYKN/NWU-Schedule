@@ -4,6 +4,12 @@ import '../../../core/nwu/periods.dart';
 import '../../../core/utils/week_mask.dart';
 import '../../../domain/course/week_pattern.dart';
 
+abstract final class CourseFieldLabels {
+  static const teacher = '教师（可选）';
+  static const campus = '校区（可选）';
+  static const room = '教室（可选）';
+}
+
 class SectionRangeSelection {
   const SectionRangeSelection({required this.start, required this.end});
 

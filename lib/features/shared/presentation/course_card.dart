@@ -680,17 +680,23 @@ class _StandaloneAddExceptionSheetState
               const SizedBox(height: 8),
               TextFormField(
                 controller: _teacher,
-                decoration: const InputDecoration(labelText: '教师'),
+                decoration: const InputDecoration(
+                  labelText: CourseFieldLabels.teacher,
+                ),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _campus,
-                decoration: const InputDecoration(labelText: '校区'),
+                decoration: const InputDecoration(
+                  labelText: CourseFieldLabels.campus,
+                ),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _room,
-                decoration: const InputDecoration(labelText: '教室'),
+                decoration: const InputDecoration(
+                  labelText: CourseFieldLabels.room,
+                ),
               ),
               const SizedBox(height: 12),
               CompactNotesField(controller: _note, label: '备注（可选）'),
@@ -869,17 +875,23 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _teacher,
-                  decoration: const InputDecoration(labelText: '教师'),
+                  decoration: const InputDecoration(
+                    labelText: CourseFieldLabels.teacher,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _campus,
-                  decoration: const InputDecoration(labelText: '校区'),
+                  decoration: const InputDecoration(
+                    labelText: CourseFieldLabels.campus,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _room,
-                  decoration: const InputDecoration(labelText: '教室'),
+                  decoration: const InputDecoration(
+                    labelText: CourseFieldLabels.room,
+                  ),
                 ),
               ],
               const SizedBox(height: 12),

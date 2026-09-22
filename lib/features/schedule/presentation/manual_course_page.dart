@@ -486,7 +486,9 @@ class _MeetingDraftCardState extends State<_MeetingDraftCard> {
             const SizedBox(height: 12),
             TextFormField(
               controller: _teacher,
-              decoration: const InputDecoration(labelText: '教师'),
+              decoration: const InputDecoration(
+                labelText: CourseFieldLabels.teacher,
+              ),
               onChanged: (_) => _updateText(),
             ),
             const SizedBox(height: 12),
@@ -494,12 +496,16 @@ class _MeetingDraftCardState extends State<_MeetingDraftCard> {
               builder: (context, constraints) {
                 final campusField = TextFormField(
                   controller: _campus,
-                  decoration: const InputDecoration(labelText: '校区'),
+                  decoration: const InputDecoration(
+                    labelText: CourseFieldLabels.campus,
+                  ),
                   onChanged: (_) => _updateText(),
                 );
                 final roomField = TextFormField(
                   controller: _room,
-                  decoration: const InputDecoration(labelText: '教室'),
+                  decoration: const InputDecoration(
+                    labelText: CourseFieldLabels.room,
+                  ),
                   onChanged: (_) => _updateText(),
                 );
                 if (constraints.maxWidth >= 320) {
