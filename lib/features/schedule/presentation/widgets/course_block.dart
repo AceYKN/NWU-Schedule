@@ -118,10 +118,11 @@ class CourseEventCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: _fullLine(
+                            child: _wrappedLine(
                               title,
                               foreground,
                               title: true,
+                              maxLines: height >= 100 ? 3 : 2,
                             ),
                           ),
                           if (status != null) ...[
@@ -134,13 +135,18 @@ class CourseEventCard extends StatelessWidget {
                         ],
                       ),
                       if (location != null)
-                        _fullLine(location, secondaryForeground),
+                        _wrappedLine(
+                          location,
+                          secondaryForeground,
+                          maxLines: 2,
+                        ),
                       if (preferences.showTeacher &&
                           entry.teacher != null &&
                           entry.teacher!.trim().isNotEmpty)
-                        _fullLine(
+                        _wrappedLine(
                           entry.teacher!.trim(),
                           secondaryForeground,
+                          maxLines: height >= 100 ? 2 : 1,
                         ),
                     ],
                   ),
@@ -153,32 +159,22 @@ class CourseEventCard extends StatelessWidget {
     );
   }
 
-  Widget _fullLine(
+  Widget _wrappedLine(
     String value,
     Color color, {
     bool title = false,
+    required int maxLines,
   }) {
-    final compact = width < 58;
-    return SizedBox(
-      height: title ? (compact ? 14 : 16) : (compact ? 11 : 13),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            value,
-            maxLines: 1,
-            softWrap: false,
-            overflow: TextOverflow.visible,
-            style: TextStyle(
-              color: color,
-              fontSize: title ? (compact ? 10.5 : 12) : (compact ? 8.5 : 10),
-              height: 1,
-              fontWeight: title ? FontWeight.w700 : FontWeight.w500,
-            ),
-          ),
-        ),
+    return Text(
+      value,
+      maxLines: maxLines,
+      softWrap: true,
+      overflow: TextOverflow.clip,
+      style: TextStyle(
+        color: color,
+        fontSize: title ? 12 : 10,
+        height: title ? 1.05 : 1,
+        fontWeight: title ? FontWeight.w700 : FontWeight.w500,
       ),
     );
   }

@@ -7,7 +7,7 @@ class ScheduleGridMetrics {
   const ScheduleGridMetrics._();
 
   static const headerHeight = 54.0;
-  static const periodHeight = 60.0;
+  static const periodHeight = 68.0;
   static const timeRailWidth = 46.0;
   static const compactTimeRailWidth = 34.0;
   static const eventGap = 3.0;
