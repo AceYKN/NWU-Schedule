@@ -25,16 +25,16 @@
 | 课表显示设置的实时预览 | `widget_test.dart`、`schedule_display_settings_page.dart` | PASS（自动化） |
 | UI、Golden、无障碍 | `test/widget`、`test/golden`、`accessibility_test.dart` | PASS（自动化） |
 | 移动端周课表 5/7 日、周末提示、周滑动、CourseBlock、自适应内容 | `schedule_page.dart`、`schedule_week_view_test.dart`、`schedule_week_view_golden_test.dart` | PASS（本地与远端 CI） |
-| Android 构建 | [GitHub Actions Run 35695928955](https://github.com/AceYKN/NWU-Schedule/actions/runs/35695928955)：debug/release APK、merged manifest 校验与 `nwu-schedule-apks-0b10f89ced965d6d3160fd84b11c8859bc92d04b` artifact 上传 | PASS |
+| Android 构建 | [GitHub Actions Run 35696866021](https://github.com/AceYKN/NWU-Schedule/actions/runs/35696866021)：debug/release APK、merged manifest 校验与 `nwu-schedule-apks-be0d47d55bff4c95e0a9b62f07d654e4fe06ec73` artifact 上传 | PASS |
 
-最近一次本地全量检查（当前 `main` 提交 `0b10f89`）：校历校验、隐私校验、当前 V9 DOM fixture、`flutter analyze`、206 项 `flutter test`、多尺寸深色/浅色 Golden 和本地 debug APK 构建均通过。对应的 [GitHub Actions Run 35695928955](https://github.com/AceYKN/NWU-Schedule/actions/runs/35695928955) 已完成，Debug/Release APK 与 Release merged manifest 校验均通过，并上传了可供同事下载的 artifact。此前的 `dc3f2d8` 修复了真实 V9 页面 `周数：` 展示前缀和 Android WebView 下拉选项误取学年的问题，并完成真实读取、Preview、确认导入和重启回读。
+最近一次本地全量检查（当前 `main` 提交 `be0d47d`）：校历校验、隐私校验、当前 V9 DOM fixture、`flutter analyze`、207 项 `flutter test`、多尺寸深色/浅色 Golden 和本地 debug APK 构建均通过。对应的 [GitHub Actions Run 35696866021](https://github.com/AceYKN/NWU-Schedule/actions/runs/35696866021) 已完成，Debug/Release APK 与 Release merged manifest 校验均通过，并上传了可供同事下载的 artifact。此前的 `dc3f2d8` 修复了真实 V9 页面 `周数：` 展示前缀和 Android WebView 下拉选项误取学年的问题，并完成真实读取、Preview、确认导入和重启回读。
 
 ## 设备上已核对但不等同于真实集成通过
 
 - Pixel 8 API 35 模拟器 `emulator-5554` 在线。
 - `app-debug.apk` 安装成功，`MainActivity` 成为 `topResumedActivity`。
 - 启动后的抽样 logcat 未发现 `FATAL EXCEPTION`。
-- 本轮以周课表 UI 提交 `0b10f89` 重新构建并安装 debug APK；`io.github.aceykn.nwuschedule/.MainActivity` 启动进程保持存活，安装后抽样 logcat 未发现 `FATAL EXCEPTION`、`am_crash` 或 `am_proc_died`。
+- 本轮以周课表 UI 提交 `be0d47d` 重新构建并安装 debug APK；`io.github.aceykn.nwuschedule/.MainActivity` 启动进程保持存活，安装后抽样 logcat 未发现 `FATAL EXCEPTION`、`am_crash` 或 `am_proc_died`。
 - 在同一 APK 上执行强制停止并重新启动后，应用进程重新存活，`CourseWidgetProvider` 仍保留 2 个实例（`widgets.size=2`），抽样 logcat 仍未发现上述崩溃标记。
 
 这只证明 APK 能安装和启动，不证明真实教务账号导入成功。
