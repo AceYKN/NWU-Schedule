@@ -131,9 +131,7 @@ class ScheduleEngine {
     return null;
   }
 
-  List<EffectiveCourseInstance> getCoursesForWeek(
-    int teachingWeek,
-  ) {
+  List<EffectiveCourseInstance> getCoursesForWeek(int teachingWeek) {
     final start = calendarEngine.definition.weekStart(teachingWeek);
     final result = <EffectiveCourseInstance>[];
     for (var day = 0; day < 7; day++) {
@@ -170,12 +168,13 @@ class ScheduleEngine {
           weekday: date.weekday,
           date: date,
           label: _weekdayLabel(date.weekday),
-          marker: switch (resolved.override?.type) {
-            CalendarOverrideType.holiday => '休',
-            CalendarOverrideType.useScheduleOf =>
-              date.weekday >= DateTime.saturday ? '补' : '调',
-            null => null,
+          kind: switch (resolved.override?.type) {
+            CalendarOverrideType.holiday => ScheduleDayKind.holiday,
+            CalendarOverrideType.useScheduleOf => ScheduleDayKind.makeup,
+            null => ScheduleDayKind.normal,
           },
+          calendarLabel: resolved.override?.label,
+          templateDate: resolved.templateDate,
           isToday: isSameDate(date, campusNow),
         ),
       );
@@ -240,11 +239,7 @@ class ScheduleEngine {
     return result;
   }
 
-  bool _hasSourceMoveOrCancel(
-    DateTime date,
-    String courseId,
-    String ruleId,
-  ) {
+  bool _hasSourceMoveOrCancel(DateTime date, String courseId, String ruleId) {
     return exceptions.any(
       (exception) =>
           (exception.type == CourseExceptionType.move ||
@@ -283,9 +278,7 @@ class ScheduleEngine {
       }
       if (exception.type == CourseExceptionType.cancel ||
           exception.type == CourseExceptionType.move) {
-        result.removeWhere(
-          (instance) => _matchesSource(instance, exception),
-        );
+        result.removeWhere((instance) => _matchesSource(instance, exception));
       }
     }
 

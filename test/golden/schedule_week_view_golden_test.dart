@@ -40,13 +40,27 @@ void main() {
     '412x915': Size(412, 915),
     '430x932': Size(430, 932),
   };
+  final scenarios = [
+    for (final entry in sizes.entries)
+      _WeekGoldenScenario(
+        label: entry.key,
+        size: entry.value,
+        showWeekend: false,
+      ),
+    for (final entry in sizes.entries.where((entry) => entry.key != '430x932'))
+      _WeekGoldenScenario(
+        label: '${entry.key}_7days',
+        size: entry.value,
+        showWeekend: true,
+      ),
+  ];
 
   for (final brightness in [Brightness.light, Brightness.dark]) {
-    for (final entry in sizes.entries) {
+    for (final scenario in scenarios) {
       testWidgets(
-        'week view ${entry.key} ${brightness.name}',
+        'week view ${scenario.label} ${brightness.name}',
         (tester) async {
-          tester.view.physicalSize = entry.value;
+          tester.view.physicalSize = scenario.size;
           tester.view.devicePixelRatio = 1;
           addTearDown(() {
             tester.view.resetPhysicalSize();
@@ -63,7 +77,8 @@ void main() {
                   (ref) => Stream.value(fixture.ready),
                 ),
                 scheduleDisplayPreferencesProvider.overrideWith(
-                  (ref) async => const ScheduleDisplayPreferences.defaults(),
+                  (ref) async => const ScheduleDisplayPreferences.defaults()
+                      .copyWith(showWeekend: scenario.showWeekend),
                 ),
               ],
               child: MaterialApp(
@@ -79,7 +94,7 @@ void main() {
           await expectLater(
             find.byType(SchedulePage),
             matchesGoldenFile(
-              'goldens/actual/pages/week_${entry.key}_${brightness.name}.png',
+              'goldens/actual/pages/week_${scenario.label}_${brightness.name}.png',
             ),
           );
         },
@@ -88,7 +103,7 @@ void main() {
   }
 }
 
-final _fixedNow = DateTime.utc(2026, 9, 7, 2, 30);
+final _fixedNow = DateTime.utc(2026, 9, 11, 2, 30);
 
 Future<_WeekFixture> _createFixture() async {
   final database = AppDatabase(NativeDatabase.memory());
@@ -104,7 +119,25 @@ Future<_WeekFixture> _createFixture() async {
     semesterEndDate: week1.add(const Duration(days: 20 * 7 - 1)),
     totalWeeks: 20,
     revision: 1,
-    dateOverrides: const [],
+    dateOverrides: [
+      CalendarDateOverride(
+        date: DateTime(2026, 9, 8),
+        type: CalendarOverrideType.holiday,
+        label: '校历假日',
+      ),
+      CalendarDateOverride(
+        date: DateTime(2026, 9, 11),
+        type: CalendarOverrideType.useScheduleOf,
+        sourceDate: DateTime(2026, 9, 13),
+        label: '工作日调休',
+      ),
+      CalendarDateOverride(
+        date: DateTime(2026, 9, 12),
+        type: CalendarOverrideType.useScheduleOf,
+        sourceDate: DateTime(2026, 9, 10),
+        label: '周末补课',
+      ),
+    ],
   );
   final semester = Semester(
     id: 'week-golden-semester',
@@ -148,11 +181,22 @@ Future<_WeekFixture> _createFixture() async {
     weekendCourse,
     [
       MeetingRule(
-        id: 'week-golden-weekend-rule',
+        id: 'week-golden-thursday-rule',
         courseId: weekendCourse.id,
-        weekday: DateTime.saturday,
+        weekday: DateTime.thursday,
         startSection: 1,
         endSection: 2,
+        teacher: '教师乙',
+        campus: '太白校区',
+        room: '实验室-321',
+        weekMask: WeekMask.all(calendar.totalWeeks),
+      ),
+      MeetingRule(
+        id: 'week-golden-sunday-rule',
+        courseId: weekendCourse.id,
+        weekday: DateTime.sunday,
+        startSection: 5,
+        endSection: 6,
         teacher: '教师乙',
         campus: '太白校区',
         room: '实验室-321',
@@ -183,6 +227,18 @@ class _WeekFixture {
   final ScheduleReady ready;
 
   Future<void> dispose() => database.close();
+}
+
+class _WeekGoldenScenario {
+  const _WeekGoldenScenario({
+    required this.label,
+    required this.size,
+    required this.showWeekend,
+  });
+
+  final String label;
+  final Size size;
+  final bool showWeekend;
 }
 
 class _TolerantGoldenFileComparator extends LocalFileComparator {

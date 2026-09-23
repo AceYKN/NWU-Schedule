@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../domain/course/course.dart';
+import '../../../domain/course/course_identity.dart';
 
 class CourseColorPair {
   const CourseColorPair({required this.container, required this.onContainer});
@@ -29,8 +30,9 @@ class CourseColorResolver {
 
   static int schedulePaletteLength() => _scheduleHueOffsets.length;
 
-  static int schedulePaletteIndex(String courseId) {
-    return _stableHash(courseId) % _scheduleHueOffsets.length;
+  static int schedulePaletteIndexForName(String courseName) {
+    return _stableHash(CourseIdentity.nameKey(courseName)) %
+        _scheduleHueOffsets.length;
   }
 
   static CourseColorPair resolve(Course course, ColorScheme scheme) {
@@ -53,11 +55,7 @@ class CourseColorResolver {
   /// Week cells use a palette derived from the active Material 3 scheme so a
   /// course keeps the same color across weeks and across app launches without
   /// introducing hard-coded light/dark colors.
-  static CourseColorPair resolveSchedule(
-    Course course,
-    ColorScheme scheme, {
-    int? paletteIndex,
-  }) {
+  static CourseColorPair resolveSchedule(Course course, ColorScheme scheme) {
     if (course.colorOverride != null) {
       final base = Color(course.colorOverride!);
       return CourseColorPair(
@@ -67,8 +65,7 @@ class CourseColorResolver {
     }
     final baseHue = HSLColor.fromColor(scheme.primary).hue;
     final hueOffset = _scheduleHueOffsets[
-        (paletteIndex ?? schedulePaletteIndex(course.id)) %
-            _scheduleHueOffsets.length];
+        schedulePaletteIndexForName(course.name) % _scheduleHueOffsets.length];
     final hue = ((baseHue + hueOffset) % 360 + 360) % 360;
     final tone = scheme.brightness == Brightness.light ? .86 : .30;
     final saturation = scheme.brightness == Brightness.light ? .42 : .48;

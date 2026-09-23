@@ -6,6 +6,7 @@ import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
 import '../../../domain/course/course.dart';
 import '../../../domain/course/course_exception.dart';
+import '../../../domain/course/meeting_rule.dart';
 import '../../../domain/errors/app_error.dart';
 import '../../shared/presentation/app_page_header.dart';
 
@@ -68,15 +69,18 @@ class CourseManagementPage extends ConsumerWidget {
     final load = ref.watch(scheduleLoadProvider);
     return load.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) => Center(
-        child: Text(nwuUserMessage(error, action: '读取课程失败')),
-      ),
+      error: (error, stackTrace) =>
+          Center(child: Text(nwuUserMessage(error, action: '读取课程失败'))),
       data: (value) {
         if (value is! ScheduleReady) {
           return const Center(child: Text('请先创建或导入学期'));
         }
         final courses = List<Course>.of(value.engine.courses)
           ..sort((a, b) => a.name.compareTo(b.name));
+        final arrangementsByCourse = <String, List<MeetingRule>>{};
+        for (final rule in value.engine.meetingRules) {
+          arrangementsByCourse.putIfAbsent(rule.courseId, () => []).add(rule);
+        }
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 36),
           children: [
@@ -89,37 +93,66 @@ class CourseManagementPage extends ConsumerWidget {
             Text(value.semester.label),
             const SizedBox(height: 16),
             if (courses.isEmpty) const Center(child: Text('这个学期还没有课程')),
-            ...courses.map((course) => Card(
-                  child: ListTile(
-                    title: Text(course.name),
-                    subtitle: Text([
-                      course.sourceType == CourseSourceType.manual
-                          ? '手动添加'
-                          : '教务导入',
-                      if (course.deleted) '已删除',
-                      if (course.hidden) '已隐藏',
-                    ].join(' · ')),
-                    trailing: PopupMenuButton<String>(
-                      tooltip: '课程操作',
-                      onSelected: (action) =>
-                          _act(context, ref, course, action),
-                      itemBuilder: (context) => [
-                        if (course.deleted)
-                          const PopupMenuItem(
-                              value: 'restore', child: Text('恢复课程'))
-                        else ...[
-                          const PopupMenuItem(value: 'edit', child: Text('编辑')),
-                          PopupMenuItem(
-                            value: course.hidden ? 'show' : 'hide',
-                            child: Text(course.hidden ? '取消隐藏' : '隐藏'),
-                          ),
-                          const PopupMenuItem(
-                              value: 'delete', child: Text('删除')),
-                        ],
-                      ],
-                    ),
+            ...courses.map((course) {
+              final arrangements =
+                  arrangementsByCourse[course.id] ?? const <MeetingRule>[];
+              return Card(
+                child: ListTile(
+                  isThreeLine: arrangements.isNotEmpty,
+                  title: Text(
+                    course.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                )),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        [
+                          course.sourceType == CourseSourceType.manual
+                              ? '手动添加'
+                              : '教务导入',
+                          '${arrangements.length} 个上课安排',
+                          if (course.deleted) '已删除',
+                          if (course.hidden) '已隐藏',
+                        ].join(' · '),
+                      ),
+                      for (final rule in arrangements.take(2))
+                        Text(
+                          _arrangementSummary(rule),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      if (arrangements.length > 2)
+                        Text('还有 ${arrangements.length - 2} 个安排'),
+                    ],
+                  ),
+                  trailing: PopupMenuButton<String>(
+                    tooltip: '课程操作',
+                    onSelected: (action) => _act(context, ref, course, action),
+                    itemBuilder: (context) => [
+                      if (course.deleted)
+                        const PopupMenuItem(
+                          value: 'restore',
+                          child: Text('恢复课程'),
+                        )
+                      else ...[
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Text('编辑整门课程'),
+                        ),
+                        PopupMenuItem(
+                          value: course.hidden ? 'show' : 'hide',
+                          child: Text(course.hidden ? '取消隐藏' : '隐藏'),
+                        ),
+                        const PopupMenuItem(value: 'delete', child: Text('删除')),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }),
             if (value.engine.exceptions.isNotEmpty) ...[
               const SizedBox(height: 24),
               Text(
@@ -139,11 +172,8 @@ class CourseManagementPage extends ConsumerWidget {
                     trailing: IconButton(
                       tooltip: '撤销临时变更',
                       icon: const Icon(Icons.undo_outlined),
-                      onPressed: () => _deleteException(
-                        context,
-                        ref,
-                        exception,
-                      ),
+                      onPressed: () =>
+                          _deleteException(context, ref, exception),
                     ),
                   ),
                 ),
@@ -154,6 +184,19 @@ class CourseManagementPage extends ConsumerWidget {
       },
     );
   }
+}
+
+String _arrangementSummary(MeetingRule rule) {
+  const weekdays = '一二三四五六日';
+  final parts = [
+    '周${weekdays[rule.weekday - 1]} ${rule.startSection}-${rule.endSection}节',
+    if (rule.weekMask.rawText.trim().isNotEmpty) rule.weekMask.rawText.trim(),
+    if (rule.room?.trim().isNotEmpty == true)
+      rule.room!.trim()
+    else if (rule.campus?.trim().isNotEmpty == true)
+      rule.campus!.trim(),
+  ];
+  return parts.join(' · ');
 }
 
 Future<void> _deleteException(
@@ -184,9 +227,8 @@ Future<void> _deleteException(
         .read(scheduleDataRepositoryProvider)
         .deleteException(exception.id);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('临时变更已撤销')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('临时变更已撤销')));
     }
   } catch (error) {
     if (context.mounted) {

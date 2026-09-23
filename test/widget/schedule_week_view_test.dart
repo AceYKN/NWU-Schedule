@@ -13,8 +13,9 @@ import 'package:nwu_schedule/features/schedule/presentation/widgets/schedule_wee
 import 'package:nwu_schedule/features/shared/presentation/course_color_resolver.dart';
 
 void main() {
-  testWidgets('five and seven day grids fit a narrow phone without overflow',
-      (tester) async {
+  testWidgets('five and seven day grids fit a narrow phone without overflow', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -53,8 +54,79 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('course block content follows the available block height',
-      (tester) async {
+  testWidgets('day status headers and the time rail fit larger text scales', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final model = _model(
+      entries: [
+        _entry(
+          id: 'weekday-course',
+          name: '计算机网络',
+          weekday: DateTime.monday,
+          startSection: 1,
+          endSection: 2,
+        ),
+      ],
+      today: DateTime.friday,
+      holidayDays: const {DateTime.tuesday},
+      makeupDays: const {DateTime.friday, DateTime.saturday},
+    );
+
+    for (final scale in [1.0, 1.15, 1.3]) {
+      await _pumpGrid(
+        tester,
+        model,
+        model.days,
+        showWeekend: true,
+        textScale: scale,
+      );
+      expect(find.text('休'), findsOneWidget);
+      expect(find.text('调'), findsOneWidget);
+      expect(find.text('补'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('makeup day header exposes its full calendar context', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final day = WeekDayColumn(
+      weekday: DateTime.saturday,
+      date: DateTime(2026, 9, 12),
+      label: '六',
+      kind: ScheduleDayKind.makeup,
+      calendarLabel: '周末补课',
+      templateDate: DateTime(2026, 9, 10),
+      isToday: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ScheduleDayHeader(day: day)),
+      ),
+    );
+    const label = '星期六，9月12日，周末补课，补班';
+    final annotatedHeader = find.byWidgetPredicate(
+      (widget) => widget is Semantics && widget.properties.label == label,
+      description: 'makeup day semantics annotation',
+    );
+    expect(annotatedHeader, findsOneWidget);
+    expect(tester.getSemantics(annotatedHeader).label, label);
+    expect(find.text('补'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('course block content follows the available block height', (
+    tester,
+  ) async {
     final entry = _entry(
       id: 'height-course',
       name: '机器学习',
@@ -85,8 +157,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('course block location wraps onto every available line',
-      (tester) async {
+  testWidgets('course block location wraps onto every available line', (
+    tester,
+  ) async {
     const location = '长安校区\n教学东楼A区四层创新实验中心409室';
     final entry = _entry(
       id: 'wrapping-location-course',
@@ -108,8 +181,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('only overlapping courses share the available day width',
-      (tester) async {
+  testWidgets('only overlapping courses share the available day width', (
+    tester,
+  ) async {
     final model = _model(
       entries: [
         _entry(
@@ -138,52 +212,53 @@ void main() {
 
     await _pumpGrid(tester, model, model.days.take(5).toList());
 
-    final blocks = tester.renderObjectList<RenderBox>(
-      find.byType(CourseBlock),
-    );
+    final blocks = tester.renderObjectList<RenderBox>(find.byType(CourseBlock));
     expect(blocks, hasLength(3));
     final widths = blocks.map((box) => box.size.width).toList();
     final widest = widths.reduce((left, right) => left > right ? left : right);
-    final narrowest =
-        widths.reduce((left, right) => left < right ? left : right);
+    final narrowest = widths.reduce(
+      (left, right) => left < right ? left : right,
+    );
     expect(widest, greaterThan(narrowest * 1.5));
   });
 
-  testWidgets('three overlapping courses collapse into an overflow affordance',
-      (tester) async {
-    final model = _model(
-      entries: [
-        _entry(
-          id: 'overlap-a',
-          name: '课程 A',
-          weekday: DateTime.monday,
-          startSection: 1,
-          endSection: 2,
-        ),
-        _entry(
-          id: 'overlap-b',
-          name: '课程 B',
-          weekday: DateTime.monday,
-          startSection: 1,
-          endSection: 2,
-        ),
-        _entry(
-          id: 'overlap-c',
-          name: '课程 C',
-          weekday: DateTime.monday,
-          startSection: 1,
-          endSection: 2,
-        ),
-      ],
-    );
+  testWidgets(
+    'three overlapping courses collapse into an overflow affordance',
+    (tester) async {
+      final model = _model(
+        entries: [
+          _entry(
+            id: 'overlap-a',
+            name: '课程 A',
+            weekday: DateTime.monday,
+            startSection: 1,
+            endSection: 2,
+          ),
+          _entry(
+            id: 'overlap-b',
+            name: '课程 B',
+            weekday: DateTime.monday,
+            startSection: 1,
+            endSection: 2,
+          ),
+          _entry(
+            id: 'overlap-c',
+            name: '课程 C',
+            weekday: DateTime.monday,
+            startSection: 1,
+            endSection: 2,
+          ),
+        ],
+      );
 
-    await _pumpGrid(tester, model, model.days.take(5).toList());
+      await _pumpGrid(tester, model, model.days.take(5).toList());
 
-    expect(find.byType(CourseBlock), findsOneWidget);
-    expect(find.byType(OverflowCourseBlock), findsOneWidget);
-    expect(find.text('+2'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      expect(find.byType(CourseBlock), findsOneWidget);
+      expect(find.byType(OverflowCourseBlock), findsOneWidget);
+      expect(find.text('+2'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('current period is marked only on today column', (tester) async {
     final model = _model(
@@ -221,8 +296,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('inactive course blocks remain ghost-like and concise',
-      (tester) async {
+  testWidgets('inactive course blocks remain ghost-like and concise', (
+    tester,
+  ) async {
     final entry = _entry(
       id: 'inactive-course',
       name: '数据结构（实验）',
@@ -329,13 +405,13 @@ void main() {
       ],
     );
 
-    final filtered = ScheduleWeekDisplayFilter.hideCourses(
-      model,
-      {'hidden-course'},
-    );
+    final filtered = ScheduleWeekDisplayFilter.hideCourses(model, {
+      'hidden-course',
+    });
 
-    expect(
-        filtered.entries.map((entry) => entry.course.id), ['visible-course']);
+    expect(filtered.entries.map((entry) => entry.course.id), [
+      'visible-course',
+    ]);
     expect(model.entries, hasLength(2));
   });
 
@@ -345,77 +421,112 @@ void main() {
       greaterThanOrEqualTo(8),
     );
     expect(
-      CourseColorResolver.schedulePaletteIndex('same-course'),
-      CourseColorResolver.schedulePaletteIndex('same-course'),
+      CourseColorResolver.schedulePaletteIndexForName('软件测试'),
+      CourseColorResolver.schedulePaletteIndexForName(' 软件测试\u00a0'),
     );
+    final scheme = ColorScheme.fromSeed(seedColor: Colors.indigo);
+    final first = CourseColorResolver.resolveSchedule(
+      Course(
+        id: 'first-id',
+        semesterId: 'term-one',
+        sourceType: CourseSourceType.imported,
+        name: '软件测试',
+      ),
+      scheme,
+    );
+    final second = CourseColorResolver.resolveSchedule(
+      Course(
+        id: 'second-id',
+        semesterId: 'term-two',
+        sourceType: CourseSourceType.manual,
+        name: ' 软件测试\u00a0',
+      ),
+      scheme,
+    );
+    expect(first.container, second.container);
   });
 
-  test('schedule course text stays neutral and meets contrast in both themes',
-      () {
-    final course = Course(
-      id: 'contrast-course',
-      semesterId: 'test-semester',
-      sourceType: CourseSourceType.manual,
-      name: '软件测试',
-    );
-
-    for (final brightness in Brightness.values) {
-      final scheme = ColorScheme.fromSeed(
-        seedColor: Colors.indigo,
-        brightness: brightness,
+  test(
+    'schedule course text stays neutral and meets contrast in both themes',
+    () {
+      final course = Course(
+        id: 'contrast-course',
+        semesterId: 'test-semester',
+        sourceType: CourseSourceType.manual,
+        name: '软件测试',
       );
-      for (var index = 0;
-          index < CourseColorResolver.schedulePaletteLength();
-          index++) {
-        final colors = CourseColorResolver.resolveSchedule(
-          course,
-          scheme,
-          paletteIndex: index,
+
+      for (final brightness in Brightness.values) {
+        final scheme = ColorScheme.fromSeed(
+          seedColor: Colors.indigo,
+          brightness: brightness,
         );
-        expect(
-          _contrastRatio(colors.container, colors.onContainer),
-          greaterThanOrEqualTo(4.5),
-        );
-        expect(_channelSpread(colors.onContainer), lessThanOrEqualTo(4));
+        for (var index = 0;
+            index < CourseColorResolver.schedulePaletteLength();
+            index++) {
+          final paletteName = 'contrast-course-$index';
+          final colors = CourseColorResolver.resolveSchedule(
+            Course(
+              id: course.id,
+              semesterId: course.semesterId,
+              sourceType: course.sourceType,
+              name: paletteName,
+            ),
+            scheme,
+          );
+          expect(
+            _contrastRatio(colors.container, colors.onContainer),
+            greaterThanOrEqualTo(4.5),
+          );
+          expect(_channelSpread(colors.onContainer), lessThanOrEqualTo(4));
+        }
       }
-    }
-  });
+    },
+  );
 
-  test('weekend makeup notice takes priority over the generic course count',
-      () {
-    final model = _model(
-      entries: [
-        _entry(
-          id: 'makeup-course',
-          name: '周六补课',
-          weekday: DateTime.saturday,
-          startSection: 1,
-          endSection: 2,
-        ),
-      ],
-      dayMarkers: const {DateTime.saturday: '补'},
-    );
+  test(
+    'weekend makeup notice takes priority over the generic course count',
+    () {
+      final model = _model(
+        entries: [
+          _entry(
+            id: 'makeup-course',
+            name: '周六补课',
+            weekday: DateTime.saturday,
+            startSection: 1,
+            endSection: 2,
+          ),
+        ],
+        makeupDays: const {DateTime.saturday},
+      );
 
-    expect(weekendCourseNoticeMessage(model), '本周六有补课安排');
-  });
+      expect(weekendCourseNoticeMessage(model), '本周六有补课安排');
+    },
+  );
 }
 
 Future<void> _pumpGrid(
   WidgetTester tester,
   WeekScheduleViewModel model,
-  List<WeekDayColumn> days,
-) async {
+  List<WeekDayColumn> days, {
+  bool showWeekend = false,
+  double textScale = 1,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: ThemeData(useMaterial3: true),
       home: Material(
         child: SizedBox(
           width: 360,
-          child: ScheduleWeekGrid(
-            visibleDays: days,
-            viewModel: model,
-            preferences: const ScheduleDisplayPreferences.defaults(),
-            now: DateTime(2026, 9, 7, 13),
+          child: MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+            child: ScheduleWeekGrid(
+              visibleDays: days,
+              viewModel: model,
+              preferences: const ScheduleDisplayPreferences.defaults()
+                  .copyWith(showWeekend: showWeekend),
+              now: DateTime(2026, 9, 7, 13),
+            ),
           ),
         ),
       ),
@@ -453,7 +564,8 @@ Future<void> _pumpBlock(
 WeekScheduleViewModel _model({
   required List<ScheduleGridEntry> entries,
   int? today,
-  Map<int, String> dayMarkers = const {},
+  Set<int> holidayDays = const {},
+  Set<int> makeupDays = const {},
 }) {
   final monday = DateTime(2026, 9, 7);
   final days = List.generate(7, (index) {
@@ -462,15 +574,20 @@ WeekScheduleViewModel _model({
       weekday: date.weekday,
       date: date,
       label: '一二三四五六日'[index],
-      marker: dayMarkers[date.weekday],
+      kind: holidayDays.contains(date.weekday)
+          ? ScheduleDayKind.holiday
+          : makeupDays.contains(date.weekday)
+              ? ScheduleDayKind.makeup
+              : ScheduleDayKind.normal,
+      calendarLabel: holidayDays.contains(date.weekday)
+          ? '校历假日'
+          : makeupDays.contains(date.weekday)
+              ? '校历调课'
+              : null,
       isToday: date.weekday == today,
     );
   });
-  return WeekScheduleViewModel(
-    week: 1,
-    days: days,
-    entries: entries,
-  );
+  return WeekScheduleViewModel(week: 1, days: days, entries: entries);
 }
 
 ScheduleGridEntry _entry({
@@ -534,10 +651,7 @@ double _contrastRatio(Color background, Color foreground) {
 
 int _channelSpread(Color color) {
   final value = color.toARGB32();
-  final channels = [
-    (value >> 16) & 0xff,
-    (value >> 8) & 0xff,
-    value & 0xff,
-  ]..sort();
+  final channels = [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff]
+    ..sort();
   return channels.last - channels.first;
 }

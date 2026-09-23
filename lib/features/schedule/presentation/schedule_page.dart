@@ -66,9 +66,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final load = ref.watch(scheduleLoadProvider);
     return load.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) => Center(
-        child: Text(nwuUserMessage(error, action: '读取本地课表失败')),
-      ),
+      error: (error, stackTrace) =>
+          Center(child: Text(nwuUserMessage(error, action: '读取本地课表失败'))),
       data: (value) {
         if (value is ScheduleNoSemester) {
           return _ScheduleEmptyState(
@@ -127,10 +126,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                 right: 16,
                 bottom: 16,
                 child: _ScheduleFabRow(
-                  onAdd: () => _showAddSheet(
-                    engine: engine,
-                    week: week,
-                  ),
+                  onAdd: () => _showAddSheet(engine: engine, week: week),
                 ),
               ),
             ],
@@ -223,9 +219,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     });
   }
 
-  Future<void> _hideCourseFromWeek(
-    EffectiveCourseInstance instance,
-  ) async {
+  Future<void> _hideCourseFromWeek(EffectiveCourseInstance instance) async {
     await _setCourseHidden(instance.course.id, hidden: true);
     if (!mounted) return;
 
@@ -267,31 +261,24 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     );
   }
 
-  Future<void> _setCourseHidden(
-    String courseId, {
-    required bool hidden,
-  }) async {
+  Future<void> _setCourseHidden(String courseId, {required bool hidden}) async {
     final repository = ref.read(scheduleDataRepositoryProvider);
     final key = scheduleDisplaySettingKeys['hiddenCourseIds']!;
-    final hiddenCourseIds =
-        decodeHiddenCourseIds(await repository.getSetting(key)).toSet();
+    final hiddenCourseIds = decodeHiddenCourseIds(
+      await repository.getSetting(key),
+    ).toSet();
     if (hidden) {
       hiddenCourseIds.add(courseId);
     } else {
       hiddenCourseIds.remove(courseId);
     }
-    await repository.setSetting(
-      key,
-      encodeHiddenCourseIds(hiddenCourseIds),
-    );
+    await repository.setSetting(key, encodeHiddenCourseIds(hiddenCourseIds));
     ref.invalidate(scheduleDisplayPreferencesProvider);
   }
 }
 
 class _ScheduleFabRow extends StatelessWidget {
-  const _ScheduleFabRow({
-    required this.onAdd,
-  });
+  const _ScheduleFabRow({required this.onAdd});
 
   final VoidCallback onAdd;
 
@@ -662,7 +649,9 @@ String weekendCourseNoticeMessage(WeekScheduleViewModel model) {
       .map((entry) => entry.weekday)
       .toSet();
   final makeupDays = model.days.where(
-    (day) => day.marker == '补' && activeWeekendDays.contains(day.weekday),
+    (day) =>
+        day.kind == ScheduleDayKind.makeup &&
+        activeWeekendDays.contains(day.weekday),
   );
   if (makeupDays.length == 1) {
     return '本周${makeupDays.single.label}有补课安排';
@@ -685,9 +674,10 @@ class _AddCourseSheet extends StatelessWidget {
         children: [
           Text(
             '添加课程',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           ListTile(
@@ -711,10 +701,7 @@ class _AddCourseSheet extends StatelessWidget {
 }
 
 class _ScheduleEmptyState extends StatelessWidget {
-  const _ScheduleEmptyState({
-    required this.onImport,
-    required this.onManual,
-  });
+  const _ScheduleEmptyState({required this.onImport, required this.onManual});
 
   final VoidCallback onImport;
   final VoidCallback onManual;
@@ -735,9 +722,10 @@ class _ScheduleEmptyState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               '暂无课表',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             const Text('可以从教务系统导入，或先手动添加课程。'),

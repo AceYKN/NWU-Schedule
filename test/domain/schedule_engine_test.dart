@@ -6,6 +6,7 @@ import 'package:nwu_schedule/domain/course/course.dart';
 import 'package:nwu_schedule/domain/course/course_exception.dart';
 import 'package:nwu_schedule/domain/course/meeting_rule.dart';
 import 'package:nwu_schedule/domain/schedule/schedule_engine.dart';
+import 'package:nwu_schedule/domain/schedule/week_schedule_view_model.dart';
 import 'package:nwu_schedule/domain/schedule/schedule_now_state.dart';
 
 CalendarDefinition makeCalendar({
@@ -74,14 +75,8 @@ void main() {
   test('resolves teaching week at the NWU campus timezone boundary', () {
     final engine = makeEngine();
 
-    expect(
-      engine.teachingWeekAt(DateTime.utc(2026, 9, 13, 15, 59)),
-      1,
-    );
-    expect(
-      engine.teachingWeekAt(DateTime.utc(2026, 9, 13, 16)),
-      2,
-    );
+    expect(engine.teachingWeekAt(DateTime.utc(2026, 9, 13, 15, 59)), 1);
+    expect(engine.teachingWeekAt(DateTime.utc(2026, 9, 13, 16)), 2);
   });
 
   test('matches a course by template weekday and teaching week', () {
@@ -140,8 +135,10 @@ void main() {
 
     final week = engine.getWeekViewModel(1);
 
-    expect(week.days[1].marker, '调');
-    expect(week.days[5].marker, '补');
+    expect(week.days[1].kind, ScheduleDayKind.makeup);
+    expect(week.days[1].shortMarker, '调');
+    expect(week.days[5].kind, ScheduleDayKind.makeup);
+    expect(week.days[5].shortMarker, '补');
   });
 
   test('makeup day keeps the source teaching week', () {
@@ -178,27 +175,15 @@ void main() {
       rules: [makeRule(weekMask: WeekMask.parse('双周', maxWeek: 20))],
     );
 
-    expect(
-      oddEngine.getCoursesForDate(DateTime(2026, 9, 7)),
-      hasLength(1),
-    );
-    expect(
-      evenEngine.getCoursesForDate(DateTime(2026, 9, 7)),
-      isEmpty,
-    );
-    expect(
-      evenEngine.getCoursesForDate(DateTime(2026, 9, 14)),
-      hasLength(1),
-    );
+    expect(oddEngine.getCoursesForDate(DateTime(2026, 9, 7)), hasLength(1));
+    expect(evenEngine.getCoursesForDate(DateTime(2026, 9, 7)), isEmpty);
+    expect(evenEngine.getCoursesForDate(DateTime(2026, 9, 14)), hasLength(1));
   });
 
   test('builds a week view model with active and inactive entries', () {
     final engine = makeEngine(
       rules: [
-        makeRule(
-          weekday: DateTime.sunday,
-          weekMask: WeekMask.all(20),
-        ),
+        makeRule(weekday: DateTime.sunday, weekMask: WeekMask.all(20)),
         makeRule(
           weekday: DateTime.monday,
           startSection: 1,
@@ -246,19 +231,13 @@ void main() {
       ],
     );
 
-    expect(
-      engine.getCoursesForDate(DateTime(2026, 9, 7)),
-      isEmpty,
-    );
+    expect(engine.getCoursesForDate(DateTime(2026, 9, 7)), isEmpty);
     final target = engine.getCoursesForDate(DateTime(2026, 9, 8));
     expect(target, hasLength(1));
     expect(target.single.startSection, 7);
     expect(target.single.room, '3508');
     expect(target.single.exceptionId, 'move-1');
-    expect(
-      engine.getCoursesForDate(DateTime(2026, 9, 14)),
-      hasLength(1),
-    );
+    expect(engine.getCoursesForDate(DateTime(2026, 9, 14)), hasLength(1));
   });
 
   test('CANCEL removes only one occurrence', () {
@@ -275,14 +254,8 @@ void main() {
       ],
     );
 
-    expect(
-      engine.getCoursesForDate(DateTime(2026, 9, 7)),
-      isEmpty,
-    );
-    expect(
-      engine.getCoursesForDate(DateTime(2026, 9, 14)),
-      hasLength(1),
-    );
+    expect(engine.getCoursesForDate(DateTime(2026, 9, 7)), isEmpty);
+    expect(engine.getCoursesForDate(DateTime(2026, 9, 14)), hasLength(1));
   });
 
   test('ADD remains visible on a holiday', () {
@@ -382,9 +355,7 @@ void main() {
   });
 
   test('finds the next course across a weekend', () {
-    final engine = makeEngine(
-      rules: [makeRule(weekday: DateTime.monday)],
-    );
+    final engine = makeEngine(rules: [makeRule(weekday: DateTime.monday)]);
 
     final next = engine.getNextCourse(DateTime.utc(2026, 9, 11, 12));
 

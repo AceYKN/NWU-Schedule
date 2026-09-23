@@ -21,20 +21,32 @@ class ScheduleGridEntry {
   CourseExceptionType? get exceptionType => instance.exceptionType;
 }
 
+enum ScheduleDayKind { normal, holiday, makeup }
+
 class WeekDayColumn {
   const WeekDayColumn({
     required this.weekday,
     required this.date,
     required this.label,
-    required this.marker,
+    required this.kind,
+    this.calendarLabel,
+    this.templateDate,
     required this.isToday,
   });
 
   final int weekday;
   final DateTime date;
   final String label;
-  final String? marker;
+  final ScheduleDayKind kind;
+  final String? calendarLabel;
+  final DateTime? templateDate;
   final bool isToday;
+
+  String? get shortMarker => switch (kind) {
+        ScheduleDayKind.normal => null,
+        ScheduleDayKind.holiday => '休',
+        ScheduleDayKind.makeup => weekday >= DateTime.saturday ? '补' : '调',
+      };
 }
 
 class WeekScheduleViewModel {
