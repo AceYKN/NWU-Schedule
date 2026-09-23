@@ -11,6 +11,7 @@ import '../../../domain/course/course.dart';
 import '../../../domain/course/course_exception.dart';
 import '../../../domain/course/meeting_rule.dart';
 import '../../../domain/semester/semester.dart';
+import '../../shared/presentation/app_page_header.dart';
 
 class CourseDetailPage extends ConsumerWidget {
   const CourseDetailPage({required this.courseId, super.key});
@@ -117,21 +118,11 @@ class _CourseDetail extends StatelessWidget {
         32,
       ),
       children: [
-        Row(
-          children: [
-            IconButton(
-              tooltip: '返回',
-              onPressed: () => context.pop(),
-              icon: const Icon(Icons.arrow_back),
-            ),
-            Expanded(
-              child: Text(
-                '课程详情',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-            ),
+        AppPageHeader(
+          title: '课程详情',
+          showBack: true,
+          onBack: context.pop,
+          actions: [
             if (exception == null)
               IconButton(
                 tooltip: '编辑课程',
@@ -149,6 +140,7 @@ class _CourseDetail extends StatelessWidget {
                 Text(
                   course.name,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontSize: themeTokens.cardTitleSize,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
@@ -172,6 +164,7 @@ class _CourseDetail extends StatelessWidget {
         Text(
           '上课安排',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontSize: themeTokens.sectionTitleSize,
                 fontWeight: FontWeight.w700,
               ),
         ),

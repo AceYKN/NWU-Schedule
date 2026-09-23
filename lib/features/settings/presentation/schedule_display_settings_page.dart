@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/theme/schedule_theme.dart';
 import '../../../core/nwu/periods.dart';
 import '../../../domain/settings/schedule_display_preferences.dart';
+import '../../shared/presentation/app_page_header.dart';
 
 class ScheduleDisplaySettingsPage extends ConsumerWidget {
   const ScheduleDisplaySettingsPage({super.key});
@@ -25,25 +27,12 @@ class ScheduleDisplaySettingsPage extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
       children: [
-        Row(
-          children: [
-            IconButton(
-              tooltip: '返回',
-              onPressed: () => Navigator.maybePop(context),
-              icon: const Icon(Icons.arrow_back),
-            ),
-            Text(
-              '课表显示',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ],
-        ),
+        const AppPageHeader(title: '课表显示', showBack: true),
         const SizedBox(height: 8),
         Text(
           '预览',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontSize: scheduleThemeTokensOf(context).sectionTitleSize,
                 fontWeight: FontWeight.w700,
               ),
         ),

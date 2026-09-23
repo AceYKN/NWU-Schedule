@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/theme/schedule_theme.dart';
 import '../../../domain/course/course.dart';
 import '../../../domain/course/course_exception.dart';
 import '../../../domain/errors/app_error.dart';
+import '../../shared/presentation/app_page_header.dart';
 
 class CourseManagementPage extends ConsumerWidget {
   const CourseManagementPage({super.key});
@@ -76,16 +78,13 @@ class CourseManagementPage extends ConsumerWidget {
         final courses = List<Course>.of(value.engine.courses)
           ..sort((a, b) => a.name.compareTo(b.name));
         return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 18, 16, 36),
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 36),
           children: [
-            Row(children: [
-              IconButton(
-                onPressed: () => context.go('/settings'),
-                icon: const Icon(Icons.arrow_back),
-                tooltip: '返回设置',
-              ),
-              Text('课程管理', style: Theme.of(context).textTheme.headlineSmall),
-            ]),
+            AppPageHeader(
+              title: '课程管理',
+              showBack: true,
+              onBack: () => context.go('/settings'),
+            ),
             const SizedBox(height: 8),
             Text(value.semester.label),
             const SizedBox(height: 16),
@@ -126,6 +125,7 @@ class CourseManagementPage extends ConsumerWidget {
               Text(
                 '临时变更',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontSize: scheduleThemeTokensOf(context).sectionTitleSize,
                       fontWeight: FontWeight.w700,
                     ),
               ),

@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/theme/schedule_theme.dart';
 import '../../../domain/course/course.dart';
 import '../../../domain/course/meeting_draft.dart';
 import '../../../domain/course/meeting_rule.dart';
 import '../../../domain/course/week_pattern.dart';
 import '../../../domain/errors/app_error.dart';
+import '../../shared/presentation/app_page_header.dart';
 import 'course_form_fields.dart';
 
 class ManualCoursePage extends ConsumerStatefulWidget {
@@ -274,14 +276,12 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
         return Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 96),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 96),
             children: [
-              Text(
-                widget.courseId == null ? '手动添加课程' : '编辑整门课程',
-                style: Theme.of(context).textTheme.headlineSmall,
+              AppPageHeader(
+                title: widget.courseId == null ? '手动添加课程' : '编辑整门课程',
+                subtitle: state.semester.label,
               ),
-              const SizedBox(height: 8),
-              Text(state.semester.label),
               const SizedBox(height: 24),
               const _SectionHeading(title: '课程信息'),
               const SizedBox(height: 12),
@@ -340,9 +340,11 @@ class _SectionHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = scheduleThemeTokensOf(context);
     return Text(
       title,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontSize: tokens.sectionTitleSize,
             fontWeight: FontWeight.w700,
           ),
     );

@@ -69,20 +69,14 @@ class ScheduleWeekGridStyle {
 }
 
 class ScheduleTodayCardStyle {
-  const ScheduleTodayCardStyle({
-    this.radius = 16,
-    this.padding = 20,
-  });
+  const ScheduleTodayCardStyle({this.radius = 16, this.padding = 20});
 
   final double radius;
   final double padding;
 }
 
 class ScheduleMonthStyle {
-  const ScheduleMonthStyle({
-    this.cellHeight = 78,
-    this.cellPadding = 7,
-  });
+  const ScheduleMonthStyle({this.cellHeight = 78, this.cellPadding = 7});
 
   final double cellHeight;
   final double cellPadding;
@@ -103,6 +97,17 @@ class ScheduleThemeTokens extends ThemeExtension<ScheduleThemeTokens> {
     required this.todayCardPadding,
     required this.monthCellHeight,
     required this.monthCellPadding,
+    this.radiusSmall = 6,
+    this.radiusMedium = 10,
+    this.radiusLarge = 16,
+    this.radiusModal = 24,
+    this.pageTitleSize = 22,
+    this.sectionTitleSize = 18,
+    this.cardTitleSize = 16,
+    this.bodySize = 14,
+    this.secondarySize = 12,
+    this.denseTitleSize = 12,
+    this.denseDetailSize = 10,
   });
 
   final double pagePadding;
@@ -118,6 +123,17 @@ class ScheduleThemeTokens extends ThemeExtension<ScheduleThemeTokens> {
   final double todayCardPadding;
   final double monthCellHeight;
   final double monthCellPadding;
+  final double radiusSmall;
+  final double radiusMedium;
+  final double radiusLarge;
+  final double radiusModal;
+  final double pageTitleSize;
+  final double sectionTitleSize;
+  final double cardTitleSize;
+  final double bodySize;
+  final double secondarySize;
+  final double denseTitleSize;
+  final double denseDetailSize;
 
   @override
   ScheduleThemeTokens copyWith({
@@ -134,6 +150,17 @@ class ScheduleThemeTokens extends ThemeExtension<ScheduleThemeTokens> {
     double? todayCardPadding,
     double? monthCellHeight,
     double? monthCellPadding,
+    double? radiusSmall,
+    double? radiusMedium,
+    double? radiusLarge,
+    double? radiusModal,
+    double? pageTitleSize,
+    double? sectionTitleSize,
+    double? cardTitleSize,
+    double? bodySize,
+    double? secondarySize,
+    double? denseTitleSize,
+    double? denseDetailSize,
   }) {
     return ScheduleThemeTokens(
       pagePadding: pagePadding ?? this.pagePadding,
@@ -149,40 +176,88 @@ class ScheduleThemeTokens extends ThemeExtension<ScheduleThemeTokens> {
       todayCardPadding: todayCardPadding ?? this.todayCardPadding,
       monthCellHeight: monthCellHeight ?? this.monthCellHeight,
       monthCellPadding: monthCellPadding ?? this.monthCellPadding,
+      radiusSmall: radiusSmall ?? this.radiusSmall,
+      radiusMedium: radiusMedium ?? this.radiusMedium,
+      radiusLarge: radiusLarge ?? this.radiusLarge,
+      radiusModal: radiusModal ?? this.radiusModal,
+      pageTitleSize: pageTitleSize ?? this.pageTitleSize,
+      sectionTitleSize: sectionTitleSize ?? this.sectionTitleSize,
+      cardTitleSize: cardTitleSize ?? this.cardTitleSize,
+      bodySize: bodySize ?? this.bodySize,
+      secondarySize: secondarySize ?? this.secondarySize,
+      denseTitleSize: denseTitleSize ?? this.denseTitleSize,
+      denseDetailSize: denseDetailSize ?? this.denseDetailSize,
     );
   }
 
   @override
-  ScheduleThemeTokens lerp(
-    covariant ScheduleThemeTokens? other,
-    double t,
-  ) {
+  ScheduleThemeTokens lerp(covariant ScheduleThemeTokens? other, double t) {
     if (other == null) return this;
     return ScheduleThemeTokens(
       pagePadding: ui.lerpDouble(pagePadding, other.pagePadding, t)!,
       cardPadding: ui.lerpDouble(cardPadding, other.cardPadding, t)!,
       sectionGap: ui.lerpDouble(sectionGap, other.sectionGap, t)!,
       gridGap: ui.lerpDouble(gridGap, other.gridGap, t)!,
-      courseAccentWidth:
-          ui.lerpDouble(courseAccentWidth, other.courseAccentWidth, t)!,
+      courseAccentWidth: ui.lerpDouble(
+        courseAccentWidth,
+        other.courseAccentWidth,
+        t,
+      )!,
       compactCoursePadding: ui.lerpDouble(
         compactCoursePadding,
         other.compactCoursePadding,
         t,
       )!,
       gridCellHeight: ui.lerpDouble(gridCellHeight, other.gridCellHeight, t)!,
-      gridColumnWidth:
-          ui.lerpDouble(gridColumnWidth, other.gridColumnWidth, t)!,
-      gridBorderWidth:
-          ui.lerpDouble(gridBorderWidth, other.gridBorderWidth, t)!,
-      todayCardRadius:
-          ui.lerpDouble(todayCardRadius, other.todayCardRadius, t)!,
-      todayCardPadding:
-          ui.lerpDouble(todayCardPadding, other.todayCardPadding, t)!,
-      monthCellHeight:
-          ui.lerpDouble(monthCellHeight, other.monthCellHeight, t)!,
-      monthCellPadding:
-          ui.lerpDouble(monthCellPadding, other.monthCellPadding, t)!,
+      gridColumnWidth: ui.lerpDouble(
+        gridColumnWidth,
+        other.gridColumnWidth,
+        t,
+      )!,
+      gridBorderWidth: ui.lerpDouble(
+        gridBorderWidth,
+        other.gridBorderWidth,
+        t,
+      )!,
+      todayCardRadius: ui.lerpDouble(
+        todayCardRadius,
+        other.todayCardRadius,
+        t,
+      )!,
+      todayCardPadding: ui.lerpDouble(
+        todayCardPadding,
+        other.todayCardPadding,
+        t,
+      )!,
+      monthCellHeight: ui.lerpDouble(
+        monthCellHeight,
+        other.monthCellHeight,
+        t,
+      )!,
+      monthCellPadding: ui.lerpDouble(
+        monthCellPadding,
+        other.monthCellPadding,
+        t,
+      )!,
+      radiusSmall: ui.lerpDouble(radiusSmall, other.radiusSmall, t)!,
+      radiusMedium: ui.lerpDouble(radiusMedium, other.radiusMedium, t)!,
+      radiusLarge: ui.lerpDouble(radiusLarge, other.radiusLarge, t)!,
+      radiusModal: ui.lerpDouble(radiusModal, other.radiusModal, t)!,
+      pageTitleSize: ui.lerpDouble(pageTitleSize, other.pageTitleSize, t)!,
+      sectionTitleSize: ui.lerpDouble(
+        sectionTitleSize,
+        other.sectionTitleSize,
+        t,
+      )!,
+      cardTitleSize: ui.lerpDouble(cardTitleSize, other.cardTitleSize, t)!,
+      bodySize: ui.lerpDouble(bodySize, other.bodySize, t)!,
+      secondarySize: ui.lerpDouble(secondarySize, other.secondarySize, t)!,
+      denseTitleSize: ui.lerpDouble(denseTitleSize, other.denseTitleSize, t)!,
+      denseDetailSize: ui.lerpDouble(
+        denseDetailSize,
+        other.denseDetailSize,
+        t,
+      )!,
     );
   }
 }
@@ -287,8 +362,9 @@ class ScheduleThemeDefinition {
     );
     return themed.copyWith(
       bodyLarge: themed.bodyLarge?.copyWith(fontWeight: typography.bodyWeight),
-      bodyMedium:
-          themed.bodyMedium?.copyWith(fontWeight: typography.bodyWeight),
+      bodyMedium: themed.bodyMedium?.copyWith(
+        fontWeight: typography.bodyWeight,
+      ),
       bodySmall: themed.bodySmall?.copyWith(fontWeight: typography.bodyWeight),
       headlineSmall: themed.headlineSmall?.copyWith(
         fontWeight: typography.titleWeight,

@@ -31,6 +31,41 @@ void main() {
       expect(lightTokens.cardPadding, theme.spacing.card);
       expect(lightTokens.sectionGap, theme.spacing.section);
       expect(lightTokens.gridGap, theme.spacing.gridGap);
+      expect(lightTokens.radiusSmall, 6);
+      expect(lightTokens.radiusMedium, 10);
+      expect(lightTokens.radiusLarge, 16);
+      expect(lightTokens.radiusModal, 24);
+      expect(lightTokens.pageTitleSize, 22);
+      expect(lightTokens.sectionTitleSize, 18);
+      expect(lightTokens.cardTitleSize, 16);
+      expect(lightTokens.bodySize, 14);
+      expect(lightTokens.secondarySize, 12);
+      expect(lightTokens.denseTitleSize, 12);
+      expect(lightTokens.denseDetailSize, 10);
     }
+  });
+
+  test('new visual tokens copy and interpolate with the theme extension', () {
+    const tokens = ScheduleThemeTokens(
+      pagePadding: 20,
+      cardPadding: 16,
+      sectionGap: 20,
+      gridGap: 8,
+      courseAccentWidth: 5,
+      compactCoursePadding: 12,
+      gridCellHeight: 70,
+      gridColumnWidth: 118,
+      gridBorderWidth: .6,
+      todayCardRadius: 16,
+      todayCardPadding: 20,
+      monthCellHeight: 78,
+      monthCellPadding: 7,
+    );
+    final customized = tokens.copyWith(radiusSmall: 8, pageTitleSize: 26);
+
+    expect(customized.radiusSmall, 8);
+    expect(customized.pageTitleSize, 26);
+    expect(tokens.lerp(customized, .5).radiusSmall, 7);
+    expect(tokens.lerp(customized, .5).pageTitleSize, 24);
   });
 }

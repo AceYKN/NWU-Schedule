@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/theme/schedule_theme.dart';
 import '../../../../domain/course/course_exception.dart';
 import '../../../../domain/schedule/week_schedule_view_model.dart';
 import '../../../../domain/settings/schedule_display_preferences.dart';
+import 'course_block_density.dart';
 import '../../../shared/presentation/course_card.dart';
 import '../../../shared/presentation/course_color_resolver.dart';
 import 'course_display_formatter.dart';
@@ -78,8 +80,16 @@ class CourseEventCard extends StatelessWidget {
     );
     final ghost = !entry.active;
     final status = _statusLabel(entry.exceptionType);
+    final tokens = scheduleThemeTokensOf(context);
+    final density = resolveCourseBlockDensity(
+      width: width,
+      height: height,
+      visibleDayCount: visibleDayCount,
+    );
     final title = CourseDisplayFormatter.title(entry.course.name);
-    final location = CourseDisplayFormatter.location(entry);
+    final location = density == CourseBlockDensity.roomy
+        ? CourseDisplayFormatter.location(entry)
+        : CourseDisplayFormatter.compactLocation(entry);
     final background = ghost
         ? Color.lerp(scheme.surface, colors.container, .38)!
         : colors.container;
@@ -95,7 +105,14 @@ class CourseEventCard extends StatelessWidget {
             ? BorderSide(color: scheme.primary, width: 2)
             : BorderSide.none;
     final label = CourseDisplayFormatter.semanticsLabel(entry);
-    final compactHeight = height < 70;
+    final showDetails = height >= 46;
+    final showTeacher = density != CourseBlockDensity.dense &&
+        height >= 60 &&
+        preferences.showTeacher &&
+        entry.teacher != null &&
+        entry.teacher!.trim().isNotEmpty;
+    final titleMaxLines = height < 36 ? 1 : (height >= 100 ? 3 : 2);
+    final compact = density != CourseBlockDensity.roomy;
 
     return Semantics(
       button: true,
@@ -106,7 +123,7 @@ class CourseEventCard extends StatelessWidget {
         color: background,
         elevation: isCurrent && !ghost ? 1 : 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(tokens.radiusMedium),
           side: border,
         ),
         clipBehavior: Clip.antiAlias,
@@ -114,8 +131,8 @@ class CourseEventCard extends StatelessWidget {
           onTap: () => _handleTap(context),
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: visibleDayCount >= 7 || width < 68 ? 4 : 6,
-              vertical: visibleDayCount >= 7 || width < 68 ? 3 : 4,
+              horizontal: compact ? 4 : 6,
+              vertical: height < 36 ? 1 : (compact ? 3 : 4),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -129,8 +146,8 @@ class CourseEventCard extends StatelessWidget {
                         title,
                         foreground,
                         title: true,
-                        maxLines: height >= 100 ? 3 : 2,
-                        compactHeight: compactHeight,
+                        maxLines: titleMaxLines,
+                        fontSize: tokens.denseTitleSize,
                       ),
                     ),
                     if (status != null) ...[
@@ -142,24 +159,25 @@ class CourseEventCard extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (location != null) ...[
-                  if (!compactHeight) const SizedBox(height: 2),
+                if (showDetails && location != null) ...[
+                  const SizedBox(height: 1),
                   _wrappedLine(
                     location,
                     secondaryForeground,
-                    maxLines: compactHeight ? 2 : null,
-                    compactHeight: compactHeight,
+                    maxLines: compact ? 1 : null,
+                    fontSize: tokens.denseDetailSize,
                   ),
                 ],
-                if (preferences.showTeacher &&
-                    entry.teacher != null &&
-                    entry.teacher!.trim().isNotEmpty) ...[
-                  if (!compactHeight) const SizedBox(height: 1),
+                if (showDetails && showTeacher) ...[
+                  const SizedBox(height: 1),
                   _wrappedLine(
                     entry.teacher!.trim(),
                     secondaryForeground,
-                    maxLines: height >= 100 ? 2 : 1,
-                    compactHeight: compactHeight,
+                    maxLines:
+                        density == CourseBlockDensity.roomy && height >= 100
+                            ? 2
+                            : 1,
+                    fontSize: tokens.denseDetailSize,
                   ),
                 ],
               ],
@@ -175,17 +193,17 @@ class CourseEventCard extends StatelessWidget {
     Color color, {
     bool title = false,
     required int? maxLines,
-    required bool compactHeight,
+    required double fontSize,
   }) {
     return Text(
       value,
       maxLines: maxLines,
       softWrap: true,
-      overflow: TextOverflow.clip,
+      overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: color,
-        fontSize: title ? 12 : 10,
-        height: compactHeight ? 1.08 : (title ? 1.2 : 1.3),
+        fontSize: fontSize,
+        height: title ? 1.16 : 1.2,
         fontWeight: title ? FontWeight.w700 : FontWeight.w500,
       ),
     );
@@ -203,8 +221,10 @@ class CourseEventCard extends StatelessWidget {
     return switch (type) {
       CourseExceptionType.add => const _CourseStatus('加', _StatusKind.add),
       CourseExceptionType.move => const _CourseStatus('调', _StatusKind.move),
-      CourseExceptionType.cancel =>
-        const _CourseStatus('停', _StatusKind.cancel),
+      CourseExceptionType.cancel => const _CourseStatus(
+          '停',
+          _StatusKind.cancel,
+        ),
       null => null,
     };
   }
@@ -233,7 +253,9 @@ class OverflowCourseBlock extends StatelessWidget {
       child: Material(
         color: scheme.secondaryContainer,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(
+            scheduleThemeTokensOf(context).radiusMedium,
+          ),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -264,9 +286,10 @@ class OverflowCourseBlock extends StatelessWidget {
           children: [
             Text(
               '同一时段的其他课程',
-              style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(sheetContext)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             for (final entry in entries)
@@ -327,7 +350,9 @@ class _StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: .16),
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: BorderRadius.circular(
+          scheduleThemeTokensOf(context).radiusSmall,
+        ),
       ),
       child: Text(
         label,

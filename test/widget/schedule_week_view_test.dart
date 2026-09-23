@@ -68,12 +68,14 @@ void main() {
 
     await _pumpBlock(tester, entry, height: 40);
     expect(find.text('机器学习'), findsOneWidget);
-    expect(find.text('长安校区\n3406'), findsOneWidget);
-    expect(find.text('教师甲'), findsOneWidget);
+    expect(find.text('长安校区\n3406'), findsNothing);
+    expect(find.text('3406'), findsNothing);
+    expect(find.text('教师甲'), findsNothing);
 
     await _pumpBlock(tester, entry, height: 64);
     expect(find.text('机器学习'), findsOneWidget);
-    expect(find.text('长安校区\n3406'), findsOneWidget);
+    expect(find.text('3406'), findsOneWidget);
+    expect(find.text('长安校区'), findsNothing);
     expect(find.text('教师甲'), findsOneWidget);
 
     await _pumpBlock(tester, entry, height: 128);
