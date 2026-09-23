@@ -44,6 +44,9 @@ class NwuDomExtractor {
 
   const normalize = (value) => String(value == null ? '' : value)
     .replace(/\s+/g, ' ').trim();
+  const courseNameKey = (value) => normalize(
+    String(value == null ? '' : value).replace(/\u00a0/g, ' '),
+  ).toLowerCase();
   const cleanLabeledValue = (value, pattern) => {
     let result = normalize(value);
     while (result && pattern.test(result)) {
@@ -662,37 +665,54 @@ class NwuDomExtractor {
 
   const buildPayload = () => {
     const totalWeeks = maxWeek > 0 ? maxWeek : 20;
-    const fingerprints = new Map();
-    const normalizedCourses = courses.map((course) => {
-      const shapes = course.meetings.map((meeting) => [
-        meeting.weekday,
-        meeting.startSection,
-        meeting.endSection,
-        normalize(meeting.weekText),
-      ].join('|')).sort();
-      const fingerprint = 'nwu-v3|course|' + hashIdentity([
-        academicYear,
-        term,
-        normalize(course.name),
-        normalize(course.identityHint || ''),
-        ...shapes,
-      ].join('|'));
-      const ordinal = fingerprints.get(fingerprint) || 0;
-      fingerprints.set(fingerprint, ordinal + 1);
-      const sourceCourseKey = ordinal === 0
-        ? fingerprint
-        : fingerprint + '|duplicate-' + ordinal;
+    const groupedCourses = new Map();
+    for (const course of courses) {
+      const nameKey = courseNameKey(course.name);
+      let group = groupedCourses.get(nameKey);
+      if (!group) {
+        group = { name: normalize(course.name), meetings: new Map() };
+        groupedCourses.set(nameKey, group);
+      }
+      for (const meeting of course.meetings) {
+        const meetingShape = [
+          meeting.weekday,
+          meeting.startSection,
+          meeting.endSection,
+          normalize(meeting.weekText),
+        ].join('|');
+        const existing = group.meetings.get(meetingShape);
+        if (!existing) {
+          group.meetings.set(meetingShape, meeting);
+        } else {
+          if (!existing.teacher && meeting.teacher) existing.teacher = meeting.teacher;
+          if (!existing.campus && meeting.campus) existing.campus = meeting.campus;
+          if (!existing.room && meeting.room) existing.room = meeting.room;
+        }
+      }
+    }
+    const remoteTermKey = academicYear + '-' + term;
+    const normalizedCourses = Array.from(groupedCourses.entries()).map(
+      ([nameKey, group]) => {
+      const sourceCourseKey = 'nwu-v4|course|' + hashIdentity(
+        remoteTermKey + '|' + nameKey,
+      );
       return {
         sourceCourseKey: sourceCourseKey,
-        name: course.name,
-        meetings: course.meetings.map((meeting) => ({
-          ...meeting,
+        name: group.name,
+        meetings: Array.from(group.meetings.entries()).map(([shape, meeting]) => ({
           sourceMeetingKey: sourceCourseKey + '|meeting|' + [
             meeting.weekday,
             meeting.startSection,
             meeting.endSection,
             normalize(meeting.weekText),
           ].join('|'),
+          weekday: meeting.weekday,
+          startSection: meeting.startSection,
+          endSection: meeting.endSection,
+          teacher: meeting.teacher,
+          campus: meeting.campus,
+          room: meeting.room,
+          weekText: meeting.weekText,
         })),
       };
     });
@@ -708,7 +728,7 @@ class NwuDomExtractor {
       : issues;
     return {
       semester: {
-        remoteTermKey: academicYear + '-' + term,
+        remoteTermKey: remoteTermKey,
         academicYear: academicYear,
         term: term,
         label: academicYear + ' 第' + term + '学期',

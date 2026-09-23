@@ -95,17 +95,16 @@ void main() {
     expect(result?.id, 'local-meeting');
   });
 
-  test('prefers an exact source meeting key over a competing structural match',
-      () {
-    final remote = importedMeeting(key: 'target-key');
-    final exact = localMeeting(id: 'exact', sourceKey: 'target-key');
-    final competing = localMeeting(id: 'competing', sourceKey: 'other-key');
+  test(
+    'prefers an exact source meeting key over a competing structural match',
+    () {
+      final remote = importedMeeting(key: 'target-key');
+      final exact = localMeeting(id: 'exact', sourceKey: 'target-key');
+      final competing = localMeeting(id: 'competing', sourceKey: 'other-key');
 
-    expect(
-      matcher.matchMeeting(remote, [competing, exact])?.id,
-      'exact',
-    );
-  });
+      expect(matcher.matchMeeting(remote, [competing, exact])?.id, 'exact');
+    },
+  );
 
   test('rejects duplicate exact source meeting keys as ambiguous', () {
     final remote = importedMeeting(key: 'duplicate-key');
@@ -165,38 +164,41 @@ void main() {
     );
   });
 
-  test('does not merge a same-name course with no structural overlap', () {
-    final remote = ImportedCourse(
-      sourceCourseKey: 'new-key',
-      name: '软件测试',
-      meetings: [
-        importedMeeting(
-          weekday: 5,
-          startSection: 9,
-          endSection: 10,
-          weeks: WeekMask.fromWeeks([9, 11, 13, 15]),
-        ),
-      ],
-    );
-    final local = Course(
-      id: 'local-course',
-      semesterId: 'semester',
-      sourceType: CourseSourceType.imported,
-      sourceCourseKey: 'old-key',
-      name: '软件测试',
-    );
+  test(
+    'matches the unique same-name course even after all meetings change',
+    () {
+      final remote = ImportedCourse(
+        sourceCourseKey: 'new-key',
+        name: '软件测试',
+        meetings: [
+          importedMeeting(
+            weekday: 5,
+            startSection: 9,
+            endSection: 10,
+            weeks: WeekMask.fromWeeks([9, 11, 13, 15]),
+          ),
+        ],
+      );
+      final local = Course(
+        id: 'local-course',
+        semesterId: 'semester',
+        sourceType: CourseSourceType.imported,
+        sourceCourseKey: 'old-key',
+        name: '软件测试',
+      );
 
-    expect(
-      matcher.matchLocalCourse(
-        remote,
-        [local],
-        {
-          local.id: [localMeeting()],
-        },
-      ),
-      isNull,
-    );
-  });
+      expect(
+        matcher.matchLocalCourse(
+          remote,
+          [local],
+          {
+            local.id: [localMeeting()],
+          },
+        ),
+        same(local),
+      );
+    },
+  );
 
   test('uses a one-to-one best assignment for multi-meeting courses', () {
     final remote = [

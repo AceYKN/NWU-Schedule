@@ -6,8 +6,10 @@ import 'package:drift/drift.dart';
 import '../../core/utils/week_mask.dart';
 import '../../domain/backup/schedule_backup.dart';
 import '../../domain/course/course.dart' as domain;
+import '../../domain/course/course_canonicalizer.dart';
 import '../../domain/course/course_field_normalizer.dart';
 import '../../domain/course/course_exception.dart' as domain;
+import '../../domain/course/course_identity.dart';
 import '../../domain/course/meeting_rule.dart' as domain;
 import '../../domain/import/import_diff.dart';
 import '../../domain/import/import_identity.dart';
@@ -21,6 +23,52 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   const DriftScheduleDataRepository(this.database);
 
   final db.AppDatabase database;
+
+  domain.Course _courseFromRow(db.Course row) => domain.Course(
+        id: row.id,
+        semesterId: row.semesterId,
+        sourceType: domain.CourseSourceType.values.byName(row.sourceType),
+        sourceCourseKey: row.sourceCourseKey,
+        name: row.name,
+        note: row.note,
+        colorOverride: row.colorOverride,
+        hidden: row.hidden,
+        deleted: row.deleted,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      );
+
+  domain.MeetingRule _meetingRuleFromRow(db.StoredMeetingRule row) =>
+      domain.MeetingRule(
+        id: row.id,
+        courseId: row.courseId,
+        sourceMeetingKey: row.sourceMeetingKey,
+        weekday: row.weekday,
+        startSection: row.startSection,
+        endSection: row.endSection,
+        teacher: normalizeTeacherField(row.teacher),
+        campus: normalizeCampusField(row.campus),
+        room: normalizeRoomField(row.room),
+        weekMask: WeekMask(row.weekMask, rawText: row.rawWeekText),
+      );
+
+  domain.CourseException _exceptionFromRow(db.CourseException row) =>
+      domain.CourseException(
+        id: row.id,
+        semesterId: row.semesterId,
+        courseId: row.courseId,
+        sourceMeetingId: row.sourceMeetingId,
+        sourceDate: row.sourceDate,
+        type: domain.CourseExceptionType.values.byName(row.type),
+        targetDate: row.targetDate,
+        targetStartSection: row.targetStartSection,
+        targetEndSection: row.targetEndSection,
+        teacherOverride: normalizeTeacherField(row.teacherOverride),
+        campusOverride: normalizeCampusField(row.campusOverride),
+        roomOverride: normalizeRoomField(row.roomOverride),
+        addedCourseName: row.addedCourseName,
+        note: row.note,
+      );
 
   @override
   Stream<void> watchChanges() => database
@@ -60,17 +108,20 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   Future<ScheduleDataSnapshot> loadSemester(String semesterId) async {
     final semesters = await loadSemesters();
     final semester = semesters.singleWhere((item) => item.id == semesterId);
-    final courseRows = await (database.select(database.courses)
-          ..where((table) => table.semesterId.equals(semesterId)))
+    final courseRows = await (database.select(
+      database.courses,
+    )..where((table) => table.semesterId.equals(semesterId)))
         .get();
     final courseIds = courseRows.map((row) => row.id).toList();
     final ruleRows = courseIds.isEmpty
-        ? <db.MeetingRule>[]
-        : await (database.select(database.meetingRules)
-              ..where((table) => table.courseId.isIn(courseIds)))
+        ? <db.StoredMeetingRule>[]
+        : await (database.select(
+            database.meetingRules,
+          )..where((table) => table.courseId.isIn(courseIds)))
             .get();
-    final exceptionRows = await (database.select(database.courseExceptions)
-          ..where((table) => table.semesterId.equals(semesterId)))
+    final exceptionRows = await (database.select(
+      database.courseExceptions,
+    )..where((table) => table.semesterId.equals(semesterId)))
         .get();
     await _cleanLegacyCourseFields(ruleRows, exceptionRows);
     return ScheduleDataSnapshot(
@@ -142,15 +193,18 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   @override
   Future<DateTime?> getPreferredSemesterSelectedAt() async {
     final row = await (database.select(database.appSettings)
-          ..where((table) => table.key.equals('preferredSemesterSelectedAt')))
+          ..where(
+            (table) => table.key.equals('preferredSemesterSelectedAt'),
+          ))
         .getSingleOrNull();
     return row == null ? null : DateTime.tryParse(row.value);
   }
 
   @override
   Future<String?> getSetting(String key) async {
-    final row = await (database.select(database.appSettings)
-          ..where((table) => table.key.equals(key)))
+    final row = await (database.select(
+      database.appSettings,
+    )..where((table) => table.key.equals(key)))
         .getSingleOrNull();
     return row?.value;
   }
@@ -159,8 +213,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   Future<void> setSetting(String key, String? value) async {
     if (key.trim().isEmpty) throw ArgumentError.value(key, 'key');
     if (value == null) {
-      await (database.delete(database.appSettings)
-            ..where((table) => table.key.equals(key)))
+      await (database.delete(
+        database.appSettings,
+      )..where((table) => table.key.equals(key)))
           .go();
       return;
     }
@@ -174,10 +229,12 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     await database.transaction(() async {
       if (semesterId == null) {
         await (database.delete(database.appSettings)
-              ..where((table) => table.key.isIn([
-                    'preferredSemesterId',
-                    'preferredSemesterSelectedAt',
-                  ])))
+              ..where(
+                (table) => table.key.isIn([
+                  'preferredSemesterId',
+                  'preferredSemesterSelectedAt',
+                ]),
+              ))
             .go();
         return;
       }
@@ -218,22 +275,26 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
       throw ArgumentError.value(semesterId, 'semesterId');
     }
     await database.transaction(() async {
-      final semester = await (database.select(database.semesters)
-            ..where((table) => table.id.equals(semesterId)))
+      final semester = await (database.select(
+        database.semesters,
+      )..where((table) => table.id.equals(semesterId)))
           .getSingleOrNull();
       if (semester == null) {
         throw StateError('Semester not found: $semesterId');
       }
-      await (database.delete(database.semesters)
-            ..where((table) => table.id.equals(semesterId)))
+      await (database.delete(
+        database.semesters,
+      )..where((table) => table.id.equals(semesterId)))
           .go();
       final preferred = await getPreferredSemesterId();
       if (preferred == semesterId) {
         await (database.delete(database.appSettings)
-              ..where((table) => table.key.isIn([
-                    'preferredSemesterId',
-                    'preferredSemesterSelectedAt',
-                  ])))
+              ..where(
+                (table) => table.key.isIn([
+                  'preferredSemesterId',
+                  'preferredSemesterSelectedAt',
+                ]),
+              ))
             .go();
       }
     });
@@ -250,51 +311,141 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     }
     final exceptionIds = removeExceptionIds.toSet();
     await database.transaction(() async {
-      await database.into(database.courses).insertOnConflictUpdate(
-            db.CoursesCompanion.insert(
-              id: course.id,
-              semesterId: course.semesterId,
-              sourceType: course.sourceType.name,
-              sourceCourseKey: Value(course.sourceCourseKey),
-              name: course.name,
-              // These columns remain only for on-device compatibility with
-              // older releases. The active product model no longer accepts
-              // or exports them, so every write must clear stale values.
-              code: const Value(null),
-              teachingClass: const Value(null),
-              credits: const Value(null),
-              assessment: const Value(null),
-              note: Value(course.note),
-              colorOverride: Value(course.colorOverride),
-              hidden: Value(course.hidden),
-              deleted: Value(course.deleted),
-              createdAt: course.createdAt,
-              updatedAt: course.updatedAt,
-            ),
-          );
-      await (database.delete(database.meetingRules)
-            ..where((table) => table.courseId.equals(course.id)))
-          .go();
-      for (final rule in rules) {
-        await database.into(database.meetingRules).insert(
-              db.MeetingRulesCompanion.insert(
-                id: rule.id,
-                courseId: rule.courseId,
-                sourceMeetingKey: Value(rule.sourceMeetingKey),
-                weekday: rule.weekday,
-                startSection: rule.startSection,
-                endSection: rule.endSection,
-                teacher: Value(normalizeTeacherField(rule.teacher)),
-                campus: Value(normalizeCampusField(rule.campus)),
-                room: Value(normalizeRoomField(rule.room)),
-                weekMask: rule.weekMask.value,
-                rawWeekText: rule.weekMask.rawText,
-              ),
-            );
+      final nameKey = CourseIdentity.nameKey(course.name);
+      final conflictingCourse = await (database.select(database.courses)
+            ..where(
+              (table) => Expression.and([
+                table.semesterId.equals(course.semesterId),
+                table.nameKey.equals(nameKey),
+              ]),
+            )
+            ..limit(1))
+          .getSingleOrNull();
+      if (conflictingCourse != null && conflictingCourse.id != course.id) {
+        throw StateError('同一学期已存在同名课程，请确认后合并');
+      }
+      final exceptionRows = await (database.select(
+        database.courseExceptions,
+      )..where((table) => table.courseId.equals(course.id)))
+          .get();
+      final canonicalized = CourseCanonicalizer.canonicalize(
+        courses: [course],
+        meetingRules: rules,
+        exceptions: [
+          for (final row in exceptionRows)
+            if (!exceptionIds.contains(row.id)) _exceptionFromRow(row),
+        ],
+      );
+      await _upsertCourse(
+        canonicalized.courses.single,
+        canonicalized.meetingRules,
+      );
+      for (final exception in canonicalized.exceptions) {
+        await (database.update(
+          database.courseExceptions,
+        )..where((table) => table.id.equals(exception.id)))
+            .write(
+          db.CourseExceptionsCompanion(
+            courseId: Value(exception.courseId),
+            sourceMeetingId: Value(exception.sourceMeetingId),
+          ),
+        );
       }
       if (exceptionIds.isNotEmpty) {
-        await (database.delete(database.courseExceptions)
-              ..where((table) => table.id.isIn(exceptionIds)))
+        await (database.delete(
+          database.courseExceptions,
+        )..where((table) => table.id.isIn(exceptionIds)))
+            .go();
+      }
+    });
+  }
+
+  @override
+  Future<void> mergeCourseInto({
+    required domain.Course editedCourse,
+    required String targetCourseId,
+    required List<domain.MeetingRule> editedRules,
+    Iterable<String> removeExceptionIds = const [],
+  }) async {
+    if (editedRules.any((rule) => rule.courseId != editedCourse.id)) {
+      throw ArgumentError('MeetingRule courseId does not match edited Course');
+    }
+    if (editedCourse.id == targetCourseId) {
+      throw ArgumentError('A course cannot be merged into itself');
+    }
+    final exceptionIds = removeExceptionIds.toSet();
+    await database.transaction(() async {
+      final sourceRow = await (database.select(
+        database.courses,
+      )..where((table) => table.id.equals(editedCourse.id)))
+          .getSingleOrNull();
+      final targetRow = await (database.select(
+        database.courses,
+      )..where((table) => table.id.equals(targetCourseId)))
+          .getSingleOrNull();
+      if (sourceRow == null || targetRow == null) {
+        throw StateError('课程已不存在，无法合并');
+      }
+      final target = _courseFromRow(targetRow);
+      if (sourceRow.semesterId != target.semesterId ||
+          editedCourse.semesterId != target.semesterId ||
+          !CourseIdentity.sameName(editedCourse.name, target.name)) {
+        throw StateError('只能合并同一学期内的同名课程');
+      }
+      final courseIds = [editedCourse.id, targetCourseId];
+      final ruleRows = await (database.select(
+        database.meetingRules,
+      )..where((table) => table.courseId.isIn(courseIds)))
+          .get();
+      final targetRules = ruleRows
+          .where((row) => row.courseId == targetCourseId)
+          .map(_meetingRuleFromRow);
+      final exceptionRows = await (database.select(
+        database.courseExceptions,
+      )..where((table) => table.courseId.isIn(courseIds)))
+          .get();
+      final canonicalized = CourseCanonicalizer.canonicalize(
+        courses: [editedCourse, target],
+        meetingRules: [...editedRules, ...targetRules],
+        exceptions: [
+          for (final row in exceptionRows)
+            if (!exceptionIds.contains(row.id)) _exceptionFromRow(row),
+        ],
+      );
+      final canonicalCourse = canonicalized.courses.single;
+
+      await (database.delete(
+        database.meetingRules,
+      )..where((table) => table.courseId.isIn(courseIds)))
+          .go();
+      for (final exception in canonicalized.exceptions) {
+        await (database.update(
+          database.courseExceptions,
+        )..where((table) => table.id.equals(exception.id)))
+            .write(
+          db.CourseExceptionsCompanion(
+            courseId: Value(exception.courseId),
+            sourceMeetingId: Value(exception.sourceMeetingId),
+          ),
+        );
+      }
+      if (canonicalCourse.id != editedCourse.id) {
+        await (database.delete(
+          database.courses,
+        )..where((table) => table.id.equals(editedCourse.id)))
+            .go();
+      }
+      if (canonicalCourse.id != targetCourseId) {
+        await (database.delete(
+          database.courses,
+        )..where((table) => table.id.equals(targetCourseId)))
+            .go();
+      }
+      await _upsertCourse(canonicalCourse, canonicalized.meetingRules);
+      if (exceptionIds.isNotEmpty) {
+        await (database.delete(
+          database.courseExceptions,
+        )..where((table) => table.id.isIn(exceptionIds)))
             .go();
       }
     });
@@ -313,10 +464,12 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             targetDate: Value(exception.targetDate),
             targetStartSection: Value(exception.targetStartSection),
             targetEndSection: Value(exception.targetEndSection),
-            teacherOverride:
-                Value(normalizeTeacherField(exception.teacherOverride)),
-            campusOverride:
-                Value(normalizeCampusField(exception.campusOverride)),
+            teacherOverride: Value(
+              normalizeTeacherField(exception.teacherOverride),
+            ),
+            campusOverride: Value(
+              normalizeCampusField(exception.campusOverride),
+            ),
             roomOverride: Value(normalizeRoomField(exception.roomOverride)),
             addedCourseName: Value(exception.addedCourseName),
             note: Value(exception.note),
@@ -327,13 +480,14 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
 
   @override
   Future<void> deleteException(String exceptionId) async {
-    await (database.delete(database.courseExceptions)
-          ..where((table) => table.id.equals(exceptionId)))
+    await (database.delete(
+      database.courseExceptions,
+    )..where((table) => table.id.equals(exceptionId)))
         .go();
   }
 
   Future<void> _cleanLegacyCourseFields(
-    List<db.MeetingRule> rules,
+    List<db.StoredMeetingRule> rules,
     List<db.CourseException> exceptions,
   ) async {
     final dirtyRules = rules.where((row) {
@@ -351,8 +505,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
 
     await database.transaction(() async {
       for (final row in dirtyRules) {
-        await (database.update(database.meetingRules)
-              ..where((table) => table.id.equals(row.id)))
+        await (database.update(
+          database.meetingRules,
+        )..where((table) => table.id.equals(row.id)))
             .write(
           db.MeetingRulesCompanion(
             teacher: Value(normalizeTeacherField(row.teacher)),
@@ -362,8 +517,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         );
       }
       for (final row in dirtyExceptions) {
-        await (database.update(database.courseExceptions)
-              ..where((table) => table.id.equals(row.id)))
+        await (database.update(
+          database.courseExceptions,
+        )..where((table) => table.id.equals(row.id)))
             .write(
           db.CourseExceptionsCompanion(
             teacherOverride: Value(normalizeTeacherField(row.teacherOverride)),
@@ -377,8 +533,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
 
   @override
   Future<void> setCourseHidden(String courseId, bool hidden) async {
-    await (database.update(database.courses)
-          ..where((table) => table.id.equals(courseId)))
+    await (database.update(
+      database.courses,
+    )..where((table) => table.id.equals(courseId)))
         .write(
       db.CoursesCompanion(
         hidden: Value(hidden),
@@ -390,8 +547,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   @override
   Future<void> deleteCourse(String courseId) async {
     await database.transaction(() async {
-      final course = await (database.select(database.courses)
-            ..where((table) => table.id.equals(courseId)))
+      final course = await (database.select(
+        database.courses,
+      )..where((table) => table.id.equals(courseId)))
           .getSingleOrNull();
       if (course == null) throw StateError('Course not found: $courseId');
       if (course.sourceType == domain.CourseSourceType.imported.name) {
@@ -399,12 +557,15 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         if (key == null || key.isEmpty) {
           throw StateError('Imported course has no source key: $courseId');
         }
-        await (database.update(database.courses)
-              ..where((table) => table.id.equals(courseId)))
-            .write(db.CoursesCompanion(
-          deleted: const Value(true),
-          updatedAt: Value(DateTime.now()),
-        ));
+        await (database.update(
+          database.courses,
+        )..where((table) => table.id.equals(courseId)))
+            .write(
+          db.CoursesCompanion(
+            deleted: const Value(true),
+            updatedAt: Value(DateTime.now()),
+          ),
+        );
         await database.into(database.deletedSourceItems).insertOnConflictUpdate(
               db.DeletedSourceItemsCompanion.insert(
                 id: 'course:${course.semesterId}:$key',
@@ -414,11 +575,13 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
               ),
             );
       } else {
-        await (database.delete(database.courseExceptions)
-              ..where((table) => table.courseId.equals(courseId)))
+        await (database.delete(
+          database.courseExceptions,
+        )..where((table) => table.courseId.equals(courseId)))
             .go();
-        await (database.delete(database.courses)
-              ..where((table) => table.id.equals(courseId)))
+        await (database.delete(
+          database.courses,
+        )..where((table) => table.id.equals(courseId)))
             .go();
       }
     });
@@ -427,8 +590,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   @override
   Future<void> restoreImportedCourse(String courseId) async {
     await database.transaction(() async {
-      final course = await (database.select(database.courses)
-            ..where((table) => table.id.equals(courseId)))
+      final course = await (database.select(
+        database.courses,
+      )..where((table) => table.id.equals(courseId)))
           .getSingleOrNull();
       if (course == null ||
           course.sourceType != domain.CourseSourceType.imported.name ||
@@ -436,15 +600,21 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         throw StateError('Not an imported course: $courseId');
       }
       await (database.delete(database.deletedSourceItems)
-            ..where((table) => table.id.equals(
-                'course:${course.semesterId}:${course.sourceCourseKey}')))
+            ..where(
+              (table) => table.id.equals(
+                'course:${course.semesterId}:${course.sourceCourseKey}',
+              ),
+            ))
           .go();
-      await (database.update(database.courses)
-            ..where((table) => table.id.equals(courseId)))
-          .write(db.CoursesCompanion(
-        deleted: const Value(false),
-        updatedAt: Value(DateTime.now()),
-      ));
+      await (database.update(
+        database.courses,
+      )..where((table) => table.id.equals(courseId)))
+          .write(
+        db.CoursesCompanion(
+          deleted: const Value(false),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
     });
   }
 
@@ -465,18 +635,12 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     return ScheduleBackup(
       createdAt: DateTime.now().toUtc(),
       semesters: semesters,
-      courses: [
-        for (final snapshot in snapshots) ...snapshot.courses,
-      ],
+      courses: [for (final snapshot in snapshots) ...snapshot.courses],
       meetingRules: [
         for (final snapshot in snapshots) ...snapshot.meetingRules,
       ],
-      exceptions: [
-        for (final snapshot in snapshots) ...snapshot.exceptions,
-      ],
-      settings: {
-        for (final setting in settings) setting.key: setting.value,
-      },
+      exceptions: [for (final snapshot in snapshots) ...snapshot.exceptions],
+      settings: {for (final setting in settings) setting.key: setting.value},
       appearance: appearance,
       importSnapshots: [
         for (final snapshot in importSnapshots)
@@ -506,6 +670,11 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   @override
   Future<void> restoreBackup(ScheduleBackup backup) async {
     final validated = ScheduleBackup.fromJson(backup.toJson());
+    final canonicalized = CourseCanonicalizer.canonicalize(
+      courses: validated.courses,
+      meetingRules: validated.meetingRules,
+      exceptions: validated.exceptions,
+    );
     await database.transaction(() async {
       await _clearAllTables();
       for (final semester in validated.semesters) {
@@ -522,7 +691,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
               ),
             );
       }
-      for (final course in validated.courses) {
+      for (final course in canonicalized.courses) {
         await database.into(database.courses).insert(
               db.CoursesCompanion.insert(
                 id: course.id,
@@ -530,6 +699,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
                 sourceType: course.sourceType.name,
                 sourceCourseKey: Value(course.sourceCourseKey),
                 name: course.name,
+                nameKey: Value(CourseIdentity.nameKey(course.name)),
                 code: const Value(null),
                 teachingClass: const Value(null),
                 credits: const Value(null),
@@ -543,7 +713,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
               ),
             );
       }
-      for (final rule in validated.meetingRules) {
+      for (final rule in canonicalized.meetingRules) {
         await database.into(database.meetingRules).insert(
               db.MeetingRulesCompanion.insert(
                 id: rule.id,
@@ -560,7 +730,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
               ),
             );
       }
-      for (final exception in validated.exceptions) {
+      for (final exception in canonicalized.exceptions) {
         await database.into(database.courseExceptions).insert(
               db.CourseExceptionsCompanion.insert(
                 id: exception.id,
@@ -747,9 +917,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         // stale old key could delete the course again if it rotates back.
         final existing =
             localCourses[remote.sourceCourseKey] ?? change.localCourse;
-        final restoreDeleted = resolution.shouldRestore(
-          remote.sourceCourseKey,
-        );
+        final restoreDeleted = resolution.shouldRestore(remote.sourceCourseKey);
         if (restoreDeleted || (existing != null && !existing.deleted)) {
           await _removeCourseTombstones(
             semesterId: semester.id,
@@ -822,8 +990,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     final local =
         existingSemester == null ? null : await loadSemester(semesterId);
     final previous = await loadLatestImport(semesterId);
-    final tombstones = await (database.select(database.deletedSourceItems)
-          ..where((table) => table.semesterId.equals(semesterId)))
+    final tombstones = await (database.select(
+      database.deletedSourceItems,
+    )..where((table) => table.semesterId.equals(semesterId)))
         .get();
     final deletedSourceCourseKeys = {
       for (final tombstone in tombstones) tombstone.sourceCourseKey,
@@ -867,6 +1036,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             sourceType: course.sourceType.name,
             sourceCourseKey: Value(course.sourceCourseKey),
             name: course.name,
+            nameKey: Value(CourseIdentity.nameKey(course.name)),
             code: const Value(null),
             teachingClass: const Value(null),
             credits: const Value(null),
@@ -879,8 +1049,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             updatedAt: course.updatedAt,
           ),
         );
-    await (database.delete(database.meetingRules)
-          ..where((table) => table.courseId.equals(course.id)))
+    await (database.delete(
+      database.meetingRules,
+    )..where((table) => table.courseId.equals(course.id)))
         .go();
     for (final rule in rules) {
       await database.into(database.meetingRules).insert(
@@ -904,12 +1075,15 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   Future<void> _markImportedDeleted(domain.Course course) async {
     final key = course.sourceCourseKey;
     if (key == null) return;
-    await (database.update(database.courses)
-          ..where((table) => table.id.equals(course.id)))
-        .write(db.CoursesCompanion(
-      deleted: const Value(true),
-      updatedAt: Value(DateTime.now()),
-    ));
+    await (database.update(
+      database.courses,
+    )..where((table) => table.id.equals(course.id)))
+        .write(
+      db.CoursesCompanion(
+        deleted: const Value(true),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
     await database.into(database.deletedSourceItems).insertOnConflictUpdate(
           db.DeletedSourceItemsCompanion.insert(
             id: 'course:${course.semesterId}:$key',
@@ -930,10 +1104,12 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         .toSet();
     if (keys.isEmpty) return;
     await (database.delete(database.deletedSourceItems)
-          ..where((table) => Expression.and([
-                table.semesterId.equals(semesterId),
-                table.sourceCourseKey.isIn(keys),
-              ])))
+          ..where(
+            (table) => Expression.and([
+              table.semesterId.equals(semesterId),
+              table.sourceCourseKey.isIn(keys),
+            ]),
+          ))
         .go();
   }
 
@@ -964,7 +1140,10 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
       semesterId: semester.id,
       sourceType: domain.CourseSourceType.imported,
       sourceCourseKey: remote.sourceCourseKey,
-      name: value('name', remote.name, existing?.name) as String,
+      name: existing != null &&
+              CourseIdentity.sameName(existing.name, remote.name)
+          ? existing.name
+          : value('name', remote.name, existing?.name) as String,
       note: existing?.note,
       colorOverride: existing?.colorOverride,
       hidden: existing?.hidden ?? false,
@@ -985,7 +1164,11 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
       (field) => field.decision == MergeDecision.local,
     );
 
-    final unmatched = [...existing];
+    final localOnlyRules = existing
+        .where((rule) => rule.sourceMeetingKey == null)
+        .toList(growable: false);
+    final unmatched =
+        existing.where((rule) => rule.sourceMeetingKey != null).toList();
     final usedIds = <String>{};
     final idRemap = <String, String>{};
     final rules = <domain.MeetingRule>[];
@@ -1019,10 +1202,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         final field = fields.where(
           (item) =>
               item.field ==
-              meetingImportField(
-                meeting.sourceMeetingKey,
-                property,
-              ),
+              meetingImportField(meeting.sourceMeetingKey, property),
         );
         final decision =
             field.isEmpty ? MergeDecision.remote : field.first.decision;
@@ -1049,12 +1229,16 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
           courseId: courseId,
           sourceMeetingKey: meeting.sourceMeetingKey,
           weekday: value('weekday', meeting.weekday, matched?.weekday) as int,
-          startSection:
-              value('startSection', meeting.startSection, matched?.startSection)
-                  as int,
-          endSection:
-              value('endSection', meeting.endSection, matched?.endSection)
-                  as int,
+          startSection: value(
+            'startSection',
+            meeting.startSection,
+            matched?.startSection,
+          ) as int,
+          endSection: value(
+            'endSection',
+            meeting.endSection,
+            matched?.endSection,
+          ) as int,
           teacher:
               value('teacher', meeting.teacher, matched?.teacher) as String?,
           campus: value('campus', meeting.campus, matched?.campus) as String?,
@@ -1073,6 +1257,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         if (usedIds.add(rule.id)) rules.add(rule);
       }
     }
+    for (final rule in localOnlyRules) {
+      if (usedIds.add(rule.id)) rules.add(rule);
+    }
     return _ReconciledRules(
       rules: List.unmodifiable(rules),
       idRemap: Map.unmodifiable(idRemap),
@@ -1085,14 +1272,14 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   }) async {
     for (final entry in idRemap.entries) {
       await (database.update(database.courseExceptions)
-            ..where((table) => Expression.and([
-                  table.courseId.equals(courseId),
-                  table.sourceMeetingId.equals(entry.key),
-                ])))
+            ..where(
+              (table) => Expression.and([
+                table.courseId.equals(courseId),
+                table.sourceMeetingId.equals(entry.key),
+              ]),
+            ))
           .write(
-        db.CourseExceptionsCompanion(
-          sourceMeetingId: Value(entry.value),
-        ),
+        db.CourseExceptionsCompanion(sourceMeetingId: Value(entry.value)),
       );
     }
   }
@@ -1111,10 +1298,12 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     ];
     if (removedIds.isEmpty) return;
     await (database.delete(database.courseExceptions)
-          ..where((table) => Expression.and([
-                table.courseId.equals(courseId),
-                table.sourceMeetingId.isIn(removedIds),
-              ])))
+          ..where(
+            (table) => Expression.and([
+              table.courseId.equals(courseId),
+              table.sourceMeetingId.isIn(removedIds),
+            ]),
+          ))
         .go();
   }
 
@@ -1147,10 +1336,7 @@ class _ImportDiffContext {
 }
 
 class _ReconciledRules {
-  const _ReconciledRules({
-    required this.rules,
-    required this.idRemap,
-  });
+  const _ReconciledRules({required this.rules, required this.idRemap});
 
   final List<domain.MeetingRule> rules;
   final Map<String, String> idRemap;

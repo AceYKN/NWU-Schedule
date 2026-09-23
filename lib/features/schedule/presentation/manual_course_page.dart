@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
 import '../../../domain/course/course.dart';
+import '../../../domain/course/course_identity.dart';
 import '../../../domain/course/meeting_draft.dart';
 import '../../../domain/course/meeting_rule.dart';
 import '../../../domain/course/week_pattern.dart';
@@ -112,9 +113,8 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
 
   void _deleteDraft(int index) {
     if (_drafts.length <= 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('课程至少需要一个上课安排')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('课程至少需要一个上课安排')));
       return;
     }
     setState(() {
@@ -163,28 +163,60 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
   Future<void> _save(ScheduleReady ready) async {
     if (_saving || !_formKey.currentState!.validate()) return;
     if (_drafts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('课程至少需要一个上课安排')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('课程至少需要一个上课安排')));
       return;
+    }
+    final desiredName = _name.text.trim();
+    Course? sameNameCourse;
+    for (final candidate in ready.engine.courses) {
+      if (candidate.id != _existingCourse?.id &&
+          CourseIdentity.sameName(candidate.name, desiredName)) {
+        sameNameCourse = candidate;
+        break;
+      }
+    }
+    if (sameNameCourse != null) {
+      final isEditing = _existingCourse != null;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(isEditing ? '合并同名课程？' : '已存在同名课程'),
+          content: Text(
+            isEditing
+                ? '“${sameNameCourse!.name}”已存在。本次修改会把当前课程及其上课安排合并到该课程。'
+                : '“${sameNameCourse!.name}”已存在，将把本次内容作为新的上课安排添加到该课程。课程备注和颜色保持现有设置。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(isEditing ? '合并课程' : '添加安排'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
     }
     setState(() => _saving = true);
     try {
       final totalWeeks = ready.engine.totalWeeks;
-      final masks = [
-        for (final draft in _drafts) draft.weekMask(totalWeeks),
-      ];
-      final id = _existingCourse?.id ??
-          'manual-${DateTime.now().microsecondsSinceEpoch}';
-      final course = _existingCourse?.copyWith(
-            name: _name.text.trim(),
+      final masks = [for (final draft in _drafts) draft.weekMask(totalWeeks)];
+      final savedAt = DateTime.now().microsecondsSinceEpoch;
+      final newCourseId = 'manual-${DateTime.now().microsecondsSinceEpoch}';
+      final id = _existingCourse?.id ?? sameNameCourse?.id ?? newCourseId;
+      final editedCourse = _existingCourse?.copyWith(
+            name: desiredName,
             note: _optional(_note),
           ) ??
           Course(
             id: id,
             semesterId: ready.semester.id,
             sourceType: CourseSourceType.manual,
-            name: _name.text.trim(),
+            name: desiredName,
             note: _optional(_note),
           );
       final existingIds = _existingRules.map((rule) => rule.id).toSet();
@@ -196,13 +228,12 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
       final deletedExceptionIds = ready.engine.exceptions
           .where(
             (exception) =>
-                exception.courseId == course.id &&
+                exception.courseId == (_existingCourse?.id ?? id) &&
                 exception.sourceMeetingId != null &&
                 deletedRuleIds.contains(exception.sourceMeetingId),
           )
           .map((exception) => exception.id)
           .toList(growable: false);
-      final savedAt = DateTime.now().microsecondsSinceEpoch;
       final rules = <MeetingRule>[];
       for (var index = 0; index < _drafts.length; index++) {
         final draft = _drafts[index];
@@ -224,11 +255,28 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
           ),
         );
       }
-      await repository.saveCourse(
-        course,
-        rules,
-        removeExceptionIds: deletedExceptionIds,
-      );
+      if (sameNameCourse != null && _existingCourse != null) {
+        await repository.mergeCourseInto(
+          editedCourse: editedCourse,
+          targetCourseId: sameNameCourse.id,
+          editedRules: rules,
+          removeExceptionIds: deletedExceptionIds,
+        );
+      } else if (sameNameCourse != null) {
+        final existingRules = ready.engine.meetingRules
+            .where((rule) => rule.courseId == sameNameCourse!.id)
+            .toList(growable: false);
+        await repository.saveCourse(sameNameCourse, [
+          ...existingRules,
+          ...rules,
+        ]);
+      } else {
+        await repository.saveCourse(
+          editedCourse,
+          rules,
+          removeExceptionIds: deletedExceptionIds,
+        );
+      }
       // The edit route can be reopened immediately after this save. Do not
       // let it reuse the previous ScheduleEngine snapshot while Drift's
       // change stream is still scheduling its next emission.
@@ -236,7 +284,17 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       context.go('/schedule');
-      messenger.showSnackBar(const SnackBar(content: Text('课程已保存到本地')));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            sameNameCourse == null
+                ? '课程已保存到本地'
+                : _existingCourse == null
+                    ? '已添加为现有课程的新上课安排'
+                    : '同名课程及上课安排已合并',
+          ),
+        ),
+      );
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -261,9 +319,8 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
     final load = ref.watch(scheduleLoadProvider);
     return load.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) => Center(
-        child: Text(nwuUserMessage(error, action: '读取学期失败')),
-      ),
+      error: (error, stackTrace) =>
+          Center(child: Text(nwuUserMessage(error, action: '读取学期失败'))),
       data: (state) {
         if (state is! ScheduleReady) {
           return const Center(child: Text('请先在设置中创建学期'));
@@ -443,9 +500,10 @@ class _MeetingDraftCardState extends State<_MeetingDraftCard> {
                 Expanded(
                   child: Text(
                     '上课安排 ${widget.index + 1}',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
                 IconButton(

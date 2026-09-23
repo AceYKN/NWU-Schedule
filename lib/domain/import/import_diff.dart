@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../course/course.dart';
+import '../course/course_identity.dart';
 import '../course/meeting_rule.dart';
 import '../schedule/schedule_data_repository.dart';
 import 'import_identity.dart';
@@ -61,15 +62,13 @@ class ImportDiff {
   final List<ImportChange> changes;
   final bool isNewSemester;
 
-  bool get hasChanges => changes.any(
-        (change) => change.kind != ImportChangeKind.unchanged,
-      );
+  bool get hasChanges =>
+      changes.any((change) => change.kind != ImportChangeKind.unchanged);
 
   bool get hasConflicts => changes.any((change) => change.hasConflict);
 
-  bool get hasLocallyDeleted => changes.any(
-        (change) => change.kind == ImportChangeKind.locallyDeleted,
-      );
+  bool get hasLocallyDeleted =>
+      changes.any((change) => change.kind == ImportChangeKind.locallyDeleted);
 
   int get locallyDeletedCount => changes
       .where((change) => change.kind == ImportChangeKind.locallyDeleted)
@@ -185,11 +184,10 @@ class ImportDiffEngine {
     final localImported = <String, Course>{};
     final localRules = <String, List<MeetingRule>>{};
     for (final course in local?.courses ?? const <Course>[]) {
-      if (course.sourceType != CourseSourceType.imported ||
-          course.sourceCourseKey == null) {
-        continue;
+      if (course.sourceType == CourseSourceType.imported &&
+          course.sourceCourseKey != null) {
+        localImported[course.sourceCourseKey!] = course;
       }
-      localImported[course.sourceCourseKey!] = course;
       localRules[course.id] = [
         for (final rule in local?.meetingRules ?? const <MeetingRule>[])
           if (rule.courseId == course.id) rule,
@@ -199,46 +197,48 @@ class ImportDiffEngine {
       for (final course in previousImport?.courses ?? const <ImportedCourse>[])
         course.sourceCourseKey: course,
     };
-    final matchedLocalKeys = <String>{};
+    final matchedLocalCourseIds = <String>{};
     final matchedPreviousKeys = <String>{};
     final changes = <ImportChange>[];
 
     for (final remote in incoming.courses) {
       var localCourse = localImported[remote.sourceCourseKey];
       if (localCourse != null &&
-          matchedLocalKeys.contains(localCourse.sourceCourseKey)) {
+          matchedLocalCourseIds.contains(localCourse.id)) {
         localCourse = null;
       }
       localCourse ??= _identityMatcher.matchLocalCourse(
         remote,
-        localImported.values.where(
-          (course) =>
-              course.sourceCourseKey != null &&
-              !matchedLocalKeys.contains(course.sourceCourseKey),
+        (local?.courses ?? const <Course>[]).where(
+          (course) => !matchedLocalCourseIds.contains(course.id),
         ),
         localRules,
       );
       if (localCourse == null) {
-        changes.add(ImportChange(
-          kind: deletedSourceCourseKeys.contains(remote.sourceCourseKey)
-              ? ImportChangeKind.locallyDeleted
-              : ImportChangeKind.added,
-          sourceCourseKey: remote.sourceCourseKey,
-          remoteCourse: remote,
-        ));
+        changes.add(
+          ImportChange(
+            kind: deletedSourceCourseKeys.contains(remote.sourceCourseKey)
+                ? ImportChangeKind.locallyDeleted
+                : ImportChangeKind.added,
+            sourceCourseKey: remote.sourceCourseKey,
+            remoteCourse: remote,
+          ),
+        );
         continue;
       }
-      matchedLocalKeys.add(localCourse.sourceCourseKey!);
+      matchedLocalCourseIds.add(localCourse.id);
       // A tombstone without a matching local course is handled above. Once a
       // live course has been matched, its deleted flag is authoritative; a
       // stale tombstone must not silently delete the live row again.
       if (localCourse.deleted) {
-        changes.add(ImportChange(
-          kind: ImportChangeKind.locallyDeleted,
-          sourceCourseKey: remote.sourceCourseKey,
-          localCourse: localCourse,
-          remoteCourse: remote,
-        ));
+        changes.add(
+          ImportChange(
+            kind: ImportChangeKind.locallyDeleted,
+            sourceCourseKey: remote.sourceCourseKey,
+            localCourse: localCourse,
+            remoteCourse: remote,
+          ),
+        );
         continue;
       }
       var previous = previousByKey[remote.sourceCourseKey];
@@ -255,7 +255,9 @@ class ImportDiffEngine {
       if (previous != null) matchedPreviousKeys.add(previous.sourceCourseKey);
       final fields = _fields(
         localCourse: localCourse,
-        localRules: localRules[localCourse.id] ?? const [],
+        localRules: (localRules[localCourse.id] ?? const [])
+            .where((rule) => rule.sourceMeetingKey != null)
+            .toList(growable: false),
         previous: previous,
         remote: remote,
       );
@@ -268,27 +270,34 @@ class ImportDiffEngine {
                 !_same(field.localValue, field.remoteValue),
           ) ||
           sourceKeyChanged;
-      changes.add(ImportChange(
-        kind: conflict
-            ? ImportChangeKind.conflict
-            : changed
-                ? ImportChangeKind.modified
-                : ImportChangeKind.unchanged,
-        sourceCourseKey: remote.sourceCourseKey,
-        localCourse: localCourse,
-        remoteCourse: remote,
-        fields: fields,
-      ));
+      changes.add(
+        ImportChange(
+          kind: conflict
+              ? ImportChangeKind.conflict
+              : changed
+                  ? ImportChangeKind.modified
+                  : ImportChangeKind.unchanged,
+          sourceCourseKey: remote.sourceCourseKey,
+          localCourse: localCourse,
+          remoteCourse: remote,
+          fields: fields,
+        ),
+      );
     }
 
     for (final localCourse in localImported.values) {
       final key = localCourse.sourceCourseKey!;
-      if (matchedLocalKeys.contains(key) || localCourse.deleted) continue;
-      changes.add(ImportChange(
-        kind: ImportChangeKind.removed,
-        sourceCourseKey: key,
-        localCourse: localCourse,
-      ));
+      if (matchedLocalCourseIds.contains(localCourse.id) ||
+          localCourse.deleted) {
+        continue;
+      }
+      changes.add(
+        ImportChange(
+          kind: ImportChangeKind.removed,
+          sourceCourseKey: key,
+          localCourse: localCourse,
+        ),
+      );
     }
 
     for (final change in changes) {
@@ -297,10 +306,7 @@ class ImportDiffEngine {
         throw StateError('Import diff item has no local or remote course');
       }
     }
-    return ImportDiff(
-      List.unmodifiable(changes),
-      isNewSemester: local == null,
-    );
+    return ImportDiff(List.unmodifiable(changes), isNewSemester: local == null);
   }
 
   List<ImportFieldChange> _fields({
@@ -309,23 +315,23 @@ class ImportDiffEngine {
     required ImportedCourse? previous,
     required ImportedCourse remote,
   }) {
-    final fields = <ImportFieldChange>[
-      _mergeField(
-        field: 'name',
-        previousValue: previous?.name,
-        localValue: localCourse.name,
-        remoteValue: remote.name,
-      ),
-    ];
+    final fields = <ImportFieldChange>[];
+    if (!CourseIdentity.sameName(localCourse.name, remote.name)) {
+      fields.add(
+        _mergeField(
+          field: 'name',
+          previousValue: previous?.name,
+          localValue: localCourse.name,
+          remoteValue: remote.name,
+        ),
+      );
+    }
 
     final unmatchedLocal = [...localRules];
     final unmatchedPrevious = [...?previous?.meetings];
 
     for (final remoteMeeting in remote.meetings) {
-      final localMeeting = _takeLocalMeeting(
-        remoteMeeting,
-        unmatchedLocal,
-      );
+      final localMeeting = _takeLocalMeeting(remoteMeeting, unmatchedLocal);
       final previousMeeting = _takePreviousMeeting(
         remoteMeeting,
         unmatchedPrevious,
@@ -349,12 +355,11 @@ class ImportDiffEngine {
 
     final localTopology = _meetingTopology(localRules);
     final remoteTopology = _meetingTopology(remote.meetings);
-    if (!_same(localTopology, remoteTopology)) {
+    if (previous != null && !_same(localTopology, remoteTopology)) {
       fields.add(
         _mergeField(
           field: 'meetings',
-          previousValue:
-              previous == null ? null : _meetingTopology(previous.meetings),
+          previousValue: _meetingTopology(previous.meetings),
           localValue: localTopology,
           remoteValue: remoteTopology,
         ),
@@ -378,8 +383,9 @@ class ImportDiffEngine {
     List<MeetingRule> candidates,
   ) {
     final exact = candidates
-        .where((candidate) =>
-            candidate.sourceMeetingKey == remote.sourceMeetingKey)
+        .where(
+          (candidate) => candidate.sourceMeetingKey == remote.sourceMeetingKey,
+        )
         .toList();
     final matched = switch (exact.length) {
       0 => _identityMatcher.matchMeeting<MeetingRule>(remote, candidates),
@@ -396,8 +402,9 @@ class ImportDiffEngine {
     List<ImportedMeeting> candidates,
   ) {
     final exact = candidates
-        .where((candidate) =>
-            candidate.sourceMeetingKey == remote.sourceMeetingKey)
+        .where(
+          (candidate) => candidate.sourceMeetingKey == remote.sourceMeetingKey,
+        )
         .toList();
     final matched = switch (exact.length) {
       0 => _identityMatcher.matchMeeting<ImportedMeeting>(remote, candidates),

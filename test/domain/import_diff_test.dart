@@ -220,7 +220,6 @@ void main() {
     );
 
     expect(diff.changes.single.kind, ImportChangeKind.unchanged);
-    expect(diff.changes.single.fields.first.field, 'name');
     expect(
       diff.changes.single.fields.map((field) => field.field),
       containsAll(<String>[
@@ -232,6 +231,10 @@ void main() {
         meetingImportField('meeting-1', 'campus'),
         meetingImportField('meeting-1', 'room'),
       ]),
+    );
+    expect(
+      diff.changes.single.fields.map((field) => field.field),
+      isNot(contains('teachingClass')),
     );
   });
 

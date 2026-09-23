@@ -487,6 +487,14 @@ class $CoursesTable extends Courses with TableInfo<$CoursesTable, Course> {
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
       'name', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _nameKeyMeta =
+      const VerificationMeta('nameKey');
+  @override
+  late final GeneratedColumn<String> nameKey = GeneratedColumn<String>(
+      'name_key', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
   static const VerificationMeta _codeMeta = const VerificationMeta('code');
   @override
   late final GeneratedColumn<String> code = GeneratedColumn<String>(
@@ -559,6 +567,7 @@ class $CoursesTable extends Courses with TableInfo<$CoursesTable, Course> {
         sourceType,
         sourceCourseKey,
         name,
+        nameKey,
         code,
         teachingClass,
         credits,
@@ -612,6 +621,10 @@ class $CoursesTable extends Courses with TableInfo<$CoursesTable, Course> {
           _nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
     } else if (isInserting) {
       context.missing(_nameMeta);
+    }
+    if (data.containsKey('name_key')) {
+      context.handle(_nameKeyMeta,
+          nameKey.isAcceptableOrUnknown(data['name_key']!, _nameKeyMeta));
     }
     if (data.containsKey('code')) {
       context.handle(
@@ -682,6 +695,8 @@ class $CoursesTable extends Courses with TableInfo<$CoursesTable, Course> {
           DriftSqlType.string, data['${effectivePrefix}source_course_key']),
       name: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      nameKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}name_key'])!,
       code: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}code']),
       teachingClass: attachedDatabase.typeMapping
@@ -717,6 +732,7 @@ class Course extends DataClass implements Insertable<Course> {
   final String sourceType;
   final String? sourceCourseKey;
   final String name;
+  final String nameKey;
   final String? code;
   final String? teachingClass;
   final double? credits;
@@ -733,6 +749,7 @@ class Course extends DataClass implements Insertable<Course> {
       required this.sourceType,
       this.sourceCourseKey,
       required this.name,
+      required this.nameKey,
       this.code,
       this.teachingClass,
       this.credits,
@@ -753,6 +770,7 @@ class Course extends DataClass implements Insertable<Course> {
       map['source_course_key'] = Variable<String>(sourceCourseKey);
     }
     map['name'] = Variable<String>(name);
+    map['name_key'] = Variable<String>(nameKey);
     if (!nullToAbsent || code != null) {
       map['code'] = Variable<String>(code);
     }
@@ -787,6 +805,7 @@ class Course extends DataClass implements Insertable<Course> {
           ? const Value.absent()
           : Value(sourceCourseKey),
       name: Value(name),
+      nameKey: Value(nameKey),
       code: code == null && nullToAbsent ? const Value.absent() : Value(code),
       teachingClass: teachingClass == null && nullToAbsent
           ? const Value.absent()
@@ -817,6 +836,7 @@ class Course extends DataClass implements Insertable<Course> {
       sourceType: serializer.fromJson<String>(json['sourceType']),
       sourceCourseKey: serializer.fromJson<String?>(json['sourceCourseKey']),
       name: serializer.fromJson<String>(json['name']),
+      nameKey: serializer.fromJson<String>(json['nameKey']),
       code: serializer.fromJson<String?>(json['code']),
       teachingClass: serializer.fromJson<String?>(json['teachingClass']),
       credits: serializer.fromJson<double?>(json['credits']),
@@ -838,6 +858,7 @@ class Course extends DataClass implements Insertable<Course> {
       'sourceType': serializer.toJson<String>(sourceType),
       'sourceCourseKey': serializer.toJson<String?>(sourceCourseKey),
       'name': serializer.toJson<String>(name),
+      'nameKey': serializer.toJson<String>(nameKey),
       'code': serializer.toJson<String?>(code),
       'teachingClass': serializer.toJson<String?>(teachingClass),
       'credits': serializer.toJson<double?>(credits),
@@ -857,6 +878,7 @@ class Course extends DataClass implements Insertable<Course> {
           String? sourceType,
           Value<String?> sourceCourseKey = const Value.absent(),
           String? name,
+          String? nameKey,
           Value<String?> code = const Value.absent(),
           Value<String?> teachingClass = const Value.absent(),
           Value<double?> credits = const Value.absent(),
@@ -875,6 +897,7 @@ class Course extends DataClass implements Insertable<Course> {
             ? sourceCourseKey.value
             : this.sourceCourseKey,
         name: name ?? this.name,
+        nameKey: nameKey ?? this.nameKey,
         code: code.present ? code.value : this.code,
         teachingClass:
             teachingClass.present ? teachingClass.value : this.teachingClass,
@@ -899,6 +922,7 @@ class Course extends DataClass implements Insertable<Course> {
           ? data.sourceCourseKey.value
           : this.sourceCourseKey,
       name: data.name.present ? data.name.value : this.name,
+      nameKey: data.nameKey.present ? data.nameKey.value : this.nameKey,
       code: data.code.present ? data.code.value : this.code,
       teachingClass: data.teachingClass.present
           ? data.teachingClass.value
@@ -925,6 +949,7 @@ class Course extends DataClass implements Insertable<Course> {
           ..write('sourceType: $sourceType, ')
           ..write('sourceCourseKey: $sourceCourseKey, ')
           ..write('name: $name, ')
+          ..write('nameKey: $nameKey, ')
           ..write('code: $code, ')
           ..write('teachingClass: $teachingClass, ')
           ..write('credits: $credits, ')
@@ -946,6 +971,7 @@ class Course extends DataClass implements Insertable<Course> {
       sourceType,
       sourceCourseKey,
       name,
+      nameKey,
       code,
       teachingClass,
       credits,
@@ -965,6 +991,7 @@ class Course extends DataClass implements Insertable<Course> {
           other.sourceType == this.sourceType &&
           other.sourceCourseKey == this.sourceCourseKey &&
           other.name == this.name &&
+          other.nameKey == this.nameKey &&
           other.code == this.code &&
           other.teachingClass == this.teachingClass &&
           other.credits == this.credits &&
@@ -983,6 +1010,7 @@ class CoursesCompanion extends UpdateCompanion<Course> {
   final Value<String> sourceType;
   final Value<String?> sourceCourseKey;
   final Value<String> name;
+  final Value<String> nameKey;
   final Value<String?> code;
   final Value<String?> teachingClass;
   final Value<double?> credits;
@@ -1000,6 +1028,7 @@ class CoursesCompanion extends UpdateCompanion<Course> {
     this.sourceType = const Value.absent(),
     this.sourceCourseKey = const Value.absent(),
     this.name = const Value.absent(),
+    this.nameKey = const Value.absent(),
     this.code = const Value.absent(),
     this.teachingClass = const Value.absent(),
     this.credits = const Value.absent(),
@@ -1018,6 +1047,7 @@ class CoursesCompanion extends UpdateCompanion<Course> {
     required String sourceType,
     this.sourceCourseKey = const Value.absent(),
     required String name,
+    this.nameKey = const Value.absent(),
     this.code = const Value.absent(),
     this.teachingClass = const Value.absent(),
     this.credits = const Value.absent(),
@@ -1041,6 +1071,7 @@ class CoursesCompanion extends UpdateCompanion<Course> {
     Expression<String>? sourceType,
     Expression<String>? sourceCourseKey,
     Expression<String>? name,
+    Expression<String>? nameKey,
     Expression<String>? code,
     Expression<String>? teachingClass,
     Expression<double>? credits,
@@ -1059,6 +1090,7 @@ class CoursesCompanion extends UpdateCompanion<Course> {
       if (sourceType != null) 'source_type': sourceType,
       if (sourceCourseKey != null) 'source_course_key': sourceCourseKey,
       if (name != null) 'name': name,
+      if (nameKey != null) 'name_key': nameKey,
       if (code != null) 'code': code,
       if (teachingClass != null) 'teaching_class': teachingClass,
       if (credits != null) 'credits': credits,
@@ -1079,6 +1111,7 @@ class CoursesCompanion extends UpdateCompanion<Course> {
       Value<String>? sourceType,
       Value<String?>? sourceCourseKey,
       Value<String>? name,
+      Value<String>? nameKey,
       Value<String?>? code,
       Value<String?>? teachingClass,
       Value<double?>? credits,
@@ -1096,6 +1129,7 @@ class CoursesCompanion extends UpdateCompanion<Course> {
       sourceType: sourceType ?? this.sourceType,
       sourceCourseKey: sourceCourseKey ?? this.sourceCourseKey,
       name: name ?? this.name,
+      nameKey: nameKey ?? this.nameKey,
       code: code ?? this.code,
       teachingClass: teachingClass ?? this.teachingClass,
       credits: credits ?? this.credits,
@@ -1127,6 +1161,9 @@ class CoursesCompanion extends UpdateCompanion<Course> {
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
+    }
+    if (nameKey.present) {
+      map['name_key'] = Variable<String>(nameKey.value);
     }
     if (code.present) {
       map['code'] = Variable<String>(code.value);
@@ -1172,6 +1209,7 @@ class CoursesCompanion extends UpdateCompanion<Course> {
           ..write('sourceType: $sourceType, ')
           ..write('sourceCourseKey: $sourceCourseKey, ')
           ..write('name: $name, ')
+          ..write('nameKey: $nameKey, ')
           ..write('code: $code, ')
           ..write('teachingClass: $teachingClass, ')
           ..write('credits: $credits, ')
@@ -1189,7 +1227,7 @@ class CoursesCompanion extends UpdateCompanion<Course> {
 }
 
 class $MeetingRulesTable extends MeetingRules
-    with TableInfo<$MeetingRulesTable, MeetingRule> {
+    with TableInfo<$MeetingRulesTable, StoredMeetingRule> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -1280,7 +1318,7 @@ class $MeetingRulesTable extends MeetingRules
   String get actualTableName => $name;
   static const String $name = 'meeting_rules';
   @override
-  VerificationContext validateIntegrity(Insertable<MeetingRule> instance,
+  VerificationContext validateIntegrity(Insertable<StoredMeetingRule> instance,
       {bool isInserting = false}) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
@@ -1355,9 +1393,9 @@ class $MeetingRulesTable extends MeetingRules
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  MeetingRule map(Map<String, dynamic> data, {String? tablePrefix}) {
+  StoredMeetingRule map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return MeetingRule(
+    return StoredMeetingRule(
       id: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
       courseId: attachedDatabase.typeMapping
@@ -1389,7 +1427,8 @@ class $MeetingRulesTable extends MeetingRules
   }
 }
 
-class MeetingRule extends DataClass implements Insertable<MeetingRule> {
+class StoredMeetingRule extends DataClass
+    implements Insertable<StoredMeetingRule> {
   final String id;
   final String courseId;
   final String? sourceMeetingKey;
@@ -1401,7 +1440,7 @@ class MeetingRule extends DataClass implements Insertable<MeetingRule> {
   final String? room;
   final int weekMask;
   final String rawWeekText;
-  const MeetingRule(
+  const StoredMeetingRule(
       {required this.id,
       required this.courseId,
       this.sourceMeetingKey,
@@ -1459,10 +1498,10 @@ class MeetingRule extends DataClass implements Insertable<MeetingRule> {
     );
   }
 
-  factory MeetingRule.fromJson(Map<String, dynamic> json,
+  factory StoredMeetingRule.fromJson(Map<String, dynamic> json,
       {ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return MeetingRule(
+    return StoredMeetingRule(
       id: serializer.fromJson<String>(json['id']),
       courseId: serializer.fromJson<String>(json['courseId']),
       sourceMeetingKey: serializer.fromJson<String?>(json['sourceMeetingKey']),
@@ -1494,7 +1533,7 @@ class MeetingRule extends DataClass implements Insertable<MeetingRule> {
     };
   }
 
-  MeetingRule copyWith(
+  StoredMeetingRule copyWith(
           {String? id,
           String? courseId,
           Value<String?> sourceMeetingKey = const Value.absent(),
@@ -1506,7 +1545,7 @@ class MeetingRule extends DataClass implements Insertable<MeetingRule> {
           Value<String?> room = const Value.absent(),
           int? weekMask,
           String? rawWeekText}) =>
-      MeetingRule(
+      StoredMeetingRule(
         id: id ?? this.id,
         courseId: courseId ?? this.courseId,
         sourceMeetingKey: sourceMeetingKey.present
@@ -1521,8 +1560,8 @@ class MeetingRule extends DataClass implements Insertable<MeetingRule> {
         weekMask: weekMask ?? this.weekMask,
         rawWeekText: rawWeekText ?? this.rawWeekText,
       );
-  MeetingRule copyWithCompanion(MeetingRulesCompanion data) {
-    return MeetingRule(
+  StoredMeetingRule copyWithCompanion(MeetingRulesCompanion data) {
+    return StoredMeetingRule(
       id: data.id.present ? data.id.value : this.id,
       courseId: data.courseId.present ? data.courseId.value : this.courseId,
       sourceMeetingKey: data.sourceMeetingKey.present
@@ -1545,7 +1584,7 @@ class MeetingRule extends DataClass implements Insertable<MeetingRule> {
 
   @override
   String toString() {
-    return (StringBuffer('MeetingRule(')
+    return (StringBuffer('StoredMeetingRule(')
           ..write('id: $id, ')
           ..write('courseId: $courseId, ')
           ..write('sourceMeetingKey: $sourceMeetingKey, ')
@@ -1567,7 +1606,7 @@ class MeetingRule extends DataClass implements Insertable<MeetingRule> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is MeetingRule &&
+      (other is StoredMeetingRule &&
           other.id == this.id &&
           other.courseId == this.courseId &&
           other.sourceMeetingKey == this.sourceMeetingKey &&
@@ -1581,7 +1620,7 @@ class MeetingRule extends DataClass implements Insertable<MeetingRule> {
           other.rawWeekText == this.rawWeekText);
 }
 
-class MeetingRulesCompanion extends UpdateCompanion<MeetingRule> {
+class MeetingRulesCompanion extends UpdateCompanion<StoredMeetingRule> {
   final Value<String> id;
   final Value<String> courseId;
   final Value<String?> sourceMeetingKey;
@@ -1628,7 +1667,7 @@ class MeetingRulesCompanion extends UpdateCompanion<MeetingRule> {
         endSection = Value(endSection),
         weekMask = Value(weekMask),
         rawWeekText = Value(rawWeekText);
-  static Insertable<MeetingRule> custom({
+  static Insertable<StoredMeetingRule> custom({
     Expression<String>? id,
     Expression<String>? courseId,
     Expression<String>? sourceMeetingKey,
@@ -4053,6 +4092,7 @@ typedef $$CoursesTableCreateCompanionBuilder = CoursesCompanion Function({
   required String sourceType,
   Value<String?> sourceCourseKey,
   required String name,
+  Value<String> nameKey,
   Value<String?> code,
   Value<String?> teachingClass,
   Value<double?> credits,
@@ -4071,6 +4111,7 @@ typedef $$CoursesTableUpdateCompanionBuilder = CoursesCompanion Function({
   Value<String> sourceType,
   Value<String?> sourceCourseKey,
   Value<String> name,
+  Value<String> nameKey,
   Value<String?> code,
   Value<String?> teachingClass,
   Value<double?> credits,
@@ -4102,7 +4143,7 @@ final class $$CoursesTableReferences
         manager.$state.copyWith(prefetchedData: [item]));
   }
 
-  static MultiTypedResultKey<$MeetingRulesTable, List<MeetingRule>>
+  static MultiTypedResultKey<$MeetingRulesTable, List<StoredMeetingRule>>
       _meetingRulesRefsTable(_$AppDatabase db) =>
           MultiTypedResultKey.fromTable(db.meetingRules,
               aliasName: 'courses__id__meeting_rules__course_id');
@@ -4138,6 +4179,9 @@ class $$CoursesTableFilterComposer
 
   ColumnFilters<String> get name => $composableBuilder(
       column: $table.name, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get nameKey => $composableBuilder(
+      column: $table.nameKey, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get code => $composableBuilder(
       column: $table.code, builder: (column) => ColumnFilters(column));
@@ -4233,6 +4277,9 @@ class $$CoursesTableOrderingComposer
   ColumnOrderings<String> get name => $composableBuilder(
       column: $table.name, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get nameKey => $composableBuilder(
+      column: $table.nameKey, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get code => $composableBuilder(
       column: $table.code, builder: (column) => ColumnOrderings(column));
 
@@ -4306,6 +4353,9 @@ class $$CoursesTableAnnotationComposer
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get nameKey =>
+      $composableBuilder(column: $table.nameKey, builder: (column) => column);
 
   GeneratedColumn<String> get code =>
       $composableBuilder(column: $table.code, builder: (column) => column);
@@ -4407,6 +4457,7 @@ class $$CoursesTableTableManager extends RootTableManager<
             Value<String> sourceType = const Value.absent(),
             Value<String?> sourceCourseKey = const Value.absent(),
             Value<String> name = const Value.absent(),
+            Value<String> nameKey = const Value.absent(),
             Value<String?> code = const Value.absent(),
             Value<String?> teachingClass = const Value.absent(),
             Value<double?> credits = const Value.absent(),
@@ -4425,6 +4476,7 @@ class $$CoursesTableTableManager extends RootTableManager<
             sourceType: sourceType,
             sourceCourseKey: sourceCourseKey,
             name: name,
+            nameKey: nameKey,
             code: code,
             teachingClass: teachingClass,
             credits: credits,
@@ -4443,6 +4495,7 @@ class $$CoursesTableTableManager extends RootTableManager<
             required String sourceType,
             Value<String?> sourceCourseKey = const Value.absent(),
             required String name,
+            Value<String> nameKey = const Value.absent(),
             Value<String?> code = const Value.absent(),
             Value<String?> teachingClass = const Value.absent(),
             Value<double?> credits = const Value.absent(),
@@ -4461,6 +4514,7 @@ class $$CoursesTableTableManager extends RootTableManager<
             sourceType: sourceType,
             sourceCourseKey: sourceCourseKey,
             name: name,
+            nameKey: nameKey,
             code: code,
             teachingClass: teachingClass,
             credits: credits,
@@ -4514,7 +4568,7 @@ class $$CoursesTableTableManager extends RootTableManager<
                 return [
                   if (meetingRulesRefs)
                     await $_getPrefetchedData<Course, $CoursesTable,
-                            MeetingRule>(
+                            StoredMeetingRule>(
                         currentTable: table,
                         referencedTable:
                             $$CoursesTableReferences._meetingRulesRefsTable(db),
@@ -4575,8 +4629,8 @@ typedef $$MeetingRulesTableUpdateCompanionBuilder = MeetingRulesCompanion
   Value<int> rowid,
 });
 
-final class $$MeetingRulesTableReferences
-    extends BaseReferences<_$AppDatabase, $MeetingRulesTable, MeetingRule> {
+final class $$MeetingRulesTableReferences extends BaseReferences<_$AppDatabase,
+    $MeetingRulesTable, StoredMeetingRule> {
   $$MeetingRulesTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
   static $CoursesTable _courseIdTable(_$AppDatabase db) =>
@@ -4780,14 +4834,14 @@ class $$MeetingRulesTableAnnotationComposer
 class $$MeetingRulesTableTableManager extends RootTableManager<
     _$AppDatabase,
     $MeetingRulesTable,
-    MeetingRule,
+    StoredMeetingRule,
     $$MeetingRulesTableFilterComposer,
     $$MeetingRulesTableOrderingComposer,
     $$MeetingRulesTableAnnotationComposer,
     $$MeetingRulesTableCreateCompanionBuilder,
     $$MeetingRulesTableUpdateCompanionBuilder,
-    (MeetingRule, $$MeetingRulesTableReferences),
-    MeetingRule,
+    (StoredMeetingRule, $$MeetingRulesTableReferences),
+    StoredMeetingRule,
     PrefetchHooks Function({bool courseId})> {
   $$MeetingRulesTableTableManager(_$AppDatabase db, $MeetingRulesTable table)
       : super(TableManagerState(
@@ -4857,7 +4911,7 @@ class $$MeetingRulesTableTableManager extends RootTableManager<
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (
-                    e.readTable<$MeetingRulesTable, MeetingRule>(table),
+                    e.readTable<$MeetingRulesTable, StoredMeetingRule>(table),
                     $$MeetingRulesTableReferences(db, table, e)
                   ))
               .toList(),
@@ -4902,14 +4956,14 @@ class $$MeetingRulesTableTableManager extends RootTableManager<
 typedef $$MeetingRulesTableProcessedTableManager = ProcessedTableManager<
     _$AppDatabase,
     $MeetingRulesTable,
-    MeetingRule,
+    StoredMeetingRule,
     $$MeetingRulesTableFilterComposer,
     $$MeetingRulesTableOrderingComposer,
     $$MeetingRulesTableAnnotationComposer,
     $$MeetingRulesTableCreateCompanionBuilder,
     $$MeetingRulesTableUpdateCompanionBuilder,
-    (MeetingRule, $$MeetingRulesTableReferences),
-    MeetingRule,
+    (StoredMeetingRule, $$MeetingRulesTableReferences),
+    StoredMeetingRule,
     PrefetchHooks Function({bool courseId})>;
 typedef $$CourseExceptionsTableCreateCompanionBuilder
     = CourseExceptionsCompanion Function({

@@ -1,7 +1,9 @@
 import '../../core/nwu/periods.dart';
+
 import 'dart:convert';
 
 import '../../core/utils/week_mask.dart';
+import '../course/course_identity.dart';
 import '../course/course_field_normalizer.dart';
 
 String safeWeekDiagnosticText(String raw) =>
@@ -93,9 +95,8 @@ class ImportedCourse {
 /// not treated as self-study unless the marker is standalone or delimited.
 bool isSelfStudyCourseName(String value) {
   final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
-  return RegExp(
-    r'(?:^|[\s【\[（(])自修(?=$|[\s】\]）)◎★〇◆■☆（(])',
-  ).hasMatch(normalized);
+  return RegExp(r'(?:^|[\s【\[（(])自修(?=$|[\s】\]）)◎★〇◆■☆（(])')
+      .hasMatch(normalized);
 }
 
 class RemoteTimetable {
@@ -270,7 +271,7 @@ class TimetableImportParser {
     if (rawCourses is! List) {
       throw const FormatException('courses must be a list');
     }
-    final courses = <ImportedCourse>[];
+    final parsedCourses = <ImportedCourse>[];
     var ignoredSelfStudyCourseCount = _int(
       json['ignoredSelfStudyCourseCount'] ?? 0,
       'ignoredSelfStudyCourseCount',
@@ -286,12 +287,11 @@ class TimetableImportParser {
         ignoredSelfStudyCourseCount += 1;
         continue;
       }
-      courses.add(_parseCourse(
-        rawCourse,
-        index: index,
-        totalWeeks: totalWeeks,
-      ));
+      parsedCourses.add(
+        _parseCourse(rawCourse, index: index, totalWeeks: totalWeeks),
+      );
     }
+    final courses = _canonicalizeCourses(semester.remoteTermKey, parsedCourses);
     return RemoteTimetable(
       semester: semester,
       totalWeeks: totalWeeks,
@@ -300,6 +300,90 @@ class TimetableImportParser {
       ignoredSelfStudyCourseCount: ignoredSelfStudyCourseCount,
     );
   }
+
+  List<ImportedCourse> _canonicalizeCourses(
+    String remoteTermKey,
+    List<ImportedCourse> courses,
+  ) {
+    final byName = <String, List<ImportedCourse>>{};
+    for (var index = 0; index < courses.length; index++) {
+      final course = courses[index];
+      final nameKey = CourseIdentity.nameKey(course.name);
+      final groupKey = nameKey.isEmpty ? '\u0000invalid-$index' : nameKey;
+      byName.putIfAbsent(groupKey, () => []).add(course);
+    }
+
+    return List.unmodifiable([
+      for (final group in byName.values)
+        _mergeImportedCourses(remoteTermKey, group),
+    ]);
+  }
+
+  ImportedCourse _mergeImportedCourses(
+    String remoteTermKey,
+    List<ImportedCourse> group,
+  ) {
+    final name = group.first.name;
+    final invalidSourceKey = group.firstWhere(
+      (course) => course.sourceCourseKey.trim().isEmpty,
+      orElse: () => group.first,
+    );
+    final sourceCourseKey =
+        group.any((course) => course.sourceCourseKey.trim().isEmpty)
+            ? invalidSourceKey.sourceCourseKey
+            : CourseIdentity.importSourceKey(remoteTermKey, name);
+    final meetingsByShape = <String, ImportedMeeting>{};
+    for (final course in group) {
+      for (final meeting in course.meetings) {
+        final shape = [
+          meeting.weekday,
+          meeting.startSection,
+          meeting.endSection,
+          meeting.weekMask.value,
+        ].join('|');
+        final previous = meetingsByShape[shape];
+        meetingsByShape[shape] = previous == null
+            ? meeting
+            : ImportedMeeting(
+                sourceMeetingKey: meeting.sourceMeetingKey,
+                weekday: previous.weekday,
+                startSection: previous.startSection,
+                endSection: previous.endSection,
+                teacher: _firstNonEmpty(previous.teacher, meeting.teacher),
+                campus: _firstNonEmpty(previous.campus, meeting.campus),
+                room: _firstNonEmpty(previous.room, meeting.room),
+                weekMask: previous.weekMask,
+              );
+      }
+    }
+
+    final meetings = meetingsByShape.entries.map((entry) {
+      final meeting = entry.value;
+      return ImportedMeeting(
+        sourceMeetingKey: '$sourceCourseKey|meeting|${entry.key}',
+        weekday: meeting.weekday,
+        startSection: meeting.startSection,
+        endSection: meeting.endSection,
+        teacher: meeting.teacher,
+        campus: meeting.campus,
+        room: meeting.room,
+        weekMask: meeting.weekMask,
+      );
+    }).toList(growable: false)
+      ..sort(
+        (left, right) =>
+            left.sourceMeetingKey.compareTo(right.sourceMeetingKey),
+      );
+
+    return ImportedCourse(
+      sourceCourseKey: sourceCourseKey,
+      name: name,
+      meetings: List.unmodifiable(meetings),
+    );
+  }
+
+  String? _firstNonEmpty(String? first, String? second) =>
+      first?.trim().isNotEmpty == true ? first : second;
 
   List<ImportIssue> _parseIssues(Object? value) {
     if (value is! List) return const [];
@@ -522,80 +606,111 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
   final issues = <ImportIssue>[...timetable.issues];
   final semester = timetable.semester;
   if (!RegExp(r'^\d{4}-\d{4}$').hasMatch(semester.academicYear)) {
-    issues.add(const ImportIssue(
-      path: 'semester.academicYear',
-      message: '学年度格式无效',
-      severity: ImportIssueSeverity.error,
-    ));
+    issues.add(
+      const ImportIssue(
+        path: 'semester.academicYear',
+        message: '学年度格式无效',
+        severity: ImportIssueSeverity.error,
+      ),
+    );
   }
   if (semester.term < 1 || semester.term > 3) {
-    issues.add(const ImportIssue(
-      path: 'semester.term',
-      message: '学期必须为 1、2 或 3',
-      severity: ImportIssueSeverity.error,
-    ));
+    issues.add(
+      const ImportIssue(
+        path: 'semester.term',
+        message: '学期必须为 1、2 或 3',
+        severity: ImportIssueSeverity.error,
+      ),
+    );
   }
   if (semester.remoteTermKey.trim().isEmpty) {
-    issues.add(const ImportIssue(
-      path: 'semester.remoteTermKey',
-      message: '学期源 ID 不能为空',
-      severity: ImportIssueSeverity.error,
-    ));
+    issues.add(
+      const ImportIssue(
+        path: 'semester.remoteTermKey',
+        message: '学期源 ID 不能为空',
+        severity: ImportIssueSeverity.error,
+      ),
+    );
   }
   if (semester.label.trim().isEmpty) {
-    issues.add(const ImportIssue(
-      path: 'semester.label',
-      message: '学期名称不能为空',
-      severity: ImportIssueSeverity.error,
-    ));
+    issues.add(
+      const ImportIssue(
+        path: 'semester.label',
+        message: '学期名称不能为空',
+        severity: ImportIssueSeverity.error,
+      ),
+    );
   }
   if (timetable.totalWeeks < 1 || timetable.totalWeeks > 64) {
-    issues.add(const ImportIssue(
-      path: 'totalWeeks',
-      message: '教学周必须在 1 到 64 之间',
-      severity: ImportIssueSeverity.error,
-    ));
+    issues.add(
+      const ImportIssue(
+        path: 'totalWeeks',
+        message: '教学周必须在 1 到 64 之间',
+        severity: ImportIssueSeverity.error,
+      ),
+    );
   }
   if (timetable.ignoredSelfStudyCourseCount < 0) {
-    issues.add(const ImportIssue(
-      path: 'ignoredSelfStudyCourseCount',
-      message: '自修课程忽略数量无效',
-      severity: ImportIssueSeverity.error,
-    ));
+    issues.add(
+      const ImportIssue(
+        path: 'ignoredSelfStudyCourseCount',
+        message: '自修课程忽略数量无效',
+        severity: ImportIssueSeverity.error,
+      ),
+    );
   }
   if (timetable.courses.isEmpty && timetable.ignoredSelfStudyCourseCount == 0) {
-    issues.add(const ImportIssue(
-      path: 'courses',
-      message: '课表没有可导入的课程',
-      severity: ImportIssueSeverity.error,
-    ));
+    issues.add(
+      const ImportIssue(
+        path: 'courses',
+        message: '课表没有可导入的课程',
+        severity: ImportIssueSeverity.error,
+      ),
+    );
   }
   final courseKeys = <String>{};
+  final courseNameKeys = <String>{};
   for (var courseIndex = 0;
       courseIndex < timetable.courses.length;
       courseIndex++) {
     final course = timetable.courses[courseIndex];
     final coursePath = 'courses[$courseIndex]';
     if (course.sourceCourseKey.trim().isEmpty) {
-      issues.add(ImportIssue(
-        path: '$coursePath.sourceCourseKey',
-        message: '课程源 ID 不能为空',
-        severity: ImportIssueSeverity.error,
-      ));
+      issues.add(
+        ImportIssue(
+          path: '$coursePath.sourceCourseKey',
+          message: '课程源 ID 不能为空',
+          severity: ImportIssueSeverity.error,
+        ),
+      );
     }
     if (course.name.trim().isEmpty) {
-      issues.add(ImportIssue(
-        path: '$coursePath.name',
-        message: '课程名不能为空',
-        severity: ImportIssueSeverity.error,
-      ));
+      issues.add(
+        ImportIssue(
+          path: '$coursePath.name',
+          message: '课程名不能为空',
+          severity: ImportIssueSeverity.error,
+        ),
+      );
+    }
+    final nameKey = CourseIdentity.nameKey(course.name);
+    if (nameKey.isNotEmpty && !courseNameKeys.add(nameKey)) {
+      issues.add(
+        ImportIssue(
+          path: '$coursePath.name',
+          message: '同一学期中课程名重复，必须合并为一门课程',
+          severity: ImportIssueSeverity.error,
+        ),
+      );
     }
     if (!courseKeys.add(course.sourceCourseKey)) {
-      issues.add(ImportIssue(
-        path: '$coursePath.sourceCourseKey',
-        message: '课程源 ID 重复',
-        severity: ImportIssueSeverity.error,
-      ));
+      issues.add(
+        ImportIssue(
+          path: '$coursePath.sourceCourseKey',
+          message: '课程源 ID 重复',
+          severity: ImportIssueSeverity.error,
+        ),
+      );
     }
     final meetingKeys = <String>{};
     final meetingSignatures = <String>{};
@@ -605,50 +720,63 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
       final meeting = course.meetings[meetingIndex];
       final path = '$coursePath.meetings[$meetingIndex]';
       if (meeting.sourceMeetingKey.trim().isEmpty) {
-        issues.add(ImportIssue(
-          path: '$path.sourceMeetingKey',
-          message: '上课安排源 ID 不能为空',
-          severity: ImportIssueSeverity.error,
-        ));
+        issues.add(
+          ImportIssue(
+            path: '$path.sourceMeetingKey',
+            message: '上课安排源 ID 不能为空',
+            severity: ImportIssueSeverity.error,
+          ),
+        );
       }
       if (meeting.weekday < 1 || meeting.weekday > 7) {
-        issues.add(ImportIssue(
-          path: '$path.weekday',
-          message: '星期必须在 1 到 7 之间',
-          severity: ImportIssueSeverity.error,
-        ));
+        issues.add(
+          ImportIssue(
+            path: '$path.weekday',
+            message: '星期必须在 1 到 7 之间',
+            severity: ImportIssueSeverity.error,
+          ),
+        );
       }
       if (meeting.startSection < 1 ||
           meeting.endSection > NwuPeriodRepository.all.length ||
           meeting.startSection > meeting.endSection) {
-        issues.add(ImportIssue(
-          path: path,
-          message: '节次范围无效',
-          severity: ImportIssueSeverity.error,
-        ));
+        issues.add(
+          ImportIssue(
+            path: path,
+            message: '节次范围无效',
+            severity: ImportIssueSeverity.error,
+          ),
+        );
       }
       final maskValue = meeting.weekMask.value;
       final maskIsValid = maskValue > 0 && maskValue.bitLength <= 64;
       if (!maskIsValid) {
-        issues.add(ImportIssue(
-          path: '$path.weekMask',
-          message: '周次位掩码无效',
-          severity: ImportIssueSeverity.error,
-        ));
-      } else if (meeting.weekMask.weeks
-          .any((week) => week > timetable.totalWeeks)) {
-        issues.add(ImportIssue(
-          path: '$path.weekText',
-          message: '周次超过学期教学周',
-          severity: ImportIssueSeverity.error,
-        ));
+        issues.add(
+          ImportIssue(
+            path: '$path.weekMask',
+            message: '周次位掩码无效',
+            severity: ImportIssueSeverity.error,
+          ),
+        );
+      } else if (meeting.weekMask.weeks.any(
+        (week) => week > timetable.totalWeeks,
+      )) {
+        issues.add(
+          ImportIssue(
+            path: '$path.weekText',
+            message: '周次超过学期教学周',
+            severity: ImportIssueSeverity.error,
+          ),
+        );
       }
       if (!meetingKeys.add(meeting.sourceMeetingKey)) {
-        issues.add(ImportIssue(
-          path: '$path.sourceMeetingKey',
-          message: '同一课程的上课安排源 ID 重复',
-          severity: ImportIssueSeverity.error,
-        ));
+        issues.add(
+          ImportIssue(
+            path: '$path.sourceMeetingKey',
+            message: '同一课程的上课安排源 ID 重复',
+            severity: ImportIssueSeverity.error,
+          ),
+        );
       }
       final signature = jsonEncode([
         meeting.weekday,
@@ -660,19 +788,23 @@ ImportValidationReport validateTimetable(RemoteTimetable timetable) {
         meeting.room,
       ]);
       if (!meetingSignatures.add(signature)) {
-        issues.add(ImportIssue(
-          path: path,
-          message: '同一课程包含完全重复的上课安排',
-          severity: ImportIssueSeverity.error,
-        ));
+        issues.add(
+          ImportIssue(
+            path: path,
+            message: '同一课程包含完全重复的上课安排',
+            severity: ImportIssueSeverity.error,
+          ),
+        );
       }
     }
     if (course.meetings.isEmpty) {
-      issues.add(ImportIssue(
-        path: '$coursePath.meetings',
-        message: '课程没有上课安排，无法安全完成导入',
-        severity: ImportIssueSeverity.error,
-      ));
+      issues.add(
+        ImportIssue(
+          path: '$coursePath.meetings',
+          message: '课程没有上课安排，无法安全完成导入',
+          severity: ImportIssueSeverity.error,
+        ),
+      );
     }
   }
   return ImportValidationReport(List.unmodifiable(issues));

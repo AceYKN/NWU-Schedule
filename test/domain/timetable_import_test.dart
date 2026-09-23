@@ -3,15 +3,17 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nwu_schedule/core/utils/week_mask.dart';
+import 'package:nwu_schedule/domain/course/course_identity.dart';
 import 'package:nwu_schedule/domain/import/timetable_import.dart';
 
 void main() {
   late Map<String, dynamic> fixture;
 
   setUpAll(() {
-    fixture = jsonDecode(File(
-      'test/fixtures/zhengfang/timetable_response.json',
-    ).readAsStringSync()) as Map<String, dynamic>;
+    fixture = jsonDecode(
+      File('test/fixtures/zhengfang/timetable_response.json')
+          .readAsStringSync(),
+    ) as Map<String, dynamic>;
   });
 
   test('normalizes canonical and Zhengfang-style field names', () {
@@ -30,6 +32,97 @@ void main() {
     expect(network.meetings.single.weekMask.weeks, [2, 4, 6, 8]);
     expect(network.meetings.single.startSection, 5);
     expect(network.meetings.single.endSection, 6);
+  });
+
+  test('canonicalizes duplicate course names and meeting structures', () {
+    final timetable = const TimetableImportParser().parse({
+      'semester': {
+        'remoteTermKey': 'term-identity',
+        'academicYear': '2026-2027',
+        'term': 1,
+        'label': '第一学期',
+        'totalWeeks': 16,
+      },
+      'courses': [
+        {
+          'sourceCourseKey': 'old-a',
+          'name': '机器学习',
+          'meetings': [
+            {
+              'sourceMeetingKey': 'old-a-1',
+              'weekday': 1,
+              'startSection': 1,
+              'endSection': 2,
+              'weekText': '1-8周',
+              'teacher': '教师甲',
+              'room': '321',
+            },
+          ],
+        },
+        {
+          'sourceCourseKey': 'old-b',
+          'name': ' 机器学习\u00a0',
+          'meetings': [
+            {
+              'sourceMeetingKey': 'old-b-1',
+              'weekday': 4,
+              'startSection': 5,
+              'endSection': 6,
+              'weekText': '9-16周',
+              'room': '1405',
+            },
+          ],
+        },
+        {
+          'sourceCourseKey': 'old-c',
+          'name': '机器学习',
+          'meetings': [
+            {
+              'sourceMeetingKey': 'old-c-1',
+              'weekday': 1,
+              'startSection': 1,
+              'endSection': 2,
+              'weekText': '1-8周',
+              'room': '322',
+            },
+          ],
+        },
+        {
+          'sourceCourseKey': 'old-d',
+          'name': '机器学习（双语）',
+          'meetings': [
+            {
+              'sourceMeetingKey': 'old-d-1',
+              'weekday': 1,
+              'startSection': 1,
+              'endSection': 2,
+              'weekText': '1-8周',
+              'room': '321',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(timetable.courses, hasLength(2));
+    final machineLearning = timetable.courses.singleWhere(
+      (course) => course.name == '机器学习',
+    );
+    expect(
+      machineLearning.sourceCourseKey,
+      CourseIdentity.importSourceKey('term-identity', '机器学习'),
+    );
+    expect(machineLearning.meetings, hasLength(2));
+    final monday = machineLearning.meetings.singleWhere(
+      (meeting) => meeting.weekday == 1,
+    );
+    expect(monday.room, '321');
+    expect(monday.teacher, '教师甲');
+    expect(
+      monday.sourceMeetingKey,
+      '${machineLearning.sourceCourseKey}|meeting|1|1|2|255',
+    );
+    expect(validateTimetable(timetable).isValid, isTrue);
   });
 
   test('strips imported teacher campus and room labels defensively', () {
@@ -84,7 +177,9 @@ void main() {
 
     expect(timetable.courses, hasLength(2));
     expect(
-        timetable.courses.any((course) => course.name.contains('自修')), isFalse);
+      timetable.courses.any((course) => course.name.contains('自修')),
+      isFalse,
+    );
     expect(timetable.ignoredSelfStudyCourseCount, 1);
     expect(validateTimetable(timetable).isValid, isTrue);
 
@@ -175,7 +270,7 @@ void main() {
         severity: ImportIssueSeverity.error,
         details: {
           'courseName': '不得输出',
-          'parsedNumbers': [321]
+          'parsedNumbers': [321],
         },
       ).toString(),
       isNot(contains('不得输出')),
@@ -186,14 +281,14 @@ void main() {
       severity: ImportIssueSeverity.error,
       details: {
         'courseName': '不得输出',
-        'parsedNumbers': [321]
+        'parsedNumbers': [321],
       },
     ).toJson()['details'] as Map;
     expect(details.containsKey('courseName'), isFalse);
     expect(details['parsedNumbers'], [321]);
   });
 
-  test('validates empty IDs, bad weekday, section and duplicate rules', () {
+  test('validates malformed meeting shapes after identity normalization', () {
     final timetable = const TimetableImportParser().parse({
       ...fixture,
       'courses': [
@@ -217,19 +312,20 @@ void main() {
             },
           ],
         },
-        {
-          'sourceCourseKey': 'same',
-          'name': '课程 B',
-          'meetings': [],
-        },
+        {'sourceCourseKey': 'same', 'name': '课程 B', 'meetings': []},
       ],
     });
     final report = validateTimetable(timetable);
     expect(report.isValid, isFalse);
     expect(report.errorCount, greaterThanOrEqualTo(4));
     expect(
-        report.issues.any((issue) => issue.path.contains('weekday')), isTrue);
-    expect(report.issues.any((issue) => issue.message.contains('重复')), isTrue);
+      report.issues.any((issue) => issue.path.contains('weekday')),
+      isTrue,
+    );
+    expect(
+      report.issues.any((issue) => issue.path.endsWith('.meetings')),
+      isTrue,
+    );
   });
 
   test('rejects a course with no meetings before destructive import', () {

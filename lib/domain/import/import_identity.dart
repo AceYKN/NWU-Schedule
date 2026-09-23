@@ -1,15 +1,13 @@
 import '../course/course.dart';
+import '../course/course_identity.dart';
 import '../course/meeting_rule.dart';
 import 'timetable_import.dart';
 
 /// Matches imported courses and meetings across snapshots when the source
 /// system has not supplied a stable opaque identifier.
 ///
-/// The fallback deliberately uses the course name and recurring meeting
-/// shape. It does not use display metadata such as course code, teaching
-/// class, credits, assessment, teacher, or room as identity. Meeting
-/// properties may still contribute to a match score as tie-breakers; they do
-/// not become part of the identity persisted by the importer.
+/// Course identity is the normalized name. Meeting structure is used only to
+/// reconcile arrangements after a course has been identified.
 class ImportIdentityMatcher {
   const ImportIdentityMatcher();
 
@@ -18,29 +16,24 @@ class ImportIdentityMatcher {
     Iterable<Course> candidates,
     Map<String, List<MeetingRule>> localRules,
   ) {
-    final matches = <({Course course, int score})>[];
-    for (final candidate in candidates) {
-      if (!_sameCourseName(candidate.name, remote.name)) continue;
-      final score = courseShapeScore(
-        remote.meetings,
-        localRules[candidate.id] ?? const [],
-      );
-      if (score != null) matches.add((course: candidate, score: score));
-    }
-    return _uniqueBest(matches);
+    final matches = candidates
+        .where(
+          (candidate) => CourseIdentity.sameName(candidate.name, remote.name),
+        )
+        .toList(growable: false);
+    return matches.length == 1 ? matches.single : null;
   }
 
   ImportedCourse? matchPreviousCourse(
     ImportedCourse remote,
     Iterable<ImportedCourse> candidates,
   ) {
-    final matches = <({ImportedCourse course, int score})>[];
-    for (final candidate in candidates) {
-      if (!_sameCourseName(candidate.name, remote.name)) continue;
-      final score = courseShapeScore(remote.meetings, candidate.meetings);
-      if (score != null) matches.add((course: candidate, score: score));
-    }
-    return _uniqueBest(matches);
+    final matches = candidates
+        .where(
+          (candidate) => CourseIdentity.sameName(candidate.name, remote.name),
+        )
+        .toList(growable: false);
+    return matches.length == 1 ? matches.single : null;
   }
 
   /// Matches a meeting by its source key first, then by an unambiguous
@@ -132,10 +125,7 @@ class ImportIdentityMatcher {
   /// Returns null when the remote meeting cannot be matched unambiguously.
   /// Structural anchors are required; teacher, campus and room only refine
   /// the score and are intentionally not identity fields.
-  static int? meetingMatchScore(
-    ImportedMeeting remote,
-    Object candidate,
-  ) {
+  static int? meetingMatchScore(ImportedMeeting remote, Object candidate) {
     final weekday = switch (candidate) {
       MeetingRule value => value.weekday,
       ImportedMeeting value => value.weekday,
@@ -181,8 +171,11 @@ class ImportIdentityMatcher {
     final sameSections =
         startSection == remote.startSection && endSection == remote.endSection;
     final sameWeeks = weekMask.value == remote.weekMask.value;
-    final structuralAnchors =
-        [sameWeekday, sameSections, sameWeeks].where((value) => value).length;
+    final structuralAnchors = [
+      sameWeekday,
+      sameSections,
+      sameWeeks,
+    ].where((value) => value).length;
     if (structuralAnchors == 0) return null;
     final sameTeacher = _sameMeetingText(teacher, remote.teacher);
     final sameCampus = _sameMeetingText(campus, remote.campus);
@@ -305,28 +298,11 @@ class ImportIdentityMatcher {
     return (score: score, columns: columns);
   }
 
-  static T? _uniqueBest<T extends Object>(
-    List<({T course, int score})> matches,
-  ) {
-    if (matches.isEmpty) return null;
-    matches.sort((left, right) => right.score.compareTo(left.score));
-    if (matches.length > 1 && matches[0].score == matches[1].score) {
-      return null;
-    }
-    return matches.first.course;
-  }
-
-  static bool _sameCourseName(String left, String right) =>
-      _normalizeText(left) == _normalizeText(right);
-
   static String? _sourceMeetingKey(Object candidate) => switch (candidate) {
         MeetingRule value => value.sourceMeetingKey,
         ImportedMeeting value => value.sourceMeetingKey,
         _ => null,
       };
-
-  static String _normalizeText(String value) =>
-      value.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
 
   static bool _sameMeetingText(String? left, String? right) =>
       (left ?? '').trim() == (right ?? '').trim();

@@ -47,6 +47,13 @@ abstract interface class ScheduleDataRepository {
     Iterable<String> removeExceptionIds = const [],
   });
 
+  Future<void> mergeCourseInto({
+    required Course editedCourse,
+    required String targetCourseId,
+    required List<MeetingRule> editedRules,
+    Iterable<String> removeExceptionIds = const [],
+  });
+
   Future<void> saveException(CourseException exception);
 
   Future<void> deleteException(String exceptionId);

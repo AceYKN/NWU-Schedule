@@ -113,6 +113,24 @@ void main() {
       ),
       findsOneWidget,
     );
+    final secondMeeting = find.ancestor(
+      of: find.text('上课安排 2', skipOffstage: false),
+      matching: find.byType(Card),
+    );
+    final secondWeekday = find.descendant(
+      of: secondMeeting,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is DropdownButtonFormField<int> &&
+            widget.decoration.labelText == '星期',
+      ),
+    );
+    expect(secondWeekday, findsOneWidget);
+    await tester.ensureVisible(secondWeekday);
+    await tester.tap(secondWeekday);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('星期二').last);
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('保存课程'),
       300,

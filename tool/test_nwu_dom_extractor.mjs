@@ -445,7 +445,8 @@ const sameCodeDifferentClass = runExtraction(sameCodeDifferentClassFixture);
 const sameNameCourses = sameCodeDifferentClass.payload.courses.filter(
   (course) => course.name === '软件测试',
 );
-assert.equal(sameNameCourses.length, 2);
+assert.equal(sameNameCourses.length, 1);
+assert.equal(sameNameCourses[0].meetings.length, 2);
 
 const rowSpanZeroFixture = `
 <!doctype html>
@@ -687,15 +688,25 @@ const sameShapeTeachingClassesFixture = `
 </body></html>`;
 const sameShapeTeachingClasses = runExtraction(sameShapeTeachingClassesFixture);
 assert.equal(sameShapeTeachingClasses.payload.issues.length, 0);
-assert.equal(sameShapeTeachingClasses.payload.courses.length, 2);
+assert.equal(sameShapeTeachingClasses.payload.courses.length, 1);
 assert.deepEqual(
   sameShapeTeachingClasses.payload.courses.map((course) => course.name),
-  ['同名课程', '同名课程'],
+  ['同名课程'],
 );
 assert.deepEqual(
   sameShapeTeachingClasses.payload.courses
     .map((course) => course.meetings[0].room),
-  ['321', '322'],
+  ['321'],
+);
+assert.equal(
+  sameShapeTeachingClasses.payload.courses[0].sourceCourseKey.startsWith(
+    'nwu-v4|course|',
+  ),
+  true,
+);
+assert.equal(
+  sameShapeTeachingClasses.payload.courses[0].meetings.length,
+  1,
 );
 assert.equal(
   JSON.stringify(sameShapeTeachingClasses.payload).includes('教学班-A'),
@@ -743,7 +754,7 @@ assert.deepEqual(
 
 const realList = runExtraction(realListFixture);
 assert.equal(realList.payload.totalWeeks, 18);
-assert.equal(realList.payload.courses.length, 6);
+assert.equal(realList.payload.courses.length, 5);
 assert.equal(
   realList.payload.issues.filter((issue) => issue.severity === 'error').length,
   0,
@@ -755,7 +766,7 @@ const realListWithLegacyArrayCallbacks = runExtraction(realListFixture, {
   legacyArrayCallbacks: true,
 });
 assert.equal(realListWithLegacyArrayCallbacks.payload.totalWeeks, 18);
-assert.equal(realListWithLegacyArrayCallbacks.payload.courses.length, 6);
+assert.equal(realListWithLegacyArrayCallbacks.payload.courses.length, 5);
 assert.equal(
   realListWithLegacyArrayCallbacks.payload.courses
     .flatMap((course) => course.meetings).length,
@@ -868,26 +879,27 @@ const realSoftware = realList.payload.courses.find(
   (course) => course.name === '软件测试（双语）',
 );
 assert.ok(realSoftware);
-assert.equal(realSoftware.meetings.length, 1);
+assert.equal(realSoftware.meetings.length, 2);
 assert.deepEqual(
-  realSoftware.meetings.map((meeting) => [
-    meeting.weekday,
-    meeting.startSection,
-    meeting.endSection,
-    meeting.weekText,
-    meeting.room,
-  ]),
+  realSoftware.meetings
+    .map((meeting) => [
+      meeting.weekday,
+      meeting.startSection,
+      meeting.endSection,
+      meeting.weekText,
+      meeting.room,
+    ])
+    .sort((left, right) => left[1] - right[1]),
   [
     [1, 3, 4, '1-18周', '3406'],
+    [1, 9, 10, '3-12周', '计算机技术实验室-321'],
   ],
 );
-
-const realSoftwareSecondClass = realList.payload.courses.find(
-  (course) => course.name === '软件测试（双语）' &&
-    course.meetings[0]?.room === '计算机技术实验室-321',
+assert.equal(
+  realList.payload.courses.filter((course) => course.name === '软件测试（双语）')
+    .length,
+  1,
 );
-assert.ok(realSoftwareSecondClass);
-assert.equal(realSoftwareSecondClass.meetings.length, 1);
 
 const mining = realList.payload.courses.find(
   (course) => course.name === 'Web数据挖掘（双语）',
