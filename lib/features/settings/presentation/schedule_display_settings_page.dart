@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
@@ -27,7 +28,11 @@ class ScheduleDisplaySettingsPage extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
       children: [
-        const AppPageHeader(title: '课表显示', showBack: true),
+        AppPageHeader(
+          title: '课表显示',
+          showBack: true,
+          onBack: () => context.go('/settings'),
+        ),
         const SizedBox(height: 8),
         Text(
           '预览',
