@@ -117,7 +117,10 @@ void main() {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
     final repository = DriftScheduleDataRepository(database);
-    final today = dateOnly(CampusClock.now());
+    final today = DateTime(2026, 9, 22);
+    final now = CampusClock.campusWallTimeToUtc(
+      DateTime(2026, 9, 22, 8),
+    );
     final week1 = today.subtract(Duration(days: today.weekday - 1 + 7));
     final calendar = CalendarDefinition(
       id: 'widget-pages-calendar',
@@ -179,7 +182,7 @@ void main() {
       ],
     );
 
-    final page = ValueNotifier<Widget>(const HomePage());
+    final page = ValueNotifier<Widget>(HomePage(now: now));
     addTearDown(page.dispose);
     await tester.pumpWidget(
       ProviderScope(
@@ -206,10 +209,10 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    await pumpPage(const HomePage());
+    await pumpPage(HomePage(now: now));
     expect(find.text('软件测试'), findsWidgets);
 
-    await pumpPage(const SchedulePage());
+    await pumpPage(SchedulePage(now: now));
     expect(find.text('周课表'), findsNothing);
     expect(find.byType(WeekPageHeader), findsOneWidget);
     expect(find.text('六'), findsNothing);
@@ -229,7 +232,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('软件测试'), findsOneWidget);
 
-    await pumpPage(const CalendarPage());
+    await pumpPage(CalendarPage(now: now));
     expect(find.byTooltip('选择日期'), findsOneWidget);
     expect(find.text('1 节'), findsWidgets);
     expect(

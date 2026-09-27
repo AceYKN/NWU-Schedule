@@ -6,6 +6,7 @@ import '../../../../core/nwu/periods.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../domain/schedule/week_schedule_view_model.dart';
 import '../../../../domain/settings/schedule_display_preferences.dart';
+import '../../../shared/presentation/course_color_resolver.dart';
 import 'course_block.dart';
 import 'schedule_layout_engine.dart';
 
@@ -15,6 +16,7 @@ class ScheduleWeekGrid extends StatelessWidget {
     required this.viewModel,
     required this.preferences,
     required this.now,
+    this.coursePalette,
     this.onEntryTap,
     super.key,
   });
@@ -23,6 +25,7 @@ class ScheduleWeekGrid extends StatelessWidget {
   final WeekScheduleViewModel viewModel;
   final ScheduleDisplayPreferences preferences;
   final DateTime now;
+  final Map<String, int>? coursePalette;
   final ValueChanged<ScheduleGridEntry>? onEntryTap;
 
   @override
@@ -41,6 +44,10 @@ class ScheduleWeekGrid extends StatelessWidget {
           visibleDays: visibleDays,
           entries: viewModel.entries,
         );
+        final palette = coursePalette ??
+            CourseColorResolver.schedulePaletteForCourses(
+              viewModel.entries.map((entry) => entry.course),
+            );
         final current =
             preferences.highlightCurrentPeriod ? _currentPeriod() : null;
         final scheme = Theme.of(context).colorScheme;
@@ -103,6 +110,7 @@ class ScheduleWeekGrid extends StatelessWidget {
                       periodWidth: periodWidth,
                       dayWidth: dayWidth,
                       visibleDayCount: visibleDays.length,
+                      palette: palette,
                     ),
                   if (current != null)
                     Positioned(
@@ -127,6 +135,7 @@ class ScheduleWeekGrid extends StatelessWidget {
     required double periodWidth,
     required double dayWidth,
     required int visibleDayCount,
+    required Map<String, int> palette,
   }) {
     final width = math.max<double>(
       8,
@@ -164,6 +173,7 @@ class ScheduleWeekGrid extends StatelessWidget {
               width: width,
               height: height,
               visibleDayCount: visibleDayCount,
+              paletteIndex: palette[item.entry!.course.id],
               isCurrent: _isCurrentEntry(item.entry!),
               onTap: onEntryTap == null ? null : () => onEntryTap!(item.entry!),
             ),

@@ -17,22 +17,54 @@ class CourseColorResolver {
 
   static const _scheduleHueOffsets = [
     0.0,
-    34.0,
-    -34.0,
-    72.0,
-    -72.0,
-    142.0,
     180.0,
-    208.0,
-    286.0,
-    324.0,
+    90.0,
+    270.0,
+    45.0,
+    225.0,
+    135.0,
+    315.0,
+    30.0,
+    210.0,
+    120.0,
+    300.0,
   ];
 
-  static int schedulePaletteLength() => _scheduleHueOffsets.length;
+  static int schedulePaletteLength() => _scheduleHueOffsets.length * 2;
 
   static int schedulePaletteIndexForName(String courseName) {
     return _stableHash(CourseIdentity.nameKey(courseName)) %
-        _scheduleHueOffsets.length;
+        schedulePaletteLength();
+  }
+
+  /// Assigns distinct automatic colors to the courses in one semester.
+  /// Sorting makes the result independent of repository and week entry order.
+  /// Extra courses receive new color indices after the base palette is full.
+  static Map<String, int> schedulePaletteForCourses(Iterable<Course> courses) {
+    final byId = {
+      for (final course in courses)
+        if (!course.deleted && course.colorOverride == null) course.id: course,
+    };
+    final ordered = byId.values.toList()
+      ..sort((left, right) {
+        final byName = CourseIdentity.nameKey(left.name)
+            .compareTo(CourseIdentity.nameKey(right.name));
+        return byName != 0 ? byName : left.id.compareTo(right.id);
+      });
+    final assigned = <String, int>{};
+    final used = <int>{};
+    for (final course in ordered) {
+      var index = schedulePaletteIndexForName(course.name);
+      while (used.contains(index) && used.length < schedulePaletteLength()) {
+        index = (index + 1) % schedulePaletteLength();
+      }
+      if (used.length >= schedulePaletteLength()) {
+        index = used.length;
+      }
+      assigned[course.id] = index;
+      used.add(index);
+    }
+    return assigned;
   }
 
   static CourseColorPair resolve(Course course, ColorScheme scheme) {
@@ -55,7 +87,11 @@ class CourseColorResolver {
   /// Week cells use a palette derived from the active Material 3 scheme so a
   /// course keeps the same color across weeks and across app launches without
   /// introducing hard-coded light/dark colors.
-  static CourseColorPair resolveSchedule(Course course, ColorScheme scheme) {
+  static CourseColorPair resolveSchedule(
+    Course course,
+    ColorScheme scheme, {
+    int? paletteIndex,
+  }) {
     if (course.colorOverride != null) {
       final base = Color(course.colorOverride!);
       return CourseColorPair(
@@ -64,10 +100,22 @@ class CourseColorResolver {
       );
     }
     final baseHue = HSLColor.fromColor(scheme.primary).hue;
-    final hueOffset = _scheduleHueOffsets[
-        schedulePaletteIndexForName(course.name) % _scheduleHueOffsets.length];
+    final index = paletteIndex ?? schedulePaletteIndexForName(course.name);
+    final hueOffset = index < schedulePaletteLength()
+        ? _scheduleHueOffsets[index % _scheduleHueOffsets.length]
+        : (index * 137.507764) % 360;
     final hue = ((baseHue + hueOffset) % 360 + 360) % 360;
-    final tone = scheme.brightness == Brightness.light ? .86 : .30;
+    final tone = scheme.brightness == Brightness.light
+        ? (index < _scheduleHueOffsets.length
+            ? .86
+            : index < schedulePaletteLength()
+                ? .73
+                : .68 + .04 * (index % 3))
+        : (index < _scheduleHueOffsets.length
+            ? .30
+            : index < schedulePaletteLength()
+                ? .42
+                : .38 + .04 * (index % 3));
     final saturation = scheme.brightness == Brightness.light ? .42 : .48;
     final accent = HSLColor.fromAHSL(1, hue, saturation, tone).toColor();
     final base = Color.lerp(
@@ -100,7 +148,10 @@ class CourseColorResolver {
         ? lightForeground
         : darkForeground;
     if (_contrastRatio(background, preferred) >= 4.5) return preferred;
-    return background.computeLuminance() > .45 ? Colors.black : Colors.white;
+    return _contrastRatio(background, Colors.black) >=
+            _contrastRatio(background, Colors.white)
+        ? Colors.black
+        : Colors.white;
   }
 
   static Color _bestContrastColor(Color background, ColorScheme scheme) {

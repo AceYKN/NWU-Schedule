@@ -17,6 +17,7 @@ import 'widgets/schedule_week_display_filter.dart';
 import 'widgets/schedule_quick_detail_sheet.dart';
 import 'widgets/timeslot_semester_schedule.dart';
 import '../../shared/presentation/course_card.dart';
+import '../../shared/presentation/course_color_resolver.dart';
 
 class SchedulePage extends ConsumerStatefulWidget {
   const SchedulePage({super.key, this.now});
@@ -368,6 +369,8 @@ class _WeekContentState extends State<_WeekContent> {
 
   @override
   Widget build(BuildContext context) {
+    final coursePalette =
+        CourseColorResolver.schedulePaletteForCourses(widget.engine.courses);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -426,6 +429,7 @@ class _WeekContentState extends State<_WeekContent> {
                     ScheduleWeekGrid(
                       visibleDays: visibleDays,
                       viewModel: pageModel,
+                      coursePalette: coursePalette,
                       preferences: widget.preferences,
                       now: CampusClock.toCampusWallTime(widget.now),
                       onEntryTap: (entry) => widget.onEntryTap(pageWeek, entry),

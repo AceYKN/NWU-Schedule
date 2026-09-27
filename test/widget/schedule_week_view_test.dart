@@ -446,6 +446,120 @@ void main() {
     expect(first.container, second.container);
   });
 
+  test('semester palette separates courses that hash to the same color', () {
+    final courses = <Course>[];
+    for (var index = 0; courses.length < 50; index++) {
+      final name = '课程$index';
+      if (CourseColorResolver.schedulePaletteIndexForName(name) != 0) {
+        continue;
+      }
+      courses.add(Course(
+        id: 'course-$index',
+        semesterId: 'term-one',
+        sourceType: CourseSourceType.manual,
+        name: name,
+      ));
+    }
+    final palette = CourseColorResolver.schedulePaletteForCourses(courses);
+    final reversedPalette = CourseColorResolver.schedulePaletteForCourses(
+      courses.reversed,
+    );
+    expect(palette, reversedPalette);
+    expect(palette.values.toSet(), hasLength(courses.length));
+
+    for (final brightness in Brightness.values) {
+      final scheme = ColorScheme.fromSeed(
+        seedColor: Colors.indigo,
+        brightness: brightness,
+      );
+      final colors = courses.map((course) {
+        return CourseColorResolver.resolveSchedule(
+          course,
+          scheme,
+          paletteIndex: palette[course.id],
+        ).container;
+      }).toSet();
+      expect(colors, hasLength(courses.length));
+    }
+  });
+
+  test('manual course color takes priority over the semester palette', () {
+    final course = Course(
+      id: 'manual-color',
+      semesterId: 'term-one',
+      sourceType: CourseSourceType.manual,
+      name: '自选颜色课程',
+      colorOverride: 0xFF7A46A1,
+    );
+    final palette = CourseColorResolver.schedulePaletteForCourses([course]);
+    expect(palette, isEmpty);
+    expect(
+      CourseColorResolver.resolveSchedule(
+        course,
+        ColorScheme.fromSeed(seedColor: Colors.indigo),
+        paletteIndex: 5,
+      ).container,
+      const Color(0xFF7A46A1),
+    );
+  });
+
+  test('separate courses with the same name get separate semester colors', () {
+    final courses = [
+      for (final id in ['first', 'second'])
+        Course(
+          id: id,
+          semesterId: 'term-one',
+          sourceType: CourseSourceType.manual,
+          name: '同名课程',
+        ),
+    ];
+    final palette = CourseColorResolver.schedulePaletteForCourses(courses);
+    expect(palette['first'], isNot(palette['second']));
+  });
+
+  testWidgets('week grid paints colliding course names in different colors', (
+    tester,
+  ) async {
+    final names = <String>[];
+    for (var index = 0; names.length < 2; index++) {
+      final name = '碰撞课程$index';
+      if (CourseColorResolver.schedulePaletteIndexForName(name) == 0) {
+        names.add(name);
+      }
+    }
+    final model = _model(entries: [
+      _entry(
+        id: 'first',
+        name: names[0],
+        weekday: DateTime.monday,
+        startSection: 1,
+        endSection: 2,
+      ),
+      _entry(
+        id: 'second',
+        name: names[1],
+        weekday: DateTime.tuesday,
+        startSection: 3,
+        endSection: 4,
+      ),
+    ]);
+    await _pumpGrid(tester, model, model.days.take(5).toList());
+    final blocks = find.byType(CourseEventCard).evaluate();
+    final colors = blocks.map((element) {
+      return tester
+          .widget<Material>(
+            find
+                .descendant(
+                  of: find.byWidget(element.widget),
+                  matching: find.byType(Material),
+                )
+                .first,
+          )
+          .color;
+    }).toSet();
+    expect(colors, hasLength(2));
+  });
+
   test(
     'schedule course text stays neutral and meets contrast in both themes',
     () {
@@ -461,9 +575,7 @@ void main() {
           seedColor: Colors.indigo,
           brightness: brightness,
         );
-        for (var index = 0;
-            index < CourseColorResolver.schedulePaletteLength();
-            index++) {
+        for (var index = 0; index < 50; index++) {
           final paletteName = 'contrast-course-$index';
           final colors = CourseColorResolver.resolveSchedule(
             Course(
@@ -473,6 +585,7 @@ void main() {
               name: paletteName,
             ),
             scheme,
+            paletteIndex: index,
           );
           expect(
             _contrastRatio(colors.container, colors.onContainer),
