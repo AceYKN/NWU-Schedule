@@ -107,21 +107,21 @@ class CourseColorResolver {
     final hue = ((baseHue + hueOffset) % 360 + 360) % 360;
     final tone = scheme.brightness == Brightness.light
         ? (index < _scheduleHueOffsets.length
-            ? .86
+            ? .84
             : index < schedulePaletteLength()
-                ? .73
-                : .68 + .04 * (index % 3))
+                ? .72
+                : .70 + .04 * (index % 3))
         : (index < _scheduleHueOffsets.length
             ? .30
             : index < schedulePaletteLength()
                 ? .42
                 : .38 + .04 * (index % 3));
-    final saturation = scheme.brightness == Brightness.light ? .42 : .38;
+    final saturation = scheme.brightness == Brightness.light ? .36 : .38;
     final accent = HSLColor.fromAHSL(1, hue, saturation, tone).toColor();
     final base = Color.lerp(
       scheme.surface,
       accent,
-      scheme.brightness == Brightness.light ? .72 : .50,
+      scheme.brightness == Brightness.light ? .64 : .50,
     )!;
     return CourseColorPair(
       container: base,
@@ -142,7 +142,7 @@ class CourseColorResolver {
     Color background,
     ColorScheme scheme,
   ) {
-    const lightForeground = Color(0xFF17181B);
+    const lightForeground = Color(0xFF3B3C3F);
     const darkForeground = Color(0xFFF3F4F6);
     final preferred = scheme.brightness == Brightness.light
         ? lightForeground

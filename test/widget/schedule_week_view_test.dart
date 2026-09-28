@@ -625,6 +625,36 @@ void main() {
     }
   });
 
+  test('light course colors stay gentle and readable across themes', () {
+    final course = Course(
+      id: 'light-course',
+      semesterId: 'test-semester',
+      sourceType: CourseSourceType.manual,
+      name: '软件测试',
+    );
+    for (final theme in officialThemes) {
+      final scheme = theme.light().colorScheme;
+      final containers = <Color>{};
+      for (var index = 0; index < 50; index++) {
+        final colors = CourseColorResolver.resolveSchedule(
+          course,
+          scheme,
+          paletteIndex: index,
+        );
+        containers.add(colors.container);
+        expect(
+          _contrastRatio(scheme.surface, colors.container),
+          lessThan(1.9),
+        );
+        expect(
+          _contrastRatio(colors.container, colors.onContainer),
+          greaterThanOrEqualTo(4.5),
+        );
+      }
+      expect(containers, hasLength(50));
+    }
+  });
+
   test(
     'weekend makeup notice takes priority over the generic course count',
     () {
