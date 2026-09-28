@@ -284,6 +284,9 @@ void main() {
             child: ScheduleWeekGrid(
               visibleDays: model.days.take(5).toList(),
               viewModel: model,
+              coursePalette: CourseColorResolver.schedulePaletteForCourses(
+                model.entries.map((entry) => entry.course),
+              ),
               preferences: const ScheduleDisplayPreferences.defaults(),
               now: DateTime(2026, 9, 7, 8, 20),
             ),
@@ -500,22 +503,26 @@ void main() {
         ColorScheme.fromSeed(seedColor: Colors.indigo),
         paletteIndex: 5,
       ).container,
-      const Color(0xFF7A46A1),
+      isNot(const Color(0xFF7A46A1)),
     );
   });
 
-  test('separate courses with the same name get separate semester colors', () {
+  test('courses with the same normalized name share one semester color', () {
     final courses = [
-      for (final id in ['first', 'second'])
+      for (final entry in [
+        ('first', '同名课程'),
+        ('second', ' 同名课程 '),
+        ('third', '同名课程\u00a0'),
+      ])
         Course(
-          id: id,
+          id: entry.$1,
           semesterId: 'term-one',
           sourceType: CourseSourceType.manual,
-          name: '同名课程',
+          name: entry.$2,
         ),
     ];
     final palette = CourseColorResolver.schedulePaletteForCourses(courses);
-    expect(palette['first'], isNot(palette['second']));
+    expect(palette.values.toSet(), hasLength(1));
   });
 
   testWidgets('week grid paints colliding course names in different colors', (
@@ -694,6 +701,9 @@ Future<void> _pumpGrid(
             child: ScheduleWeekGrid(
               visibleDays: days,
               viewModel: model,
+              coursePalette: CourseColorResolver.schedulePaletteForCourses(
+                model.entries.map((entry) => entry.course),
+              ),
               preferences: const ScheduleDisplayPreferences.defaults()
                   .copyWith(showWeekend: showWeekend),
               now: DateTime(2026, 9, 7, 13),

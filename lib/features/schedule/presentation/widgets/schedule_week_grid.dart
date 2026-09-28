@@ -6,7 +6,6 @@ import '../../../../core/nwu/periods.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../domain/schedule/week_schedule_view_model.dart';
 import '../../../../domain/settings/schedule_display_preferences.dart';
-import '../../../shared/presentation/course_color_resolver.dart';
 import 'course_block.dart';
 import 'schedule_layout_engine.dart';
 
@@ -16,7 +15,7 @@ class ScheduleWeekGrid extends StatelessWidget {
     required this.viewModel,
     required this.preferences,
     required this.now,
-    this.coursePalette,
+    required this.coursePalette,
     this.onEntryTap,
     super.key,
   });
@@ -25,7 +24,7 @@ class ScheduleWeekGrid extends StatelessWidget {
   final WeekScheduleViewModel viewModel;
   final ScheduleDisplayPreferences preferences;
   final DateTime now;
-  final Map<String, int>? coursePalette;
+  final Map<String, int> coursePalette;
   final ValueChanged<ScheduleGridEntry>? onEntryTap;
 
   @override
@@ -44,10 +43,6 @@ class ScheduleWeekGrid extends StatelessWidget {
           visibleDays: visibleDays,
           entries: viewModel.entries,
         );
-        final palette = coursePalette ??
-            CourseColorResolver.schedulePaletteForCourses(
-              viewModel.entries.map((entry) => entry.course),
-            );
         final current =
             preferences.highlightCurrentPeriod ? _currentPeriod() : null;
         final scheme = Theme.of(context).colorScheme;
@@ -110,7 +105,7 @@ class ScheduleWeekGrid extends StatelessWidget {
                       periodWidth: periodWidth,
                       dayWidth: dayWidth,
                       visibleDayCount: visibleDays.length,
-                      palette: palette,
+                      palette: coursePalette,
                     ),
                   if (current != null)
                     Positioned(
