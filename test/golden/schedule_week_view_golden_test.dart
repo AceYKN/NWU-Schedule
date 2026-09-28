@@ -101,6 +101,41 @@ void main() {
       );
     }
   }
+
+  testWidgets('week view warm-sand dark', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final fixture = await _createFixture();
+    addTearDown(fixture.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(fixture.database),
+          scheduleLoadProvider.overrideWith(
+            (ref) => Stream.value(fixture.ready),
+          ),
+          scheduleDisplayPreferencesProvider.overrideWith(
+            (ref) async => const ScheduleDisplayPreferences.defaults(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: officialThemes.last.dark(),
+          home: SchedulePage(now: _fixedNow),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(SchedulePage),
+      matchesGoldenFile('goldens/actual/pages/week_360x800_warm-sand_dark.png'),
+    );
+  });
 }
 
 final _fixedNow = DateTime.utc(2026, 9, 11, 2, 30);

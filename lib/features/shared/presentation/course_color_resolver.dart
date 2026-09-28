@@ -116,12 +116,12 @@ class CourseColorResolver {
             : index < schedulePaletteLength()
                 ? .42
                 : .38 + .04 * (index % 3));
-    final saturation = scheme.brightness == Brightness.light ? .42 : .48;
+    final saturation = scheme.brightness == Brightness.light ? .42 : .38;
     final accent = HSLColor.fromAHSL(1, hue, saturation, tone).toColor();
     final base = Color.lerp(
       scheme.surface,
       accent,
-      scheme.brightness == Brightness.light ? .72 : .78,
+      scheme.brightness == Brightness.light ? .72 : .50,
     )!;
     return CourseColorPair(
       container: base,

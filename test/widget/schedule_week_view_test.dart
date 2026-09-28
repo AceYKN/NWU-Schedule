@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nwu_schedule/app/theme/schedule_theme.dart';
 import 'package:nwu_schedule/core/utils/week_mask.dart';
 import 'package:nwu_schedule/domain/course/course.dart';
 import 'package:nwu_schedule/domain/course/meeting_rule.dart';
@@ -596,6 +597,33 @@ void main() {
       }
     },
   );
+
+  test('dark course colors stay subdued across official themes', () {
+    final course = Course(
+      id: 'subdued-course',
+      semesterId: 'test-semester',
+      sourceType: CourseSourceType.manual,
+      name: '软件测试',
+    );
+    for (final theme in officialThemes) {
+      final scheme = theme.dark().colorScheme;
+      for (var index = 0; index < 50; index++) {
+        final colors = CourseColorResolver.resolveSchedule(
+          course,
+          scheme,
+          paletteIndex: index,
+        );
+        expect(
+          _contrastRatio(scheme.surface, colors.container),
+          lessThan(2.6),
+        );
+        expect(
+          _contrastRatio(colors.container, colors.onContainer),
+          greaterThanOrEqualTo(4.5),
+        );
+      }
+    }
+  });
 
   test(
     'weekend makeup notice takes priority over the generic course count',
