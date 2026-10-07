@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,23 +8,21 @@ import 'package:nwu_schedule/domain/import/import_diff.dart';
 import 'package:nwu_schedule/domain/import/timetable_import.dart';
 import 'package:nwu_schedule/features/import/presentation/timetable_import_page.dart';
 
+import '../support/schedule_golden_comparator.dart';
+
 void main() {
   final previousComparator = goldenFileComparator;
   late RemoteTimetable timetable;
 
   setUpAll(() {
-    goldenFileComparator = _TolerantGoldenFileComparator(
+    goldenFileComparator = ScheduleGoldenComparator(
       Uri.file(
         '${Directory.current.path}${Platform.pathSeparator}'
         'test${Platform.pathSeparator}'
         'golden${Platform.pathSeparator}'
         'timetable_import_preview_golden_test.dart',
       ),
-      // This preview is text-dense. Linux and Windows system fonts differ by
-      // about 1.75% of pixels after the schedule-detail rows are included,
-      // while preserving layout, colors, and controls. Keep this tolerance
-      // local to the text-heavy preview and below a meaningful regression
-      // threshold.
+      // Retain the existing tolerance within each platform's references.
       precisionTolerance: 0.02,
     );
     final fixture = jsonDecode(
@@ -80,34 +77,5 @@ void main() {
         );
       },
     );
-  }
-}
-
-class _TolerantGoldenFileComparator extends LocalFileComparator {
-  _TolerantGoldenFileComparator(
-    super.testFile, {
-    required double precisionTolerance,
-  })  : assert(
-          0 <= precisionTolerance && precisionTolerance <= 1,
-          'precisionTolerance must be between 0 and 1',
-        ),
-        _precisionTolerance = precisionTolerance;
-
-  final double _precisionTolerance;
-
-  @override
-  Future<bool> compare(Uint8List imageBytes, Uri golden) async {
-    final result = await GoldenFileComparator.compareLists(
-      imageBytes,
-      await getGoldenBytes(golden),
-    );
-    final passed = result.passed || result.diffPercent <= _precisionTolerance;
-    if (passed) {
-      result.dispose();
-      return true;
-    }
-    final error = await generateFailureOutput(result, golden, basedir);
-    result.dispose();
-    throw FlutterError(error);
   }
 }

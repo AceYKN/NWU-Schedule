@@ -23,6 +23,14 @@ flutter test --update-goldens test/golden
 flutter test
 ```
 
+The five text-bearing golden suites use `ScheduleGoldenComparator`. Windows
+references retain their original `goldens/` paths; Linux references live under
+`goldens/linux/`. Generate and review each set on its own host with the pinned
+Flutter SDK before committing them. Loading the same font avoids missing glyphs,
+but Windows and Linux still rasterize text differently. Comparison tolerances
+remain unchanged, and Linux CI compares against Linux-rendered references.
+The color-only palette fixture uses a shared reference.
+
 Regeneration downloads the pinned upstream font. Normal test runs never
 download fonts or depend on installed system fonts. Review the rendered
 Chinese text and layout before accepting updated golden images.

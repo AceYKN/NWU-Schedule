@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -19,11 +18,13 @@ import 'package:nwu_schedule/domain/settings/schedule_display_preferences.dart';
 import 'package:nwu_schedule/domain/semester/semester.dart';
 import 'package:nwu_schedule/features/schedule/presentation/schedule_page.dart';
 
+import '../support/schedule_golden_comparator.dart';
+
 void main() {
   final previousComparator = goldenFileComparator;
 
   setUpAll(() {
-    goldenFileComparator = _TolerantGoldenFileComparator(
+    goldenFileComparator = ScheduleGoldenComparator(
       Uri.file(
         '${Directory.current.path}${Platform.pathSeparator}'
         'test${Platform.pathSeparator}golden${Platform.pathSeparator}'
@@ -274,28 +275,4 @@ class _WeekGoldenScenario {
   final String label;
   final Size size;
   final bool showWeekend;
-}
-
-class _TolerantGoldenFileComparator extends LocalFileComparator {
-  _TolerantGoldenFileComparator(
-    super.testFile, {
-    required double precisionTolerance,
-  }) : _precisionTolerance = precisionTolerance;
-
-  final double _precisionTolerance;
-
-  @override
-  Future<bool> compare(Uint8List imageBytes, Uri golden) async {
-    final result = await GoldenFileComparator.compareLists(
-      imageBytes,
-      await getGoldenBytes(golden),
-    );
-    if (result.passed || result.diffPercent <= _precisionTolerance) {
-      result.dispose();
-      return true;
-    }
-    final error = await generateFailureOutput(result, golden, basedir);
-    result.dispose();
-    throw FlutterError(error);
-  }
 }

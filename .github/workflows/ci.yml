@@ -25,6 +25,14 @@ jobs:
       - run: node tool/test_nwu_dom_extractor.mjs
       - run: flutter analyze
       - run: flutter test
+      - if: failure()
+        name: Upload golden comparison images
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-comparisons-${{ github.sha }}
+          path: test/golden/failures/
+          if-no-files-found: ignore
+          retention-days: 7
       - run: flutter build apk --debug
       - name: Android scheduling regression tests
         working-directory: android

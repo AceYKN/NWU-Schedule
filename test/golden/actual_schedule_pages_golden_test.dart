@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -26,17 +25,22 @@ import 'package:nwu_schedule/features/import/presentation/timetable_import_page.
 import 'package:nwu_schedule/features/schedule/presentation/course_detail_page.dart';
 import 'package:nwu_schedule/features/schedule/presentation/schedule_page.dart';
 
+import '../support/schedule_golden_comparator.dart';
+
 void main() {
   final previousComparator = goldenFileComparator;
 
   setUpAll(() {
-    goldenFileComparator = _TolerantGoldenFileComparator(
+    goldenFileComparator = ScheduleGoldenComparator(
       Uri.file(
         '${Directory.current.path}${Platform.pathSeparator}'
         'test${Platform.pathSeparator}golden${Platform.pathSeparator}'
         'actual_schedule_pages_golden_test.dart',
       ),
       precisionTolerance: 0.015,
+      filenameTolerances: {
+        for (final theme in officialThemes) '${theme.id}_month.png': 0.016,
+      },
     );
   });
 
@@ -342,39 +346,4 @@ class _GoldenFixture {
   final ScheduleReady ready;
 
   Future<void> dispose() => database.close();
-}
-
-class _TolerantGoldenFileComparator extends LocalFileComparator {
-  _TolerantGoldenFileComparator(
-    super.testFile, {
-    required double precisionTolerance,
-  })  : assert(
-          0 <= precisionTolerance && precisionTolerance <= 1,
-          'precisionTolerance must be between 0 and 1',
-        ),
-        _precisionTolerance = precisionTolerance;
-
-  final double _precisionTolerance;
-
-  @override
-  Future<bool> compare(Uint8List imageBytes, Uri golden) async {
-    final result = await GoldenFileComparator.compareLists(
-      imageBytes,
-      await getGoldenBytes(golden),
-    );
-    // The month grid is denser than the other real pages. Its date labels
-    // produce a stable 1.50%–1.51% Windows/Linux font-rasterization delta,
-    // so allow a narrowly larger tolerance for month goldens only.
-    final tolerance = golden.pathSegments.last.endsWith('_month.png')
-        ? 0.016
-        : _precisionTolerance;
-    final passed = result.passed || result.diffPercent <= tolerance;
-    if (passed) {
-      result.dispose();
-      return true;
-    }
-    final error = await generateFailureOutput(result, golden, basedir);
-    result.dispose();
-    throw FlutterError(error);
-  }
 }
