@@ -74,6 +74,7 @@ void main() {
         'scheduleDisplay': {
           'showWeekend': true,
           'showTeacher': false,
+          'showCampus': false,
           'hiddenCourseIds': ['course-1'],
         },
       },
@@ -105,6 +106,10 @@ void main() {
     expect(
       (restored.appearance['scheduleDisplay'] as Map)['showWeekend'],
       isTrue,
+    );
+    expect(
+      (restored.appearance['scheduleDisplay'] as Map)['showCampus'],
+      isFalse,
     );
     expect(
       (restored.appearance['scheduleDisplay'] as Map)['hiddenCourseIds'],

@@ -38,6 +38,7 @@ int _backupRequiredInt(Map<String, dynamic> json, String key) {
 const backupScheduleDisplaySettingKeys = <String, String>{
   'showWeekend': 'schedule.weekView.showWeekend',
   'showTeacher': 'schedule.weekView.showTeacher',
+  'showCampus': 'schedule.weekView.showCampus',
   'showInactiveCourses': 'schedule.weekView.showInactiveCourses',
   'showPeriodTimes': 'schedule.weekView.showPeriodTimes',
   'highlightCurrentPeriod': 'schedule.weekView.highlightCurrentPeriod',

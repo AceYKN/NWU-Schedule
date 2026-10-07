@@ -277,7 +277,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               children: [
                 const ListTile(
                   leading: Icon(Icons.info_outline),
-                  title: Text('西北大学课程表'),
+                  title: Text(nwuAppName),
                   subtitle: Text('Android First · Local First · 无广告无账号'),
                 ),
                 const Divider(height: 1),
@@ -299,7 +299,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   title: const Text('开源许可证'),
                   onTap: () => showLicensePage(
                     context: context,
-                    applicationName: '西北大学课程表',
+                    applicationName: nwuAppName,
                     applicationVersion: nwuAppVersion,
                   ),
                 ),
@@ -487,6 +487,7 @@ Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
         'scheduleDisplay': {
           'showWeekend': display.showWeekend,
           'showTeacher': display.showTeacher,
+          'showCampus': display.showCampus,
           'showInactiveCourses': display.showInactiveCourses,
           'showPeriodTimes': display.showPeriodTimes,
           'highlightCurrentPeriod': display.highlightCurrentPeriod,

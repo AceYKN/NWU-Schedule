@@ -2,8 +2,8 @@ import '../../../../domain/schedule/week_schedule_view_model.dart';
 
 /// Presentation-only formatting for the dense week grid.
 ///
-/// The stored course name and location are never changed. Dense cards prefer
-/// the room and fall back to campus when no room is available.
+/// The stored course name and location are never changed. Campus visibility
+/// follows the display preference, and room names always remain complete.
 class CourseDisplayFormatter {
   const CourseDisplayFormatter._();
 
@@ -12,21 +12,13 @@ class CourseDisplayFormatter {
     return normalized.isEmpty ? value : normalized;
   }
 
-  static String? location(ScheduleGridEntry entry) {
-    final values = [entry.campus, entry.room]
+  static String? location(ScheduleGridEntry entry, {bool showCampus = true}) {
+    final values = [if (showCampus) entry.campus, entry.room]
         .whereType<String>()
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
     return values.isEmpty ? null : values.join('\n');
-  }
-
-  static String? compactLocation(ScheduleGridEntry entry) {
-    final room = entry.room?.trim();
-    if (room != null && room.isNotEmpty) return room;
-
-    final campus = entry.campus?.trim();
-    return campus == null || campus.isEmpty ? null : campus;
   }
 
   static String semanticsLabel(ScheduleGridEntry entry) {

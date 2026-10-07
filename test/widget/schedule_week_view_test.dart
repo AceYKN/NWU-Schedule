@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nwu_schedule/app/theme/schedule_theme.dart';
 import 'package:nwu_schedule/core/utils/week_mask.dart';
@@ -12,6 +13,8 @@ import 'package:nwu_schedule/features/schedule/presentation/schedule_page.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/schedule_week_grid.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/schedule_week_display_filter.dart';
 import 'package:nwu_schedule/features/shared/presentation/course_color_resolver.dart';
+
+import '../support/golden_fonts.dart';
 
 void main() {
   testWidgets('five and seven day grids fit a narrow phone without overflow', (
@@ -240,7 +243,7 @@ void main() {
     },
   );
 
-  testWidgets('course block content follows the available block height', (
+  testWidgets('short course blocks retain complete scrollable content', (
     tester,
   ) async {
     final entry = _entry(
@@ -254,23 +257,135 @@ void main() {
       room: '3406',
     );
 
-    await _pumpBlock(tester, entry, height: 40);
-    expect(find.text('机器学习'), findsOneWidget);
-    expect(find.text('长安校区\n3406'), findsNothing);
-    expect(find.text('3406'), findsNothing);
-    expect(find.text('教师甲'), findsNothing);
-
-    await _pumpBlock(tester, entry, height: 64);
-    expect(find.text('机器学习'), findsOneWidget);
-    expect(find.text('3406'), findsOneWidget);
-    expect(find.text('长安校区'), findsNothing);
-    expect(find.text('教师甲'), findsOneWidget);
-
-    await _pumpBlock(tester, entry, height: 128);
-    expect(find.text('机器学习'), findsOneWidget);
-    expect(find.text('长安校区\n3406'), findsOneWidget);
-    expect(find.text('教师甲'), findsOneWidget);
+    for (final height in [40.0, 64.0, 128.0]) {
+      await _pumpBlock(tester, entry, height: height);
+      expect(find.text('机器学习'), findsOneWidget);
+      expect(find.text('长安校区\n3406'), findsOneWidget);
+      expect(find.text('教师甲'), findsOneWidget);
+      final title = tester.widget<Text>(find.text('机器学习'));
+      expect(title.maxLines, isNull);
+      if (height == 40) {
+        await tester.drag(
+            find.byType(SingleChildScrollView), const Offset(0, -200));
+        await tester.pumpAndSettle();
+        final card = tester.getRect(find.byType(CourseBlock));
+        final teacher = tester.getRect(find.text('教师甲'));
+        expect(teacher.bottom, lessThanOrEqualTo(card.bottom));
+        expect(teacher.top, greaterThanOrEqualTo(card.top));
+      }
+      expect(tester.takeException(), isNull);
+    }
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('all course fields wrap and remain inside expanded week cards',
+      (tester) async {
+    await tester.runAsync(loadGoldenFonts);
+    for (final scale in [1.0, 1.6, 2.0]) {
+      for (final phoneWidth in [360.0, 412.0]) {
+        for (final days in [5, 7]) {
+          final model = _model(entries: [
+            _entry(
+              id: 'full-content',
+              name: '软件工程实践与创新实验 Software Engineering Laboratory',
+              weekday: 1,
+              startSection: 1,
+              endSection: 1,
+              teacher: '张老师与李老师 Alexander Montgomery',
+              campus: '长安校区',
+              room: '教学东楼四层创新实验中心409室',
+            ),
+            _entry(
+              id: 'overlapping-content',
+              name: '计算机科学综合实验课程',
+              weekday: 1,
+              startSection: 1,
+              endSection: 2,
+              teacher: '王老师与赵老师',
+              campus: '太白校区',
+              room: '综合教学楼第二实验室',
+            ),
+            _entry(
+              id: 'next-section',
+              name: '后续课程',
+              weekday: 1,
+              startSection: 3,
+              endSection: 4,
+            ),
+          ]);
+          await tester.pumpWidget(MaterialApp(
+            home: MediaQuery(
+              data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+              child: Scaffold(
+                body: Center(
+                  child: SizedBox(
+                    width: phoneWidth,
+                    child: SingleChildScrollView(
+                      child: ScheduleWeekGrid(
+                        visibleDays: model.days.take(days).toList(),
+                        viewModel: model,
+                        preferences:
+                            const ScheduleDisplayPreferences.defaults(),
+                        now: DateTime(2026, 9, 7, 13),
+                        coursePalette: const {},
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ));
+          await tester.pumpAndSettle();
+          final blocks = find.byType(CourseBlock);
+          expect(blocks, findsNWidgets(3));
+          // Only the complete week scrolls; cards need no internal scrolling.
+          expect(find.byType(SingleChildScrollView), findsOneWidget);
+          for (final element in blocks.evaluate()) {
+            final card = find.byElementPredicate((other) => other == element);
+            final cardRect = tester.getRect(card);
+            final text = find.descendant(of: card, matching: find.byType(Text));
+            for (final textElement in text.evaluate()) {
+              final finder =
+                  find.byElementPredicate((other) => other == textElement);
+              final widget = tester.widget<Text>(finder);
+              final paragraph = tester.renderObject<RenderParagraph>(finder);
+              final textRect = tester.getRect(finder);
+              expect(widget.maxLines, isNull);
+              expect(widget.softWrap, isTrue);
+              expect(paragraph.didExceedMaxLines, isFalse);
+              expect(textRect.top, greaterThanOrEqualTo(cardRect.top));
+              expect(textRect.bottom, lessThanOrEqualTo(cardRect.bottom));
+              expect(textRect.left, greaterThanOrEqualTo(cardRect.left));
+              expect(textRect.right, lessThanOrEqualTo(cardRect.right));
+            }
+          }
+          final fullCard = find.ancestor(
+            of: find.text(model.entries.first.course.name),
+            matching: blocks,
+          );
+          expect(
+              find.descendant(
+                  of: fullCard,
+                  matching: find.text('张老师与李老师 Alexander Montgomery')),
+              findsOneWidget);
+          expect(
+              find.descendant(
+                  of: fullCard, matching: find.text('长安校区\n教学东楼四层创新实验中心409室')),
+              findsOneWidget);
+          final title = tester.renderObject<RenderParagraph>(
+              find.text(model.entries.first.course.name));
+          final lines = title.getBoxesForSelection(TextSelection(
+              baseOffset: 0, extentOffset: title.text.toPlainText().length));
+          expect(lines.map((box) => box.top).toSet().length, greaterThan(3));
+          final laterCard =
+              find.ancestor(of: find.text('后续课程'), matching: blocks);
+          expect(tester.getRect(laterCard).top,
+              greaterThanOrEqualTo(tester.getRect(fullCard).bottom));
+          expect(tester.takeException(), isNull,
+              reason: 'width=$phoneWidth days=$days scale=$scale');
+        }
+      }
+    }
   });
 
   testWidgets('course block location wraps onto every available line', (
@@ -898,15 +1013,17 @@ Future<void> _pumpBlock(
     MaterialApp(
       theme: ThemeData(useMaterial3: true),
       home: Material(
-        child: SizedBox(
-          width: 100,
-          height: height,
-          child: CourseBlock(
-            entry: entry,
-            preferences: const ScheduleDisplayPreferences.defaults(),
+        child: Center(
+          child: SizedBox(
             width: 92,
             height: height,
-            visibleDayCount: 5,
+            child: CourseBlock(
+              entry: entry,
+              preferences: const ScheduleDisplayPreferences.defaults(),
+              width: 92,
+              height: height,
+              visibleDayCount: 5,
+            ),
           ),
         ),
       ),

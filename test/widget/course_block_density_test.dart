@@ -9,7 +9,29 @@ import 'package:nwu_schedule/domain/settings/schedule_display_preferences.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/course_block.dart';
 
 void main() {
-  testWidgets('seven day card gives room priority over campus and teacher',
+  for (final days in [5, 7]) {
+    for (final showCampus in [true, false]) {
+      testWidgets('$days day card respects campus visibility $showCampus',
+          (tester) async {
+        await _pumpBlock(
+          tester,
+          campus: '长安校区',
+          room: '3406',
+          teacher: '教师甲',
+          visibleDayCount: days,
+          showCampus: showCampus,
+        );
+
+        expect(find.text(showCampus ? '长安校区\n3406' : '3406'), findsOneWidget);
+        expect(find.textContaining('长安校区'),
+            showCampus ? findsOneWidget : findsNothing);
+        expect(find.text('教师甲'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('seven day card keeps the complete location and teacher',
       (tester) async {
     await _pumpBlock(
       tester,
@@ -19,9 +41,8 @@ void main() {
     );
 
     expect(find.text('机器学习'), findsOneWidget);
-    expect(find.text('3406'), findsOneWidget);
-    expect(find.text('长安校区'), findsNothing);
-    expect(find.text('教师甲'), findsNothing);
+    expect(find.text('长安校区\n3406'), findsOneWidget);
+    expect(find.text('教师甲'), findsOneWidget);
     expect(
       tester.widget<Text>(find.text('机器学习')).style?.fontSize,
       greaterThanOrEqualTo(11),
@@ -33,7 +54,7 @@ void main() {
     await _pumpBlock(tester, campus: '太白校区', teacher: '教师乙');
 
     expect(find.text('太白校区'), findsOneWidget);
-    expect(find.text('教师乙'), findsNothing);
+    expect(find.text('教师乙'), findsOneWidget);
   });
 }
 
@@ -42,6 +63,8 @@ Future<void> _pumpBlock(
   String? campus,
   String? room,
   String? teacher,
+  int visibleDayCount = 7,
+  bool showCampus = true,
 }) async {
   final course = Course(
     id: 'dense-course',
@@ -87,10 +110,11 @@ Future<void> _pumpBlock(
           height: 128,
           child: CourseBlock(
             entry: entry,
-            preferences: const ScheduleDisplayPreferences.defaults(),
+            preferences: const ScheduleDisplayPreferences.defaults()
+                .copyWith(showCampus: showCampus),
             width: 92,
             height: 128,
-            visibleDayCount: 7,
+            visibleDayCount: visibleDayCount,
           ),
         ),
       ),

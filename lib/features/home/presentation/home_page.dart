@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
+import '../../../core/nwu/constants.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../domain/calendar/calendar_engine.dart';
 import '../../../domain/errors/app_error.dart';
@@ -188,7 +189,7 @@ class _WelcomeContent extends StatelessWidget {
             Text('欢迎', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text(
-              '西北大学课程表',
+              nwuAppName,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),

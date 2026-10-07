@@ -83,15 +83,14 @@ class CourseEventCard extends StatelessWidget {
     final ghost = !entry.active;
     final status = _statusLabel(entry.exceptionType);
     final tokens = scheduleThemeTokensOf(context);
-    final density = resolveCourseBlockDensity(
+    final content = _CourseCardContent.measure(
+      context,
+      entry: entry,
+      preferences: preferences,
       width: width,
-      height: height,
       visibleDayCount: visibleDayCount,
+      status: status,
     );
-    final title = CourseDisplayFormatter.title(entry.course.name);
-    final location = density == CourseBlockDensity.roomy
-        ? CourseDisplayFormatter.location(entry)
-        : CourseDisplayFormatter.compactLocation(entry);
     final background = ghost
         ? Color.lerp(scheme.surface, colors.container, .38)!
         : colors.container;
@@ -107,66 +106,6 @@ class CourseEventCard extends StatelessWidget {
             ? BorderSide(color: scheme.primary, width: 2)
             : BorderSide.none;
     final label = CourseDisplayFormatter.semanticsLabel(entry);
-    final compact = density != CourseBlockDensity.roomy;
-    final showBadge = status != null &&
-        width >=
-            (compact ? 8 : 12) +
-                MediaQuery.textScalerOf(context).scale(tokens.denseTitleSize) +
-                MediaQuery.textScalerOf(context).scale(9) +
-                8;
-    final verticalPadding = height < 36 ? 1.0 : (compact ? 3.0 : 4.0);
-    final textWidth =
-        math.max(1.0, width - (compact ? 8 : 12) - (showBadge ? 22 : 0));
-    double measure(String text, double size, double lineHeight,
-        {int? maxLines}) {
-      final painter = TextPainter(
-        text: TextSpan(
-            text: text,
-            style: DefaultTextStyle.of(context).style.copyWith(
-                fontSize: size,
-                height: lineHeight,
-                fontWeight: FontWeight.w700)),
-        textDirection: Directionality.of(context),
-        textScaler: MediaQuery.textScalerOf(context),
-        maxLines: maxLines,
-      )..layout(maxWidth: textWidth);
-      final measured = painter.height;
-      painter.dispose();
-      return measured;
-    }
-
-    final titleLineHeight =
-        measure('国', tokens.denseTitleSize, 1.16, maxLines: 1);
-    final detailLineHeight =
-        measure('国', tokens.denseDetailSize, 1.2, maxLines: 1);
-    final available = math.max(0.0, height - verticalPadding * 2);
-    final reserveLocation =
-        location != null && available >= titleLineHeight + detailLineHeight + 1
-            ? detailLineHeight + 1
-            : 0.0;
-    final titleMaxLines = math.max(1,
-        math.min(3, ((available - reserveLocation) / titleLineHeight).floor()));
-    var remaining = available -
-        measure(title, tokens.denseTitleSize, 1.16, maxLines: titleMaxLines);
-    final locationMaxLines = math.max(
-        0,
-        math.min(
-            compact ? 1 : 100, ((remaining - 1) / detailLineHeight).floor()));
-    final showDetails =
-        height >= 46 && location != null && locationMaxLines > 0;
-    if (showDetails) {
-      remaining -= measure(location, tokens.denseDetailSize, 1.2,
-              maxLines: locationMaxLines) +
-          1;
-    }
-    final teacherMaxLines =
-        math.max(0, math.min(2, ((remaining - 1) / detailLineHeight).floor()));
-    final showTeacher = height >= 60 &&
-        density != CourseBlockDensity.dense &&
-        preferences.showTeacher &&
-        entry.teacher?.trim().isNotEmpty == true &&
-        teacherMaxLines > 0;
-
     return Semantics(
       button: true,
       excludeSemantics: true,
@@ -182,63 +121,59 @@ class CourseEventCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => _handleTap(context),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 4 : 6,
-              vertical: verticalPadding,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final text = Padding(
+                padding: content.padding,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: _wrappedLine(
-                        title,
-                        foreground,
-                        title: true,
-                        maxLines: titleMaxLines,
-                        fontSize: tokens.denseTitleSize,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _wrappedLine(
+                            content.title,
+                            foreground,
+                            title: true,
+                            fontSize: tokens.denseTitleSize,
+                          ),
+                        ),
+                        if (content.showBadge) ...[
+                          const SizedBox(width: 2),
+                          _StatusBadge(
+                            label: status!.label,
+                            color: status.color(scheme),
+                          ),
+                        ],
+                      ],
                     ),
-                    if (showBadge) ...[
-                      const SizedBox(width: 2),
-                      _StatusBadge(
-                        label: status.label,
-                        color: status.color(scheme),
+                    if (content.location != null) ...[
+                      const SizedBox(height: 1),
+                      _wrappedLine(
+                        content.location!,
+                        secondaryForeground,
+                        fontSize: tokens.denseDetailSize,
+                      ),
+                    ],
+                    if (content.teacher != null) ...[
+                      const SizedBox(height: 1),
+                      _wrappedLine(
+                        content.teacher!,
+                        secondaryForeground,
+                        fontSize: tokens.denseDetailSize,
                       ),
                     ],
                   ],
                 ),
-                if (showDetails) ...[
-                  const SizedBox(height: 1),
-                  _wrappedLine(
-                    location,
-                    secondaryForeground,
-                    maxLines: !compact &&
-                            measure(location, tokens.denseDetailSize, 1.2) <=
-                                available -
-                                    measure(title, tokens.denseTitleSize, 1.16,
-                                        maxLines: titleMaxLines) -
-                                    1
-                        ? null
-                        : locationMaxLines,
-                    fontSize: tokens.denseDetailSize,
-                  ),
-                ],
-                if (showTeacher) ...[
-                  const SizedBox(height: 1),
-                  _wrappedLine(
-                    entry.teacher!.trim(),
-                    secondaryForeground,
-                    maxLines: teacherMaxLines,
-                    fontSize: tokens.denseDetailSize,
-                  ),
-                ],
-              ],
-            ),
+              );
+              // The week grid reserves the complete measured height. Keep
+              // content reachable when an external caller forces a shorter card.
+              return constraints.maxHeight < content.height
+                  ? SingleChildScrollView(primary: false, child: text)
+                  : text;
+            },
           ),
         ),
       ),
@@ -249,14 +184,12 @@ class CourseEventCard extends StatelessWidget {
     String value,
     Color color, {
     bool title = false,
-    required int? maxLines,
     required double fontSize,
   }) {
     return Text(
       value,
-      maxLines: maxLines,
       softWrap: true,
-      overflow: TextOverflow.ellipsis,
+      overflow: TextOverflow.clip,
       style: TextStyle(
         color: color,
         fontSize: fontSize,
@@ -266,6 +199,22 @@ class CourseEventCard extends StatelessWidget {
     );
   }
 
+  static double requiredHeight(
+    BuildContext context, {
+    required ScheduleGridEntry entry,
+    required ScheduleDisplayPreferences preferences,
+    required double width,
+    required int visibleDayCount,
+  }) =>
+      _CourseCardContent.measure(
+        context,
+        entry: entry,
+        preferences: preferences,
+        width: width,
+        visibleDayCount: visibleDayCount,
+        status: _statusLabel(entry.exceptionType),
+      ).height;
+
   void _handleTap(BuildContext context) {
     if (onTap != null) {
       onTap!();
@@ -274,7 +223,7 @@ class CourseEventCard extends StatelessWidget {
     }
   }
 
-  _CourseStatus? _statusLabel(CourseExceptionType? type) {
+  static _CourseStatus? _statusLabel(CourseExceptionType? type) {
     return switch (type) {
       CourseExceptionType.add => const _CourseStatus('加', _StatusKind.add),
       CourseExceptionType.move => const _CourseStatus('调', _StatusKind.move),
@@ -284,6 +233,108 @@ class CourseEventCard extends StatelessWidget {
         ),
       null => null,
     };
+  }
+}
+
+class _CourseCardContent {
+  const _CourseCardContent({
+    required this.title,
+    required this.location,
+    required this.teacher,
+    required this.padding,
+    required this.showBadge,
+    required this.height,
+  });
+
+  final String title;
+  final String? location;
+  final String? teacher;
+  final EdgeInsets padding;
+  final bool showBadge;
+  final double height;
+
+  static _CourseCardContent measure(
+    BuildContext context, {
+    required ScheduleGridEntry entry,
+    required ScheduleDisplayPreferences preferences,
+    required double width,
+    required int visibleDayCount,
+    required _CourseStatus? status,
+  }) {
+    final tokens = scheduleThemeTokensOf(context);
+    // Padding depends on column width, so measuring cannot change the density
+    // when the grid expands its rows to accommodate the content.
+    final compact = resolveCourseBlockDensity(
+          width: width,
+          height: double.infinity,
+          visibleDayCount: visibleDayCount,
+        ) !=
+        CourseBlockDensity.roomy;
+    final padding = EdgeInsets.symmetric(
+      horizontal: compact ? 4 : 6,
+      vertical: compact ? 3 : 4,
+    );
+    final title = CourseDisplayFormatter.title(entry.course.name);
+    final location = CourseDisplayFormatter.location(
+      entry,
+      showCampus: preferences.showCampus,
+    );
+    final teacherValue = entry.teacher?.trim();
+    final teacher = preferences.showTeacher &&
+            teacherValue != null &&
+            teacherValue.isNotEmpty
+        ? teacherValue
+        : null;
+
+    Size measure(String value, double size, double lineHeight,
+        FontWeight weight, double maxWidth) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: value,
+          style: DefaultTextStyle.of(context).style.copyWith(
+                fontSize: size,
+                height: lineHeight,
+                fontWeight: weight,
+              ),
+        ),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout(maxWidth: maxWidth);
+      final measured = painter.size;
+      painter.dispose();
+      return measured;
+    }
+
+    final innerWidth = math.max(1.0, width - padding.horizontal);
+    final badgeSize = status == null
+        ? Size.zero
+        : measure(status.label, 9, 1, FontWeight.w800, double.infinity);
+    final badgeWidth = math.max(16.0, badgeSize.width + 6);
+    final showBadge = status != null &&
+        innerWidth >=
+            badgeWidth +
+                2 +
+                MediaQuery.textScalerOf(context).scale(tokens.denseTitleSize);
+    final titleWidth =
+        math.max(1.0, innerWidth - (showBadge ? badgeWidth + 2 : 0));
+    var height =
+        measure(title, tokens.denseTitleSize, 1.16, FontWeight.w700, titleWidth)
+            .height;
+    if (showBadge) height = math.max(height, math.max(16, badgeSize.height));
+    for (final value in [location, teacher].whereType<String>()) {
+      height += 1 +
+          measure(value, tokens.denseDetailSize, 1.2, FontWeight.w500,
+                  innerWidth)
+              .height;
+    }
+    return _CourseCardContent(
+      title: title,
+      location: location,
+      teacher: teacher,
+      padding: padding,
+      showBadge: showBadge,
+      height: (height + padding.vertical).ceilToDouble(),
+    );
   }
 }
 

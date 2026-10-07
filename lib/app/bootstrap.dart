@@ -104,6 +104,7 @@ final themeIdProvider = FutureProvider<String>((ref) async {
 const scheduleDisplaySettingKeys = {
   'showWeekend': 'schedule.weekView.showWeekend',
   'showTeacher': 'schedule.weekView.showTeacher',
+  'showCampus': 'schedule.weekView.showCampus',
   'showInactiveCourses': 'schedule.weekView.showInactiveCourses',
   'showPeriodTimes': 'schedule.weekView.showPeriodTimes',
   'highlightCurrentPeriod': 'schedule.weekView.highlightCurrentPeriod',
@@ -124,6 +125,7 @@ final scheduleDisplayPreferencesProvider =
   return ScheduleDisplayPreferences(
     showWeekend: await read('showWeekend', false),
     showTeacher: await read('showTeacher', true),
+    showCampus: await read('showCampus', true),
     showInactiveCourses: await read('showInactiveCourses', false),
     showPeriodTimes: await read('showPeriodTimes', true),
     highlightCurrentPeriod: await read('highlightCurrentPeriod', true),

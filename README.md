@@ -1,4 +1,4 @@
-# NWU Schedule
+# 西小课（NWU Schedule）
 
 面向西北大学本科生的 Android-first、本地优先课程表 App。项目以
 `SPEC.md` 为产品与验收依据，不提供账号服务器、云同步、广告或统计服务。

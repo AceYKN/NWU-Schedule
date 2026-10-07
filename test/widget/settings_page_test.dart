@@ -13,6 +13,53 @@ import 'package:nwu_schedule/features/settings/presentation/settings_page.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('campus visibility defaults on and survives reopening settings',
+      (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftScheduleDataRepository(database);
+    Future<void> openSettings() async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appDatabaseProvider.overrideWithValue(database)],
+          child: const MaterialApp(
+            home: Scaffold(body: ScheduleDisplaySettingsPage()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    final campusSwitch = find.widgetWithText(SwitchListTile, '显示校区');
+    await openSettings();
+    expect(tester.widget<SwitchListTile>(campusSwitch).value, isTrue);
+    expect(find.textContaining('长安校区'), findsOneWidget);
+
+    await tester.ensureVisible(campusSwitch);
+    await tester.tap(campusSwitch);
+    await tester.pumpAndSettle();
+    expect(
+        await repository.getSetting('schedule.weekView.showCampus'), 'false');
+    expect(find.textContaining('长安校区'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+    await openSettings();
+    expect(tester.widget<SwitchListTile>(campusSwitch).value, isFalse);
+    expect(find.textContaining('长安校区'), findsNothing);
+    expect(find.textContaining('A101 · 张老师'), findsOneWidget);
+
+    await tester.ensureVisible(campusSwitch);
+    await tester.tap(campusSwitch);
+    await tester.pumpAndSettle();
+    expect(await repository.getSetting('schedule.weekView.showCampus'), 'true');
+    expect(find.textContaining('长安校区'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets(
     'permission denial disables stale reminder setting and clears alarms',
     (tester) async {

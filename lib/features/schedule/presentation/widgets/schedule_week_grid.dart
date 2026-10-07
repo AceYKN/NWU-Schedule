@@ -54,7 +54,6 @@ class ScheduleWeekGrid extends StatelessWidget {
     );
     labelPainter.dispose();
     final periodCount = NwuPeriodRepository.all.length;
-    final rowHeight = ScheduleGridMetrics.periodHeight * scale;
     final dayHeaderHeight = ScheduleGridMetrics.headerHeight * scale;
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -66,6 +65,33 @@ class ScheduleWeekGrid extends StatelessWidget {
           visibleDays: visibleDays,
           entries: viewModel.entries,
         );
+        var rowHeight = ScheduleGridMetrics.periodHeight * scale;
+        for (final item in layout) {
+          if (item.isOverflow) continue;
+          final width = math.max<double>(
+            8,
+            dayWidth / item.laneCount - ScheduleGridMetrics.eventGap,
+          );
+          final contentHeight = CourseEventCard.requiredHeight(
+            context,
+            entry: item.entry!,
+            preferences: preferences,
+            width: width,
+            visibleDayCount: visibleDays.length,
+          );
+          final sectionCount =
+              item.effectiveEndSection - item.effectiveStartSection + 1;
+          final sectionGaps = ScheduleGridMetrics.sectionHeight(
+            item.effectiveStartSection,
+            item.effectiveEndSection,
+            rowHeight: 0,
+          );
+          rowHeight = math.max(
+            rowHeight,
+            (contentHeight + ScheduleGridMetrics.eventGap - sectionGaps) /
+                sectionCount,
+          );
+        }
         final current = preferences.highlightCurrentPeriod
             ? _currentPeriod(
                 rowHeight: rowHeight,

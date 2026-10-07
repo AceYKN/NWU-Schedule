@@ -91,6 +91,14 @@ class _ScheduleDisplaySettingsPageState
                 ),
                 const Divider(height: 1),
                 _PreferenceSwitch(
+                  title: '显示校区',
+                  subtitle: '关闭后仅显示教室',
+                  value: preferences.showCampus,
+                  onChanged: (value) =>
+                      _run(() => _save(ref, 'showCampus', value)),
+                ),
+                const Divider(height: 1),
+                _PreferenceSwitch(
                   title: '显示非本周课程',
                   value: preferences.showInactiveCourses,
                   onChanged: (value) =>
@@ -312,6 +320,24 @@ class _SchedulePreview extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final dayWidth = (constraints.maxWidth - 20 - 40) / days.length;
+          final detail = [
+            if (preferences.showCampus) '长安校区',
+            preferences.showTeacher ? 'A101 · 张老师' : 'A101',
+          ].join('\n');
+          final textPainter = TextPainter(
+            text: TextSpan(
+              text: '高等数学\n$detail',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelSmall
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout(maxWidth: dayWidth - 11);
+          final rowHeight =
+              ((textPainter.height + 12) / 2).clamp(35.0, double.infinity);
+          textPainter.dispose();
           return Padding(
             padding: const EdgeInsets.all(10),
             child: Column(
@@ -361,19 +387,19 @@ class _SchedulePreview extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 SizedBox(
-                  height: 142,
+                  height: rowHeight * 4 + 2,
                   child: Stack(
                     children: [
                       for (var row = 0; row < 4; row++)
                         Positioned(
-                          top: row * 35,
+                          top: row * rowHeight,
                           left: 0,
                           right: 0,
                           child: Row(
                             children: [
                               SizedBox(
                                 width: 40,
-                                height: 35,
+                                height: rowHeight,
                                 child: Center(
                                   child: Text(
                                     preferences.showPeriodTimes
@@ -388,7 +414,7 @@ class _SchedulePreview extends StatelessWidget {
                               for (final _ in days)
                                 Expanded(
                                   child: Container(
-                                    height: 35,
+                                    height: rowHeight,
                                     decoration: BoxDecoration(
                                       border: Border(
                                         bottom: BorderSide(
@@ -406,19 +432,18 @@ class _SchedulePreview extends StatelessWidget {
                         left: 44 + (days.length > 1 ? 1 : 0),
                         top: 2,
                         width: dayWidth,
-                        height: 68,
+                        height: rowHeight * 2 - 2,
                         child: _PreviewBlock(
                           title: '高等数学',
-                          detail:
-                              preferences.showTeacher ? 'A101 · 张老师' : 'A101',
+                          detail: detail,
                         ),
                       ),
                       if (preferences.showInactiveCourses)
                         Positioned(
                           left: 44 + dayWidth * (days.length > 2 ? 2 : 1),
-                          top: 72,
+                          top: rowHeight * 2 + 2,
                           width: dayWidth,
-                          height: 55,
+                          height: rowHeight * 2 - 15,
                           child: const _PreviewBlock(
                             title: '大学英语',
                             detail: '非本周',
@@ -429,7 +454,7 @@ class _SchedulePreview extends StatelessWidget {
                         Positioned(
                           left: 40,
                           right: 0,
-                          top: 69,
+                          top: rowHeight * 2 - 1,
                           child: Container(height: 2, color: scheme.primary),
                         ),
                       Positioned(
@@ -522,8 +547,7 @@ class _PreviewBlock extends StatelessWidget {
       ),
       child: Text(
         '$title\n$detail',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
+        softWrap: true,
         style: Theme.of(context)
             .textTheme
             .labelSmall

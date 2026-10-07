@@ -4,6 +4,7 @@ class ScheduleDisplayPreferences {
   const ScheduleDisplayPreferences({
     required this.showWeekend,
     required this.showTeacher,
+    this.showCampus = true,
     required this.showInactiveCourses,
     required this.showPeriodTimes,
     required this.highlightCurrentPeriod,
@@ -14,6 +15,7 @@ class ScheduleDisplayPreferences {
   const ScheduleDisplayPreferences.defaults()
       : showWeekend = false,
         showTeacher = true,
+        showCampus = true,
         showInactiveCourses = false,
         showPeriodTimes = true,
         highlightCurrentPeriod = true,
@@ -22,6 +24,7 @@ class ScheduleDisplayPreferences {
 
   final bool showWeekend;
   final bool showTeacher;
+  final bool showCampus;
   final bool showInactiveCourses;
   final bool showPeriodTimes;
   final bool highlightCurrentPeriod;
@@ -31,6 +34,7 @@ class ScheduleDisplayPreferences {
   ScheduleDisplayPreferences copyWith({
     bool? showWeekend,
     bool? showTeacher,
+    bool? showCampus,
     bool? showInactiveCourses,
     bool? showPeriodTimes,
     bool? highlightCurrentPeriod,
@@ -40,6 +44,7 @@ class ScheduleDisplayPreferences {
     return ScheduleDisplayPreferences(
       showWeekend: showWeekend ?? this.showWeekend,
       showTeacher: showTeacher ?? this.showTeacher,
+      showCampus: showCampus ?? this.showCampus,
       showInactiveCourses: showInactiveCourses ?? this.showInactiveCourses,
       showPeriodTimes: showPeriodTimes ?? this.showPeriodTimes,
       highlightCurrentPeriod:

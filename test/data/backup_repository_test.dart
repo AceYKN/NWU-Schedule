@@ -195,6 +195,7 @@ void main() {
         'scheduleDisplay': {
           'showWeekend': true,
           'showTeacher': false,
+          'showCampus': false,
           'showPeriodTimes': false,
           'hiddenCourseIds': ['manual-backup-course'],
         },
@@ -223,6 +224,11 @@ void main() {
       await repository.getSetting('schedule.weekView.showTeacher'),
       'false',
     );
+    expect(
+      await repository.getSetting('schedule.weekView.showCampus'),
+      'false',
+    );
+    expect(restored.meetingRules.single.campus, '长安校区');
     expect(
       await repository.getSetting('schedule.weekView.showPeriodTimes'),
       'false',

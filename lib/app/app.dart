@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'bootstrap.dart';
+import '../core/nwu/constants.dart';
 import '../domain/settings/appearance_preferences.dart';
 import 'router.dart';
 import 'theme/schedule_theme.dart';
@@ -55,7 +56,7 @@ class _NwuScheduleAppState extends ConsumerState<NwuScheduleApp>
     final selectedThemeMode =
         ref.watch(themeModeProvider).asData?.value ?? AppThemeMode.system;
     return MaterialApp.router(
-      title: '西北大学课程表',
+      title: nwuAppName,
       locale: const Locale('zh', 'CN'),
       supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
