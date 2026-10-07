@@ -75,6 +75,7 @@ android {
 
     buildTypes {
         release {
+            applicationIdSuffix = ".preview"
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }

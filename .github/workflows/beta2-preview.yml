@@ -1,0 +1,55 @@
+name: Beta2 preview APK
+
+on:
+  push:
+    branches: [preview/beta2-20261007]
+  create:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: beta2-preview
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/preview/beta2-20261007'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Create temporary preview signing key
+        run: >-
+          keytool -genkeypair -v
+          -keystore "$RUNNER_TEMP/nwu-preview.jks"
+          -storepass preview-store-password
+          -keypass preview-store-password
+          -alias nwu-preview
+          -keyalg RSA
+          -keysize 2048
+          -validity 365
+          -dname "CN=NWU Schedule Preview"
+          -noprompt
+      - name: Build release APK only
+        run: flutter build apk --release
+        env:
+          NWU_RELEASE_STORE_FILE: ${{ runner.temp }}/nwu-preview.jks
+          NWU_RELEASE_STORE_PASSWORD: preview-store-password
+          NWU_RELEASE_KEY_ALIAS: nwu-preview
+          NWU_RELEASE_KEY_PASSWORD: preview-store-password
+      - name: Name installable preview APK
+        run: |
+          mkdir -p preview-apk
+          cp build/app/outputs/flutter-apk/app-release.apk preview-apk/nwu-schedule-beta2-preview.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nwu-schedule-beta2-preview
+          path: preview-apk/nwu-schedule-beta2-preview.apk
+          if-no-files-found: error
+          retention-days: 14
