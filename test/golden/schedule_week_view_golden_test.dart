@@ -54,52 +54,79 @@ void main() {
         size: entry.value,
         showWeekend: true,
       ),
+    const _WeekGoldenScenario(
+      label: '360x800_away',
+      size: Size(360, 800),
+      showWeekend: false,
+      weekAdvance: 1,
+    ),
+    const _WeekGoldenScenario(
+      label: '360x800_away_large_text',
+      size: Size(360, 800),
+      showWeekend: true,
+      showPeriodTimes: false,
+      weekAdvance: 1,
+      textScale: 1.3,
+    ),
   ];
 
   for (final brightness in [Brightness.light, Brightness.dark]) {
     for (final scenario in scenarios) {
-      testWidgets(
-        'week view ${scenario.label} ${brightness.name}',
-        (tester) async {
-          tester.view.physicalSize = scenario.size;
-          tester.view.devicePixelRatio = 1;
-          addTearDown(() {
-            tester.view.resetPhysicalSize();
-            tester.view.resetDevicePixelRatio();
-          });
+      testWidgets('week view ${scenario.label} ${brightness.name}', (
+        tester,
+      ) async {
+        tester.view.physicalSize = scenario.size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
 
-          final fixture = await _createFixture();
-          addTearDown(fixture.dispose);
-          await tester.pumpWidget(
-            ProviderScope(
-              overrides: [
-                appDatabaseProvider.overrideWithValue(fixture.database),
-                scheduleLoadProvider.overrideWith(
-                  (ref) => Stream.value(fixture.ready),
-                ),
-                scheduleDisplayPreferencesProvider.overrideWith(
-                  (ref) async => const ScheduleDisplayPreferences.defaults()
-                      .copyWith(showWeekend: scenario.showWeekend),
-                ),
-              ],
-              child: MaterialApp(
-                theme: brightness == Brightness.light
-                    ? officialThemes.first.light()
-                    : officialThemes.first.dark(),
-                home: SchedulePage(now: _fixedNow),
+        final fixture = await _createFixture();
+        addTearDown(fixture.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              appDatabaseProvider.overrideWithValue(fixture.database),
+              scheduleLoadProvider.overrideWith(
+                (ref) => Stream.value(fixture.ready),
               ),
+              scheduleDisplayPreferencesProvider.overrideWith(
+                (ref) async =>
+                    const ScheduleDisplayPreferences.defaults().copyWith(
+                  showWeekend: scenario.showWeekend,
+                  showPeriodTimes: scenario.showPeriodTimes,
+                ),
+              ),
+            ],
+            child: MaterialApp(
+              theme: brightness == Brightness.light
+                  ? officialThemes.first.light()
+                  : officialThemes.first.dark(),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(scenario.textScale)),
+                child: child!,
+              ),
+              home: SchedulePage(now: _fixedNow),
             ),
-          );
+          ),
+        );
+        await tester.pumpAndSettle();
+        for (var swipe = 0; swipe < scenario.weekAdvance; swipe++) {
+          await tester.drag(find.byType(PageView), const Offset(-300, 0));
           await tester.pumpAndSettle();
+        }
+        expect(tester.takeException(), isNull);
 
-          await expectLater(
-            find.byType(SchedulePage),
-            matchesGoldenFile(
-              'goldens/actual/pages/week_${scenario.label}_${brightness.name}.png',
-            ),
-          );
-        },
-      );
+        await expectLater(
+          find.byType(SchedulePage),
+          matchesGoldenFile(
+            'goldens/actual/pages/week_${scenario.label}_${brightness.name}.png',
+          ),
+        );
+      });
     }
   }
 
@@ -197,49 +224,43 @@ Future<_WeekFixture> _createFixture() async {
     name: '机器学习实验（双语）',
   );
   await repository.saveSemester(semester);
-  await repository.saveCourse(
-    course,
-    [
-      MeetingRule(
-        id: 'week-golden-rule',
-        courseId: course.id,
-        weekday: DateTime.monday,
-        startSection: 3,
-        endSection: 4,
-        teacher: '教师甲',
-        campus: '长安校区',
-        room: '3406',
-        weekMask: WeekMask.all(calendar.totalWeeks),
-      ),
-    ],
-  );
-  await repository.saveCourse(
-    weekendCourse,
-    [
-      MeetingRule(
-        id: 'week-golden-thursday-rule',
-        courseId: weekendCourse.id,
-        weekday: DateTime.thursday,
-        startSection: 1,
-        endSection: 2,
-        teacher: '教师乙',
-        campus: '太白校区',
-        room: '实验室-321',
-        weekMask: WeekMask.all(calendar.totalWeeks),
-      ),
-      MeetingRule(
-        id: 'week-golden-sunday-rule',
-        courseId: weekendCourse.id,
-        weekday: DateTime.sunday,
-        startSection: 5,
-        endSection: 6,
-        teacher: '教师乙',
-        campus: '太白校区',
-        room: '实验室-321',
-        weekMask: WeekMask.all(calendar.totalWeeks),
-      ),
-    ],
-  );
+  await repository.saveCourse(course, [
+    MeetingRule(
+      id: 'week-golden-rule',
+      courseId: course.id,
+      weekday: DateTime.monday,
+      startSection: 3,
+      endSection: 4,
+      teacher: '教师甲',
+      campus: '长安校区',
+      room: '3406',
+      weekMask: WeekMask.all(calendar.totalWeeks),
+    ),
+  ]);
+  await repository.saveCourse(weekendCourse, [
+    MeetingRule(
+      id: 'week-golden-thursday-rule',
+      courseId: weekendCourse.id,
+      weekday: DateTime.thursday,
+      startSection: 1,
+      endSection: 2,
+      teacher: '教师乙',
+      campus: '太白校区',
+      room: '实验室-321',
+      weekMask: WeekMask.all(calendar.totalWeeks),
+    ),
+    MeetingRule(
+      id: 'week-golden-sunday-rule',
+      courseId: weekendCourse.id,
+      weekday: DateTime.sunday,
+      startSection: 5,
+      endSection: 6,
+      teacher: '教师乙',
+      campus: '太白校区',
+      room: '实验室-321',
+      weekMask: WeekMask.all(calendar.totalWeeks),
+    ),
+  ]);
   final snapshot = await repository.loadSemester(semester.id);
   return _WeekFixture(
     database: database,
@@ -270,9 +291,15 @@ class _WeekGoldenScenario {
     required this.label,
     required this.size,
     required this.showWeekend,
+    this.showPeriodTimes = true,
+    this.weekAdvance = 0,
+    this.textScale = 1,
   });
 
   final String label;
   final Size size;
   final bool showWeekend;
+  final bool showPeriodTimes;
+  final int weekAdvance;
+  final double textScale;
 }

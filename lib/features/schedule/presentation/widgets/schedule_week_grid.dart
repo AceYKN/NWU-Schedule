@@ -29,12 +29,31 @@ class ScheduleWeekGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final periodWidth = preferences.showPeriodTimes
-        ? ScheduleGridMetrics.timeRailWidth
-        : ScheduleGridMetrics.compactTimeRailWidth;
+    final scale = math.max(
+      1.0,
+      MediaQuery.textScalerOf(context).scale(14) / 14,
+    );
+    final weekLabel = '第 ${viewModel.week} 周';
+    final weekLabelStyle = Theme.of(context).textTheme.labelSmall!.copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        );
+    final labelPainter = TextPainter(
+      // Reserve two digits so columns stay aligned when swiping past week 9.
+      text: TextSpan(text: '第 64 周', style: weekLabelStyle),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final periodWidth = math.max(
+      (preferences.showPeriodTimes
+              ? ScheduleGridMetrics.timeRailWidth
+              : ScheduleGridMetrics.compactTimeRailWidth) *
+          scale,
+      labelPainter.width + 8,
+    );
+    labelPainter.dispose();
     final periodCount = NwuPeriodRepository.all.length;
-    final scale =
-        math.max(1.0, MediaQuery.textScalerOf(context).scale(14) / 14);
     final rowHeight = ScheduleGridMetrics.periodHeight * scale;
     final dayHeaderHeight = ScheduleGridMetrics.headerHeight * scale;
     return LayoutBuilder(
@@ -49,11 +68,16 @@ class ScheduleWeekGrid extends StatelessWidget {
         );
         final current = preferences.highlightCurrentPeriod
             ? _currentPeriod(
-                rowHeight: rowHeight, dayHeaderHeight: dayHeaderHeight)
+                rowHeight: rowHeight,
+                dayHeaderHeight: dayHeaderHeight,
+              )
             : null;
         final scheme = Theme.of(context).colorScheme;
-        final canvasHeight = ScheduleGridMetrics.canvasHeight(periodCount,
-            rowHeight: rowHeight, dayHeaderHeight: dayHeaderHeight);
+        final canvasHeight = ScheduleGridMetrics.canvasHeight(
+          periodCount,
+          rowHeight: rowHeight,
+          dayHeaderHeight: dayHeaderHeight,
+        );
 
         return ColoredBox(
           color: scheme.surface,
@@ -88,6 +112,23 @@ class ScheduleWeekGrid extends StatelessWidget {
                       ),
                     ),
                   ),
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    width: periodWidth,
+                    height: dayHeaderHeight,
+                    child: Center(
+                      child: Semantics(
+                        label: '正在查看第 ${viewModel.week} 周课表',
+                        excludeSemantics: true,
+                        child: Text(
+                          weekLabel,
+                          maxLines: 1,
+                          style: weekLabelStyle,
+                        ),
+                      ),
+                    ),
+                  ),
                   for (var index = 0; index < visibleDays.length; index++)
                     Positioned(
                       left: periodWidth + index * dayWidth,
@@ -99,9 +140,11 @@ class ScheduleWeekGrid extends StatelessWidget {
                   for (var section = 1; section <= periodCount; section++)
                     Positioned(
                       left: 0,
-                      top: ScheduleGridMetrics.sectionTop(section,
-                          rowHeight: rowHeight,
-                          dayHeaderHeight: dayHeaderHeight),
+                      top: ScheduleGridMetrics.sectionTop(
+                        section,
+                        rowHeight: rowHeight,
+                        dayHeaderHeight: dayHeaderHeight,
+                      ),
                       width: periodWidth,
                       height: rowHeight,
                       child: ScheduleTimeAxis(
@@ -164,8 +207,11 @@ class ScheduleWeekGrid extends StatelessWidget {
         item.dayIndex * dayWidth +
         item.lane * (dayWidth / item.laneCount) +
         ScheduleGridMetrics.eventGap / 2;
-    final top = ScheduleGridMetrics.sectionTop(item.effectiveStartSection,
-            rowHeight: rowHeight, dayHeaderHeight: dayHeaderHeight) +
+    final top = ScheduleGridMetrics.sectionTop(
+          item.effectiveStartSection,
+          rowHeight: rowHeight,
+          dayHeaderHeight: dayHeaderHeight,
+        ) +
         ScheduleGridMetrics.eventGap / 2;
 
     return Positioned(
@@ -202,9 +248,10 @@ class ScheduleWeekGrid extends StatelessWidget {
         current.section <= entry.endSection;
   }
 
-  _CurrentPeriod? _currentPeriod(
-      {double rowHeight = ScheduleGridMetrics.periodHeight,
-      double dayHeaderHeight = ScheduleGridMetrics.headerHeight}) {
+  _CurrentPeriod? _currentPeriod({
+    double rowHeight = ScheduleGridMetrics.periodHeight,
+    double dayHeaderHeight = ScheduleGridMetrics.headerHeight,
+  }) {
     final today = dateOnly(now);
     final dayIndex = visibleDays.indexWhere(
       (day) => day.isToday && isSameDate(day.date, today),
@@ -216,8 +263,12 @@ class ScheduleWeekGrid extends StatelessWidget {
         return _CurrentPeriod(
           dayIndex: dayIndex,
           section: period.number,
-          top: ScheduleGridMetrics.currentTimeTop(period.number, minutes,
-              rowHeight: rowHeight, dayHeaderHeight: dayHeaderHeight),
+          top: ScheduleGridMetrics.currentTimeTop(
+            period.number,
+            minutes,
+            rowHeight: rowHeight,
+            dayHeaderHeight: dayHeaderHeight,
+          ),
           label: formatMinutes(minutes),
         );
       }
@@ -399,8 +450,11 @@ class _ScheduleGridPainter extends CustomPainter {
       groupPaint,
     );
     for (var section = 1; section <= periodCount; section++) {
-      final y = ScheduleGridMetrics.sectionTop(section,
-              rowHeight: rowHeight, dayHeaderHeight: dayHeaderHeight) +
+      final y = ScheduleGridMetrics.sectionTop(
+            section,
+            rowHeight: rowHeight,
+            dayHeaderHeight: dayHeaderHeight,
+          ) +
           rowHeight;
       canvas.drawLine(
         Offset(0, y),

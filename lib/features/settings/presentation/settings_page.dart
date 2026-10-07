@@ -65,39 +65,47 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           if (_busy) const Text('正在处理…'),
           Text(
             '设置',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
           if (failures.isNotEmpty)
             Card(
-                child: ListTile(
-                    leading: const Icon(Icons.sync_problem),
-                    title: const Text('平台同步尚未完成'),
-                    subtitle: Text(
-                        '${failures.contains('notifications') ? '提醒排程或清理失败。' : ''}${failures.contains('widget') ? '小组件更新或清理失败。' : ''}'),
-                    trailing: TextButton(
-                        onPressed: () =>
-                            _run(() => _retryPlatformSync(context, ref)),
-                        child: const Text('重试')))),
+              child: ListTile(
+                leading: const Icon(Icons.sync_problem),
+                title: const Text('平台同步尚未完成'),
+                subtitle: Text(
+                  '${failures.contains('notifications') ? '提醒排程或清理失败。' : ''}${failures.contains('widget') ? '小组件更新或清理失败。' : ''}',
+                ),
+                trailing: TextButton(
+                  onPressed: () => _run(() => _retryPlatformSync(context, ref)),
+                  child: const Text('重试'),
+                ),
+              ),
+            ),
           const SizedBox(height: 20),
           _SectionTitle(title: '学期与课表'),
           Card(
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.school_outlined),
-                  title: const Text('当前学期'),
-                  subtitle: Text(currentSemester),
+                  leading: Icon(
+                    Icons.download_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  title: const Text('从教务系统导入'),
+                  subtitle: const Text('登录教务系统，读取个人课表'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _run(() => _selectSemester(context, ref)),
+                  onTap: () => context.push('/import'),
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.add_circle_outline),
-                  title: const Text('新建本地学期'),
-                  subtitle: const Text('根据已收录校历创建空课表'),
-                  onTap: () => _run(() => _createSemester(context, ref)),
+                  leading: const Icon(Icons.swap_horiz_outlined),
+                  title: const Text('切换学期'),
+                  subtitle: Text(currentSemester),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _run(() => _selectSemester(context, ref)),
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -109,11 +117,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.download_outlined),
-                  title: const Text('从教务系统导入'),
-                  subtitle: const Text('在临时 WebView 中登录并读取课表'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/import'),
+                  leading: const Icon(Icons.add_circle_outline),
+                  title: const Text('新建本地学期'),
+                  subtitle: const Text('根据已收录校历创建空课表'),
+                  onTap: () => _run(() => _createSemester(context, ref)),
                 ),
               ],
             ),
@@ -137,26 +144,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   value: ref.watch(notificationEnabledProvider).asData?.value ??
                       false,
                   onChanged: (enabled) => _run(
-                      () => _setNotificationEnabled(context, ref, enabled)),
+                    () => _setNotificationEnabled(context, ref, enabled),
+                  ),
                   title: const Text('上课提醒'),
                   subtitle: const Text('只使用本地通知，不上传课程数据'),
                 ),
                 ListTile(
-                    title: const Text('提醒状态'),
-                    trailing: platform?['replenishFailed'] == true
-                        ? TextButton(
-                            onPressed: () =>
-                                _run(() => _retryPlatformSync(context, ref)),
-                            child: const Text('重试'))
-                        : null,
-                    subtitle: Text(platform == null
+                  title: const Text('提醒状态'),
+                  trailing: platform?['replenishFailed'] == true
+                      ? TextButton(
+                          onPressed: () =>
+                              _run(() => _retryPlatformSync(context, ref)),
+                          child: const Text('重试'),
+                        )
+                      : null,
+                  subtitle: Text(
+                    platform == null
                         ? '暂时无法读取系统通知状态；系统省电可能延迟提醒'
                         : '${platform['systemAllowed'] == true ? '系统通知允许' : '系统通知已关闭'} · '
                             '${platform['channelAllowed'] == true ? '提醒渠道允许' : '提醒渠道已关闭'}\n'
                             '${failures.contains('notifications') || platform['replenishFailed'] == true ? '排程失败，请重试' : platform['planStored'] == true ? '本地提醒计划已保存' : '尚未保存提醒计划'}\n'
-                            '系统可能延迟送达，提前时间不保证准点'),
-                    onTap: () =>
-                        ref.invalidate(notificationPlatformStatusProvider)),
+                            '系统可能延迟送达，提前时间不保证准点',
+                  ),
+                  onTap: () =>
+                      ref.invalidate(notificationPlatformStatusProvider),
+                ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.timer_outlined),
@@ -190,8 +202,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     selected: {selectedThemeMode},
                     onSelectionChanged: (selection) {
                       if (selection.isNotEmpty) {
-                        _run(() =>
-                            _selectThemeMode(context, ref, selection.first));
+                        _run(
+                          () => _selectThemeMode(context, ref, selection.first),
+                        );
                       }
                     },
                   ),
@@ -212,7 +225,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             onSelected: (selected) {
                               if (selected) {
                                 _run(
-                                    () => _selectTheme(context, ref, theme.id));
+                                  () => _selectTheme(context, ref, theme.id),
+                                );
                               }
                             },
                             avatar: CircleAvatar(
@@ -233,14 +247,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.file_download_outlined),
+                  leading: const Icon(Icons.file_upload_outlined),
                   title: const Text('导出完整备份'),
                   subtitle: const Text('只包含本地课程和设置，不包含账号或 Cookie'),
                   onTap: () => _run(() => _exportBackup(context, ref)),
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.file_upload_outlined),
+                  leading: const Icon(Icons.file_download_outlined),
                   title: const Text('导入完整备份'),
                   onTap: () => _run(() => _restoreBackup(context, ref)),
                 ),
@@ -341,11 +355,13 @@ Future<void> _createSemester(BuildContext context, WidgetRef ref) async {
           shrinkWrap: true,
           children: [
             const ListTile(title: Text('选择校历')),
-            ...entries.map((entry) => ListTile(
-                  title: Text(entry.label ?? entry.id),
-                  subtitle: Text(entry.id),
-                  onTap: () => Navigator.pop(sheetContext, entry.id),
-                )),
+            ...entries.map(
+              (entry) => ListTile(
+                title: Text(entry.label ?? entry.id),
+                subtitle: Text(entry.id),
+                onTap: () => Navigator.pop(sheetContext, entry.id),
+              ),
+            ),
           ],
         ),
       ),
@@ -358,15 +374,17 @@ Future<void> _createSemester(BuildContext context, WidgetRef ref) async {
       2 => '第二学期',
       _ => '夏季学期',
     };
-    await repository.saveSemester(Semester(
-      id: definition.id,
-      academicYear: definition.academicYear,
-      term: SemesterTerm.values[definition.term - 1],
-      label: '${definition.academicYear} $termLabel',
-      calendarId: definition.id,
-      calendarRevision: definition.revision,
-      createdAt: DateTime.now(),
-    ));
+    await repository.saveSemester(
+      Semester(
+        id: definition.id,
+        academicYear: definition.academicYear,
+        term: SemesterTerm.values[definition.term - 1],
+        label: '${definition.academicYear} $termLabel',
+        calendarId: definition.id,
+        calendarRevision: definition.revision,
+        createdAt: DateTime.now(),
+      ),
+    );
     await repository.setPreferredSemesterId(selected);
     if (context.mounted) _showMessage(context, '学期已创建，可以手动添加课程');
   } catch (error) {
@@ -401,12 +419,8 @@ Future<void> _selectSemester(BuildContext context, WidgetRef ref) async {
                 trailing: IconButton(
                   tooltip: '删除学期',
                   icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _deleteSemester(
-                    context,
-                    sheetContext,
-                    ref,
-                    semester,
-                  ),
+                  onPressed: () =>
+                      _deleteSemester(context, sheetContext, ref, semester),
                 ),
               ),
             ),

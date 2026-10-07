@@ -19,8 +19,9 @@ import 'package:nwu_schedule/features/schedule/presentation/schedule_page.dart';
 import 'package:nwu_schedule/infrastructure/calendar/bundled_calendar_repository.dart';
 
 void main() {
-  testWidgets('explains when an imported semester has no bundled calendar',
-      (tester) async {
+  testWidgets('explains when an imported semester has no bundled calendar', (
+    tester,
+  ) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
     final repository = DriftScheduleDataRepository(database);
@@ -57,8 +58,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
-  testWidgets('shows and dismisses a non-blocking calendar revision notice',
-      (tester) async {
+  testWidgets('shows and dismisses a non-blocking calendar revision notice', (
+    tester,
+  ) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
     final repository = DriftScheduleDataRepository(database);
@@ -112,15 +114,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
-  testWidgets('renders the real Home, Week, Month, and Detail pages',
-      (tester) async {
+  testWidgets('renders the real Home, Week, Month, and Detail pages', (
+    tester,
+  ) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
     final repository = DriftScheduleDataRepository(database);
     final today = DateTime(2026, 9, 22);
-    final now = CampusClock.campusWallTimeToUtc(
-      DateTime(2026, 9, 22, 8),
-    );
+    final now = CampusClock.campusWallTimeToUtc(DateTime(2026, 9, 22, 8));
     final week1 = today.subtract(Duration(days: today.weekday - 1 + 7));
     final calendar = CalendarDefinition(
       id: 'widget-pages-calendar',
@@ -162,25 +163,38 @@ void main() {
     );
     await repository.saveSemester(semester);
     await repository.saveCourse(course, [rule]);
+    final eveningCourse = Course(
+      id: 'widget-pages-evening-course',
+      semesterId: semester.id,
+      sourceType: CourseSourceType.manual,
+      name: '晚间课程',
+    );
+    await repository.saveCourse(eveningCourse, [
+      MeetingRule(
+        id: 'widget-pages-evening-rule',
+        courseId: eveningCourse.id,
+        weekday: DateTime.friday,
+        startSection: 10,
+        endSection: 11,
+        weekMask: WeekMask.all(calendar.totalWeeks),
+      ),
+    ]);
     final weekendCourse = Course(
       id: 'widget-pages-weekend-course',
       semesterId: semester.id,
       sourceType: CourseSourceType.manual,
       name: '周末实验课',
     );
-    await repository.saveCourse(
-      weekendCourse,
-      [
-        MeetingRule(
-          id: 'widget-pages-weekend-rule',
-          courseId: weekendCourse.id,
-          weekday: DateTime.saturday,
-          startSection: 1,
-          endSection: 2,
-          weekMask: WeekMask.all(calendar.totalWeeks),
-        ),
-      ],
-    );
+    await repository.saveCourse(weekendCourse, [
+      MeetingRule(
+        id: 'widget-pages-weekend-rule',
+        courseId: weekendCourse.id,
+        weekday: DateTime.saturday,
+        startSection: 1,
+        endSection: 2,
+        weekMask: WeekMask.all(calendar.totalWeeks),
+      ),
+    ]);
 
     final page = ValueNotifier<Widget>(HomePage(now: now));
     addTearDown(page.dispose);
@@ -214,23 +228,77 @@ void main() {
 
     await pumpPage(SchedulePage(now: now));
     expect(find.text('周课表'), findsNothing);
-    expect(find.byType(WeekPageHeader), findsOneWidget);
+    expect(find.text('第 2 周'), findsOneWidget);
+    expect(find.byIcon(Icons.keyboard_arrow_down), findsNothing);
+    expect(find.text('回本周'), findsNothing);
+    final viewport = tester.getRect(find.byType(PageView));
+    expect(viewport.top, tester.getRect(find.byType(SchedulePage)).top);
     expect(find.text('六'), findsNothing);
     expect(find.textContaining('本周周末有 1 节课'), findsOneWidget);
     await tester.tap(find.textContaining('查看周末'));
     await tester.pumpAndSettle();
     expect(find.text('六'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.keyboard_arrow_down));
+    await tester.drag(find.byType(PageView), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('选择教学周'), findsOneWidget);
-    await tester.tap(find.text('第1周'));
+    expect(find.text('第 1 周'), findsOneWidget);
+    expect(find.text('回本周'), findsOneWidget);
+    final backButton = tester.getRect(find.byTooltip('返回本周'));
+    final addButton = tester.getRect(find.byTooltip('添加课程'));
+    expect(backButton.right, lessThan(addButton.left));
+    expect(backButton.center.dy, addButton.center.dy);
+    expect(tester.getRect(find.byType(PageView)), viewport);
+    final scrollable = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byType(SingleChildScrollView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.dragFrom(
+      Offset((backButton.right + addButton.left) / 2, addButton.center.dy),
+      const Offset(0, -150),
+    );
     await tester.pumpAndSettle();
+    expect(scrollable.position.pixels, greaterThan(0));
     expect(find.text('六'), findsNothing);
     expect(find.textContaining('本周周末有 1 节课'), findsOneWidget);
+    await tester.tap(find.text('回本周'));
+    await tester.pumpAndSettle();
+    expect(find.text('第 2 周'), findsOneWidget);
+    expect(find.text('回本周'), findsNothing);
+    for (var swipe = 0; swipe < 8; swipe++) {
+      await tester.drag(find.byType(PageView), const Offset(-600, 0));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('第 10 周'), findsOneWidget);
+    final eveningFinder = find.text('晚间课程', skipOffstage: false);
+    await tester.ensureVisible(eveningFinder);
+    await tester.pumpAndSettle();
+    final eveningRect = tester.getRect(eveningFinder);
+    expect(
+      eveningRect.bottom,
+      lessThan(tester.getRect(find.byTooltip('返回本周')).top),
+    );
+    await tester.tap(eveningFinder);
+    await tester.pumpAndSettle();
+    expect(find.text('当前：第10周'), findsOneWidget);
+    Navigator.of(tester.element(find.text('当前：第10周'))).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('回本周'));
+    await tester.pumpAndSettle();
+    expect(find.text('第 2 周'), findsOneWidget);
+    expect(find.text('回本周'), findsNothing);
     final courseFinder = find.textContaining('软件测试', skipOffstage: false);
     await tester.ensureVisible(courseFinder);
     await tester.pumpAndSettle();
     expect(find.textContaining('软件测试'), findsOneWidget);
+
+    await pumpPage(SchedulePage(now: DateTime.utc(2027, 9, 1)));
+    await tester.drag(find.byType(PageView), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('回本周'), findsNothing);
+    expect(tester.takeException(), isNull);
 
     await pumpPage(CalendarPage(now: now));
     expect(find.byTooltip('选择日期'), findsOneWidget);

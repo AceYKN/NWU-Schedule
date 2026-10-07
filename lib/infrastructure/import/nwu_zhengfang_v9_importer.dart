@@ -8,7 +8,10 @@ typedef TimetablePayloadReader = Future<Map<String, dynamic>> Function();
 /// endpoint and response shape must be observed in a real student session.
 class NwuZhengfangV9Importer implements TimetableImporter {
   static const adapterVersion = 'nwu-zhengfang-v9-dom-v9';
-  static final entryUri = Uri.parse('https://jwgl.nwu.edu.cn/jwglxt/');
+  static final entryUri = Uri.parse(
+    'https://jwgl.nwu.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html'
+    '?gnmkdm=N253508&layout=default',
+  );
 
   static bool isAllowedUri(Uri uri) =>
       uri.scheme == 'https' &&
@@ -160,9 +163,7 @@ class NwuZhengfangV9Importer implements TimetableImporter {
     }
   }
 
-  List<Map<String, dynamic>> _semesterCandidates(
-    Map<String, dynamic> payload,
-  ) {
+  List<Map<String, dynamic>> _semesterCandidates(Map<String, dynamic> payload) {
     final raw =
         payload['semesters'] ?? payload['semesterOptions'] ?? payload['terms'];
     if (raw is! List || raw.isEmpty) return [payload];

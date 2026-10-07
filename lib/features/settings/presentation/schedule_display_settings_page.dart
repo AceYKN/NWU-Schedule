@@ -30,7 +30,8 @@ class _ScheduleDisplaySettingsPageState
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(nwuUserMessage(error, action: '更新课表显示失败'))));
+          SnackBar(content: Text(nwuUserMessage(error, action: '更新课表显示失败'))),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -50,102 +51,106 @@ class _ScheduleDisplaySettingsPageState
       }
     }
     return IgnorePointer(
-        ignoring: _busy,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
-          children: [
-            if (_busy) const Text('正在处理…'),
-            AppPageHeader(
-              title: '课表显示',
-              showBack: true,
-              onBack: () => context.go('/settings'),
+      ignoring: _busy,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
+        children: [
+          if (_busy) const Text('正在处理…'),
+          AppPageHeader(
+            title: '课表显示',
+            showBack: true,
+            onBack: () => context.go('/settings'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '预览',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontSize: scheduleThemeTokensOf(context).sectionTitleSize,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 8),
+          _SchedulePreview(preferences: preferences),
+          const SizedBox(height: 20),
+          Card(
+            child: Column(
+              children: [
+                _PreferenceSwitch(
+                  title: '始终显示周末',
+                  subtitle: '关闭时，有周末课程的周会提示你临时查看周末',
+                  value: preferences.showWeekend,
+                  onChanged: (value) =>
+                      _run(() => _save(ref, 'showWeekend', value)),
+                ),
+                const Divider(height: 1),
+                _PreferenceSwitch(
+                  title: '显示教师',
+                  value: preferences.showTeacher,
+                  onChanged: (value) =>
+                      _run(() => _save(ref, 'showTeacher', value)),
+                ),
+                const Divider(height: 1),
+                _PreferenceSwitch(
+                  title: '显示非本周课程',
+                  value: preferences.showInactiveCourses,
+                  onChanged: (value) =>
+                      _run(() => _save(ref, 'showInactiveCourses', value)),
+                ),
+                const Divider(height: 1),
+                _PreferenceSwitch(
+                  title: '显示节次时间',
+                  value: preferences.showPeriodTimes,
+                  onChanged: (value) =>
+                      _run(() => _save(ref, 'showPeriodTimes', value)),
+                ),
+                const Divider(height: 1),
+                _PreferenceSwitch(
+                  title: '高亮当前节次',
+                  value: preferences.highlightCurrentPeriod,
+                  onChanged: (value) =>
+                      _save(ref, 'highlightCurrentPeriod', value),
+                ),
+                const Divider(height: 1),
+                _PreferenceSwitch(
+                  title: '显示“返回本周”按钮',
+                  value: preferences.showBackToCurrentWeekFab,
+                  onChanged: (value) =>
+                      _save(ref, 'showBackToCurrentWeekFab', value),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              '预览',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontSize: scheduleThemeTokensOf(context).sectionTitleSize,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            _SchedulePreview(preferences: preferences),
+          ),
+          if (preferences.hiddenCourseIds.isNotEmpty) ...[
             const SizedBox(height: 20),
-            Card(
-              child: Column(
-                children: [
-                  _PreferenceSwitch(
-                    title: '始终显示周末',
-                    subtitle: '关闭时，有周末课程的周会提示你临时查看周末',
-                    value: preferences.showWeekend,
-                    onChanged: (value) =>
-                        _run(() => _save(ref, 'showWeekend', value)),
-                  ),
-                  const Divider(height: 1),
-                  _PreferenceSwitch(
-                    title: '显示教师',
-                    value: preferences.showTeacher,
-                    onChanged: (value) =>
-                        _run(() => _save(ref, 'showTeacher', value)),
-                  ),
-                  const Divider(height: 1),
-                  _PreferenceSwitch(
-                    title: '显示非本周课程',
-                    value: preferences.showInactiveCourses,
-                    onChanged: (value) =>
-                        _run(() => _save(ref, 'showInactiveCourses', value)),
-                  ),
-                  const Divider(height: 1),
-                  _PreferenceSwitch(
-                    title: '显示节次时间',
-                    value: preferences.showPeriodTimes,
-                    onChanged: (value) =>
-                        _run(() => _save(ref, 'showPeriodTimes', value)),
-                  ),
-                  const Divider(height: 1),
-                  _PreferenceSwitch(
-                    title: '高亮当前节次',
-                    value: preferences.highlightCurrentPeriod,
-                    onChanged: (value) =>
-                        _save(ref, 'highlightCurrentPeriod', value),
-                  ),
-                  const Divider(height: 1),
-                  _PreferenceSwitch(
-                    title: '显示“返回本周”按钮',
-                    value: preferences.showBackToCurrentWeekFab,
-                    onChanged: (value) =>
-                        _save(ref, 'showBackToCurrentWeekFab', value),
-                  ),
-                ],
+            _HiddenCoursesCard(
+              courseIds: preferences.hiddenCourseIds,
+              courseNames: courseNames,
+              onRestore: (courseId) => _run(
+                () => _restoreHidden(
+                  context,
+                  ref,
+                  courseId,
+                  courseNames[courseId] ?? courseId,
+                ),
+              ),
+              onRestoreAll: () => _run(
+                () => _restoreAllHidden(
+                  context,
+                  ref,
+                  preferences.hiddenCourseIds,
+                ),
               ),
             ),
-            if (preferences.hiddenCourseIds.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              _HiddenCoursesCard(
-                courseIds: preferences.hiddenCourseIds,
-                courseNames: courseNames,
-                onRestore: (courseId) => _run(() => _restoreHidden(
-                      context,
-                      ref,
-                      courseId,
-                      courseNames[courseId] ?? courseId,
-                    )),
-                onRestoreAll: () => _run(() => _restoreAllHidden(
-                      context,
-                      ref,
-                      preferences.hiddenCourseIds,
-                    )),
-              ),
-            ],
           ],
-        ));
+        ],
+      ),
+    );
   }
 
   Future<void> _save(WidgetRef ref, String name, bool value) async {
-    await ref.read(scheduleDataRepositoryProvider).setSetting(
-          scheduleDisplaySettingKeys[name]!,
-          value.toString(),
-        );
+    await ref
+        .read(scheduleDataRepositoryProvider)
+        .setSetting(scheduleDisplaySettingKeys[name]!, value.toString());
     ref.invalidate(scheduleDisplayPreferencesProvider);
   }
 
@@ -157,8 +162,9 @@ class _ScheduleDisplaySettingsPageState
   ) async {
     final key = scheduleDisplaySettingKeys['hiddenCourseIds']!;
     final repository = ref.read(scheduleDataRepositoryProvider);
-    final hidden = decodeHiddenCourseIds(await repository.getSetting(key))
-        .toSet()
+    final hidden = decodeHiddenCourseIds(
+      await repository.getSetting(key),
+    ).toSet()
       ..remove(courseId);
     await repository.setSetting(key, encodeHiddenCourseIds(hidden));
     ref.invalidate(scheduleDisplayPreferencesProvider);
@@ -202,8 +208,9 @@ class _ScheduleDisplaySettingsPageState
   Future<void> _addHidden(WidgetRef ref, String courseId) async {
     final key = scheduleDisplaySettingKeys['hiddenCourseIds']!;
     final repository = ref.read(scheduleDataRepositoryProvider);
-    final hidden = decodeHiddenCourseIds(await repository.getSetting(key))
-        .toSet()
+    final hidden = decodeHiddenCourseIds(
+      await repository.getSetting(key),
+    ).toSet()
       ..add(courseId);
     await repository.setSetting(key, encodeHiddenCourseIds(hidden));
     ref.invalidate(scheduleDisplayPreferencesProvider);
@@ -300,57 +307,27 @@ class _SchedulePreview extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: .35),
-        ),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .35)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final dayWidth = (constraints.maxWidth - 20 - 34) / days.length;
+          final dayWidth = (constraints.maxWidth - 20 - 40) / days.length;
           return Padding(
             padding: const EdgeInsets.all(10),
             child: Column(
               children: [
                 Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        '周课表  ·  第 4 周',
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    if (preferences.showBackToCurrentWeekFab)
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: scheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 3,
-                          ),
-                          child: Text(
-                            '回本周',
-                            style: TextStyle(
-                              color: scheme.onPrimaryContainer,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
                     SizedBox(
-                      width: 30,
-                      child: const SizedBox.shrink(),
+                      width: 40,
+                      child: Text(
+                        '第 4 周',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                     for (var index = 0; index < days.length; index++)
                       Expanded(
@@ -395,7 +372,7 @@ class _SchedulePreview extends StatelessWidget {
                           child: Row(
                             children: [
                               SizedBox(
-                                width: 30,
+                                width: 40,
                                 height: 35,
                                 child: Center(
                                   child: Text(
@@ -426,7 +403,7 @@ class _SchedulePreview extends StatelessWidget {
                           ),
                         ),
                       Positioned(
-                        left: 34 + (days.length > 1 ? 1 : 0),
+                        left: 44 + (days.length > 1 ? 1 : 0),
                         top: 2,
                         width: dayWidth,
                         height: 68,
@@ -438,7 +415,7 @@ class _SchedulePreview extends StatelessWidget {
                       ),
                       if (preferences.showInactiveCourses)
                         Positioned(
-                          left: 34 + dayWidth * (days.length > 2 ? 2 : 1),
+                          left: 44 + dayWidth * (days.length > 2 ? 2 : 1),
                           top: 72,
                           width: dayWidth,
                           height: 55,
@@ -450,11 +427,56 @@ class _SchedulePreview extends StatelessWidget {
                         ),
                       if (preferences.highlightCurrentPeriod)
                         Positioned(
-                          left: 30,
+                          left: 40,
                           right: 0,
                           top: 69,
                           child: Container(height: 2, color: scheme.primary),
                         ),
+                      Positioned(
+                        right: 4,
+                        bottom: 4,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (preferences.showBackToCurrentWeekFab) ...[
+                              DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: scheme.surfaceContainerHigh,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 6,
+                                  ),
+                                  child: Text(
+                                    '回本周',
+                                    style: TextStyle(
+                                      color: scheme.onSurface,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: scheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(5),
+                                child: Icon(
+                                  Icons.add_rounded,
+                                  size: 20,
+                                  color: scheme.onPrimaryContainer,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -502,10 +524,10 @@ class _PreviewBlock extends StatelessWidget {
         '$title\n$detail',
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w700,
-            ),
+        style: Theme.of(context)
+            .textTheme
+            .labelSmall
+            ?.copyWith(color: foreground, fontWeight: FontWeight.w700),
       ),
     );
   }
