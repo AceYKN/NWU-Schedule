@@ -10,6 +10,7 @@ void main() {
   const allowedPermissions = {
     'android.permission.INTERNET',
     'android.permission.POST_NOTIFICATIONS',
+    'android.permission.RECEIVE_BOOT_COMPLETED',
   };
   final unexpectedPermissions = permissions.difference(allowedPermissions);
   if (unexpectedPermissions.isNotEmpty) {

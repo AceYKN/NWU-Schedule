@@ -8,9 +8,35 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
+import android.content.pm.ApplicationInfo
 
 class CourseNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val pending = goAsync()
+        PlatformTaskRunner.execute {
+            try {
+                val id = intent.getIntExtra(EXTRA_ID, -1)
+                val fireAt = intent.getLongExtra(EXTRA_FIRE_AT, -1)
+                if (NotificationAlarmScheduler.acceptsAlarm(context, id, fireAt)) {
+                    try {
+                        showNotification(context, intent)
+                    } finally {
+                        // A replenishment failure must not suppress today's reminder.
+                        NotificationAlarmScheduler.onAlarmFired(context, id, fireAt)
+                    }
+                }
+            } catch (error: Exception) {
+                context.getSharedPreferences("nwu_schedule_notifications", Context.MODE_PRIVATE)
+                    .edit().putBoolean("replenish_failed", true).apply()
+                if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                    Log.e("CourseReminder", "Reminder delivery or replenishment failed", error)
+                }
+            } finally { pending?.finish() }
+        }
+    }
+
+    private fun showNotification(context: Context, intent: Intent) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
@@ -63,6 +89,7 @@ class CourseNotificationReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        const val EXTRA_FIRE_AT = "notification_fire_at"
         const val EXTRA_ID = "notification_id"
         const val EXTRA_TITLE = "notification_title"
         const val EXTRA_BODY = "notification_body"

@@ -1837,6 +1837,24 @@ class $CourseExceptionsTable extends CourseExceptions
   late final GeneratedColumn<DateTime> targetDate = GeneratedColumn<DateTime>(
       'target_date', aliasedName, true,
       type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _sourceDateKeyMeta =
+      const VerificationMeta('sourceDateKey');
+  @override
+  late final GeneratedColumn<String> sourceDateKey = GeneratedColumn<String>(
+      'source_date_key', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _targetDateKeyMeta =
+      const VerificationMeta('targetDateKey');
+  @override
+  late final GeneratedColumn<String> targetDateKey = GeneratedColumn<String>(
+      'target_date_key', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _colorOverrideMeta =
+      const VerificationMeta('colorOverride');
+  @override
+  late final GeneratedColumn<int> colorOverride = GeneratedColumn<int>(
+      'color_override', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _targetStartSectionMeta =
       const VerificationMeta('targetStartSection');
   @override
@@ -1893,6 +1911,9 @@ class $CourseExceptionsTable extends CourseExceptions
         sourceDate,
         type,
         targetDate,
+        sourceDateKey,
+        targetDateKey,
+        colorOverride,
         targetStartSection,
         targetEndSection,
         teacherOverride,
@@ -1952,6 +1973,24 @@ class $CourseExceptionsTable extends CourseExceptions
           _targetDateMeta,
           targetDate.isAcceptableOrUnknown(
               data['target_date']!, _targetDateMeta));
+    }
+    if (data.containsKey('source_date_key')) {
+      context.handle(
+          _sourceDateKeyMeta,
+          sourceDateKey.isAcceptableOrUnknown(
+              data['source_date_key']!, _sourceDateKeyMeta));
+    }
+    if (data.containsKey('target_date_key')) {
+      context.handle(
+          _targetDateKeyMeta,
+          targetDateKey.isAcceptableOrUnknown(
+              data['target_date_key']!, _targetDateKeyMeta));
+    }
+    if (data.containsKey('color_override')) {
+      context.handle(
+          _colorOverrideMeta,
+          colorOverride.isAcceptableOrUnknown(
+              data['color_override']!, _colorOverrideMeta));
     }
     if (data.containsKey('target_start_section')) {
       context.handle(
@@ -2022,6 +2061,12 @@ class $CourseExceptionsTable extends CourseExceptions
           .read(DriftSqlType.string, data['${effectivePrefix}type'])!,
       targetDate: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}target_date']),
+      sourceDateKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}source_date_key']),
+      targetDateKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}target_date_key']),
+      colorOverride: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}color_override']),
       targetStartSection: attachedDatabase.typeMapping.read(
           DriftSqlType.int, data['${effectivePrefix}target_start_section']),
       targetEndSection: attachedDatabase.typeMapping
@@ -2055,6 +2100,9 @@ class CourseException extends DataClass implements Insertable<CourseException> {
   final DateTime? sourceDate;
   final String type;
   final DateTime? targetDate;
+  final String? sourceDateKey;
+  final String? targetDateKey;
+  final int? colorOverride;
   final int? targetStartSection;
   final int? targetEndSection;
   final String? teacherOverride;
@@ -2071,6 +2119,9 @@ class CourseException extends DataClass implements Insertable<CourseException> {
       this.sourceDate,
       required this.type,
       this.targetDate,
+      this.sourceDateKey,
+      this.targetDateKey,
+      this.colorOverride,
       this.targetStartSection,
       this.targetEndSection,
       this.teacherOverride,
@@ -2096,6 +2147,15 @@ class CourseException extends DataClass implements Insertable<CourseException> {
     map['type'] = Variable<String>(type);
     if (!nullToAbsent || targetDate != null) {
       map['target_date'] = Variable<DateTime>(targetDate);
+    }
+    if (!nullToAbsent || sourceDateKey != null) {
+      map['source_date_key'] = Variable<String>(sourceDateKey);
+    }
+    if (!nullToAbsent || targetDateKey != null) {
+      map['target_date_key'] = Variable<String>(targetDateKey);
+    }
+    if (!nullToAbsent || colorOverride != null) {
+      map['color_override'] = Variable<int>(colorOverride);
     }
     if (!nullToAbsent || targetStartSection != null) {
       map['target_start_section'] = Variable<int>(targetStartSection);
@@ -2139,6 +2199,15 @@ class CourseException extends DataClass implements Insertable<CourseException> {
       targetDate: targetDate == null && nullToAbsent
           ? const Value.absent()
           : Value(targetDate),
+      sourceDateKey: sourceDateKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceDateKey),
+      targetDateKey: targetDateKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(targetDateKey),
+      colorOverride: colorOverride == null && nullToAbsent
+          ? const Value.absent()
+          : Value(colorOverride),
       targetStartSection: targetStartSection == null && nullToAbsent
           ? const Value.absent()
           : Value(targetStartSection),
@@ -2173,6 +2242,9 @@ class CourseException extends DataClass implements Insertable<CourseException> {
       sourceDate: serializer.fromJson<DateTime?>(json['sourceDate']),
       type: serializer.fromJson<String>(json['type']),
       targetDate: serializer.fromJson<DateTime?>(json['targetDate']),
+      sourceDateKey: serializer.fromJson<String?>(json['sourceDateKey']),
+      targetDateKey: serializer.fromJson<String?>(json['targetDateKey']),
+      colorOverride: serializer.fromJson<int?>(json['colorOverride']),
       targetStartSection: serializer.fromJson<int?>(json['targetStartSection']),
       targetEndSection: serializer.fromJson<int?>(json['targetEndSection']),
       teacherOverride: serializer.fromJson<String?>(json['teacherOverride']),
@@ -2194,6 +2266,9 @@ class CourseException extends DataClass implements Insertable<CourseException> {
       'sourceDate': serializer.toJson<DateTime?>(sourceDate),
       'type': serializer.toJson<String>(type),
       'targetDate': serializer.toJson<DateTime?>(targetDate),
+      'sourceDateKey': serializer.toJson<String?>(sourceDateKey),
+      'targetDateKey': serializer.toJson<String?>(targetDateKey),
+      'colorOverride': serializer.toJson<int?>(colorOverride),
       'targetStartSection': serializer.toJson<int?>(targetStartSection),
       'targetEndSection': serializer.toJson<int?>(targetEndSection),
       'teacherOverride': serializer.toJson<String?>(teacherOverride),
@@ -2213,6 +2288,9 @@ class CourseException extends DataClass implements Insertable<CourseException> {
           Value<DateTime?> sourceDate = const Value.absent(),
           String? type,
           Value<DateTime?> targetDate = const Value.absent(),
+          Value<String?> sourceDateKey = const Value.absent(),
+          Value<String?> targetDateKey = const Value.absent(),
+          Value<int?> colorOverride = const Value.absent(),
           Value<int?> targetStartSection = const Value.absent(),
           Value<int?> targetEndSection = const Value.absent(),
           Value<String?> teacherOverride = const Value.absent(),
@@ -2231,6 +2309,12 @@ class CourseException extends DataClass implements Insertable<CourseException> {
         sourceDate: sourceDate.present ? sourceDate.value : this.sourceDate,
         type: type ?? this.type,
         targetDate: targetDate.present ? targetDate.value : this.targetDate,
+        sourceDateKey:
+            sourceDateKey.present ? sourceDateKey.value : this.sourceDateKey,
+        targetDateKey:
+            targetDateKey.present ? targetDateKey.value : this.targetDateKey,
+        colorOverride:
+            colorOverride.present ? colorOverride.value : this.colorOverride,
         targetStartSection: targetStartSection.present
             ? targetStartSection.value
             : this.targetStartSection,
@@ -2264,6 +2348,15 @@ class CourseException extends DataClass implements Insertable<CourseException> {
       type: data.type.present ? data.type.value : this.type,
       targetDate:
           data.targetDate.present ? data.targetDate.value : this.targetDate,
+      sourceDateKey: data.sourceDateKey.present
+          ? data.sourceDateKey.value
+          : this.sourceDateKey,
+      targetDateKey: data.targetDateKey.present
+          ? data.targetDateKey.value
+          : this.targetDateKey,
+      colorOverride: data.colorOverride.present
+          ? data.colorOverride.value
+          : this.colorOverride,
       targetStartSection: data.targetStartSection.present
           ? data.targetStartSection.value
           : this.targetStartSection,
@@ -2297,6 +2390,9 @@ class CourseException extends DataClass implements Insertable<CourseException> {
           ..write('sourceDate: $sourceDate, ')
           ..write('type: $type, ')
           ..write('targetDate: $targetDate, ')
+          ..write('sourceDateKey: $sourceDateKey, ')
+          ..write('targetDateKey: $targetDateKey, ')
+          ..write('colorOverride: $colorOverride, ')
           ..write('targetStartSection: $targetStartSection, ')
           ..write('targetEndSection: $targetEndSection, ')
           ..write('teacherOverride: $teacherOverride, ')
@@ -2318,6 +2414,9 @@ class CourseException extends DataClass implements Insertable<CourseException> {
       sourceDate,
       type,
       targetDate,
+      sourceDateKey,
+      targetDateKey,
+      colorOverride,
       targetStartSection,
       targetEndSection,
       teacherOverride,
@@ -2337,6 +2436,9 @@ class CourseException extends DataClass implements Insertable<CourseException> {
           other.sourceDate == this.sourceDate &&
           other.type == this.type &&
           other.targetDate == this.targetDate &&
+          other.sourceDateKey == this.sourceDateKey &&
+          other.targetDateKey == this.targetDateKey &&
+          other.colorOverride == this.colorOverride &&
           other.targetStartSection == this.targetStartSection &&
           other.targetEndSection == this.targetEndSection &&
           other.teacherOverride == this.teacherOverride &&
@@ -2355,6 +2457,9 @@ class CourseExceptionsCompanion extends UpdateCompanion<CourseException> {
   final Value<DateTime?> sourceDate;
   final Value<String> type;
   final Value<DateTime?> targetDate;
+  final Value<String?> sourceDateKey;
+  final Value<String?> targetDateKey;
+  final Value<int?> colorOverride;
   final Value<int?> targetStartSection;
   final Value<int?> targetEndSection;
   final Value<String?> teacherOverride;
@@ -2372,6 +2477,9 @@ class CourseExceptionsCompanion extends UpdateCompanion<CourseException> {
     this.sourceDate = const Value.absent(),
     this.type = const Value.absent(),
     this.targetDate = const Value.absent(),
+    this.sourceDateKey = const Value.absent(),
+    this.targetDateKey = const Value.absent(),
+    this.colorOverride = const Value.absent(),
     this.targetStartSection = const Value.absent(),
     this.targetEndSection = const Value.absent(),
     this.teacherOverride = const Value.absent(),
@@ -2390,6 +2498,9 @@ class CourseExceptionsCompanion extends UpdateCompanion<CourseException> {
     this.sourceDate = const Value.absent(),
     required String type,
     this.targetDate = const Value.absent(),
+    this.sourceDateKey = const Value.absent(),
+    this.targetDateKey = const Value.absent(),
+    this.colorOverride = const Value.absent(),
     this.targetStartSection = const Value.absent(),
     this.targetEndSection = const Value.absent(),
     this.teacherOverride = const Value.absent(),
@@ -2411,6 +2522,9 @@ class CourseExceptionsCompanion extends UpdateCompanion<CourseException> {
     Expression<DateTime>? sourceDate,
     Expression<String>? type,
     Expression<DateTime>? targetDate,
+    Expression<String>? sourceDateKey,
+    Expression<String>? targetDateKey,
+    Expression<int>? colorOverride,
     Expression<int>? targetStartSection,
     Expression<int>? targetEndSection,
     Expression<String>? teacherOverride,
@@ -2429,6 +2543,9 @@ class CourseExceptionsCompanion extends UpdateCompanion<CourseException> {
       if (sourceDate != null) 'source_date': sourceDate,
       if (type != null) 'type': type,
       if (targetDate != null) 'target_date': targetDate,
+      if (sourceDateKey != null) 'source_date_key': sourceDateKey,
+      if (targetDateKey != null) 'target_date_key': targetDateKey,
+      if (colorOverride != null) 'color_override': colorOverride,
       if (targetStartSection != null)
         'target_start_section': targetStartSection,
       if (targetEndSection != null) 'target_end_section': targetEndSection,
@@ -2450,6 +2567,9 @@ class CourseExceptionsCompanion extends UpdateCompanion<CourseException> {
       Value<DateTime?>? sourceDate,
       Value<String>? type,
       Value<DateTime?>? targetDate,
+      Value<String?>? sourceDateKey,
+      Value<String?>? targetDateKey,
+      Value<int?>? colorOverride,
       Value<int?>? targetStartSection,
       Value<int?>? targetEndSection,
       Value<String?>? teacherOverride,
@@ -2467,6 +2587,9 @@ class CourseExceptionsCompanion extends UpdateCompanion<CourseException> {
       sourceDate: sourceDate ?? this.sourceDate,
       type: type ?? this.type,
       targetDate: targetDate ?? this.targetDate,
+      sourceDateKey: sourceDateKey ?? this.sourceDateKey,
+      targetDateKey: targetDateKey ?? this.targetDateKey,
+      colorOverride: colorOverride ?? this.colorOverride,
       targetStartSection: targetStartSection ?? this.targetStartSection,
       targetEndSection: targetEndSection ?? this.targetEndSection,
       teacherOverride: teacherOverride ?? this.teacherOverride,
@@ -2502,6 +2625,15 @@ class CourseExceptionsCompanion extends UpdateCompanion<CourseException> {
     }
     if (targetDate.present) {
       map['target_date'] = Variable<DateTime>(targetDate.value);
+    }
+    if (sourceDateKey.present) {
+      map['source_date_key'] = Variable<String>(sourceDateKey.value);
+    }
+    if (targetDateKey.present) {
+      map['target_date_key'] = Variable<String>(targetDateKey.value);
+    }
+    if (colorOverride.present) {
+      map['color_override'] = Variable<int>(colorOverride.value);
     }
     if (targetStartSection.present) {
       map['target_start_section'] = Variable<int>(targetStartSection.value);
@@ -2543,6 +2675,9 @@ class CourseExceptionsCompanion extends UpdateCompanion<CourseException> {
           ..write('sourceDate: $sourceDate, ')
           ..write('type: $type, ')
           ..write('targetDate: $targetDate, ')
+          ..write('sourceDateKey: $sourceDateKey, ')
+          ..write('targetDateKey: $targetDateKey, ')
+          ..write('colorOverride: $colorOverride, ')
           ..write('targetStartSection: $targetStartSection, ')
           ..write('targetEndSection: $targetEndSection, ')
           ..write('teacherOverride: $teacherOverride, ')
@@ -4974,6 +5109,9 @@ typedef $$CourseExceptionsTableCreateCompanionBuilder
   Value<DateTime?> sourceDate,
   required String type,
   Value<DateTime?> targetDate,
+  Value<String?> sourceDateKey,
+  Value<String?> targetDateKey,
+  Value<int?> colorOverride,
   Value<int?> targetStartSection,
   Value<int?> targetEndSection,
   Value<String?> teacherOverride,
@@ -4993,6 +5131,9 @@ typedef $$CourseExceptionsTableUpdateCompanionBuilder
   Value<DateTime?> sourceDate,
   Value<String> type,
   Value<DateTime?> targetDate,
+  Value<String?> sourceDateKey,
+  Value<String?> targetDateKey,
+  Value<int?> colorOverride,
   Value<int?> targetStartSection,
   Value<int?> targetEndSection,
   Value<String?> teacherOverride,
@@ -5051,6 +5192,15 @@ class $$CourseExceptionsTableFilterComposer
 
   ColumnFilters<DateTime> get targetDate => $composableBuilder(
       column: $table.targetDate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get sourceDateKey => $composableBuilder(
+      column: $table.sourceDateKey, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get targetDateKey => $composableBuilder(
+      column: $table.targetDateKey, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get colorOverride => $composableBuilder(
+      column: $table.colorOverride, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get targetStartSection => $composableBuilder(
       column: $table.targetStartSection,
@@ -5130,6 +5280,18 @@ class $$CourseExceptionsTableOrderingComposer
   ColumnOrderings<DateTime> get targetDate => $composableBuilder(
       column: $table.targetDate, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get sourceDateKey => $composableBuilder(
+      column: $table.sourceDateKey,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get targetDateKey => $composableBuilder(
+      column: $table.targetDateKey,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get colorOverride => $composableBuilder(
+      column: $table.colorOverride,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<int> get targetStartSection => $composableBuilder(
       column: $table.targetStartSection,
       builder: (column) => ColumnOrderings(column));
@@ -5208,6 +5370,15 @@ class $$CourseExceptionsTableAnnotationComposer
   GeneratedColumn<DateTime> get targetDate => $composableBuilder(
       column: $table.targetDate, builder: (column) => column);
 
+  GeneratedColumn<String> get sourceDateKey => $composableBuilder(
+      column: $table.sourceDateKey, builder: (column) => column);
+
+  GeneratedColumn<String> get targetDateKey => $composableBuilder(
+      column: $table.targetDateKey, builder: (column) => column);
+
+  GeneratedColumn<int> get colorOverride => $composableBuilder(
+      column: $table.colorOverride, builder: (column) => column);
+
   GeneratedColumn<int> get targetStartSection => $composableBuilder(
       column: $table.targetStartSection, builder: (column) => column);
 
@@ -5284,6 +5455,9 @@ class $$CourseExceptionsTableTableManager extends RootTableManager<
             Value<DateTime?> sourceDate = const Value.absent(),
             Value<String> type = const Value.absent(),
             Value<DateTime?> targetDate = const Value.absent(),
+            Value<String?> sourceDateKey = const Value.absent(),
+            Value<String?> targetDateKey = const Value.absent(),
+            Value<int?> colorOverride = const Value.absent(),
             Value<int?> targetStartSection = const Value.absent(),
             Value<int?> targetEndSection = const Value.absent(),
             Value<String?> teacherOverride = const Value.absent(),
@@ -5302,6 +5476,9 @@ class $$CourseExceptionsTableTableManager extends RootTableManager<
             sourceDate: sourceDate,
             type: type,
             targetDate: targetDate,
+            sourceDateKey: sourceDateKey,
+            targetDateKey: targetDateKey,
+            colorOverride: colorOverride,
             targetStartSection: targetStartSection,
             targetEndSection: targetEndSection,
             teacherOverride: teacherOverride,
@@ -5320,6 +5497,9 @@ class $$CourseExceptionsTableTableManager extends RootTableManager<
             Value<DateTime?> sourceDate = const Value.absent(),
             required String type,
             Value<DateTime?> targetDate = const Value.absent(),
+            Value<String?> sourceDateKey = const Value.absent(),
+            Value<String?> targetDateKey = const Value.absent(),
+            Value<int?> colorOverride = const Value.absent(),
             Value<int?> targetStartSection = const Value.absent(),
             Value<int?> targetEndSection = const Value.absent(),
             Value<String?> teacherOverride = const Value.absent(),
@@ -5338,6 +5518,9 @@ class $$CourseExceptionsTableTableManager extends RootTableManager<
             sourceDate: sourceDate,
             type: type,
             targetDate: targetDate,
+            sourceDateKey: sourceDateKey,
+            targetDateKey: targetDateKey,
+            colorOverride: colorOverride,
             targetStartSection: targetStartSection,
             targetEndSection: targetEndSection,
             teacherOverride: teacherOverride,

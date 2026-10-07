@@ -7,6 +7,8 @@ environment:
   sdk: ">=3.4.0 <4.0.0"
 
 dependencies:
+  flutter_localizations:
+    sdk: flutter
   flutter:
     sdk: flutter
   flutter_riverpod: ^3.4.3

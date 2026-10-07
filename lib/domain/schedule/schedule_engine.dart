@@ -33,6 +33,30 @@ class ScheduleEngine {
     if (semesterId.trim().isEmpty) {
       throw ArgumentError.value(semesterId, 'semesterId');
     }
+    for (final course in this.courses) {
+      _coursesById[course.id] = course;
+    }
+    for (final rule in this.meetingRules) {
+      _rulesByWeekday.putIfAbsent(rule.weekday, () => []).add(rule);
+      _rulesByCourse.putIfAbsent(rule.courseId, () => []).add(rule);
+    }
+    for (final exception in this.exceptions) {
+      // Legacy out-of-range exceptions have no effective instance in this term.
+      if ([exception.sourceDate, exception.targetDate]
+          .any((d) => d != null && !_withinSemester(d))) {
+        continue;
+      }
+      if (exception.sourceDate != null) {
+        _sourceExceptions
+            .putIfAbsent(dateKey(exception.sourceDate!), () => [])
+            .add(exception);
+      }
+      if (exception.targetDate != null) {
+        _targetExceptions
+            .putIfAbsent(dateKey(exception.targetDate!), () => [])
+            .add(exception);
+      }
+    }
   }
 
   final String semesterId;
@@ -41,6 +65,16 @@ class ScheduleEngine {
   final List<MeetingRule> meetingRules;
   final List<CourseException> exceptions;
   final NwuPeriodRepository periodRepository;
+  final _coursesById = <String, Course>{};
+  final _rulesByWeekday = <int, List<MeetingRule>>{};
+  final _rulesByCourse = <String, List<MeetingRule>>{};
+  final _sourceExceptions = <String, List<CourseException>>{};
+  final _targetExceptions = <String, List<CourseException>>{};
+  final _dateCache = <String, List<EffectiveCourseInstance>>{};
+
+  bool _withinSemester(DateTime date) =>
+      !dateOnly(date).isBefore(calendarDefinition.semesterStartDate) &&
+      !dateOnly(date).isAfter(calendarDefinition.semesterEndDate);
 
   /// The calendar definition used by this schedule. Presentation code should
   /// use this read-only view through [ScheduleEngine] rather than reaching
@@ -114,13 +148,13 @@ class ScheduleEngine {
     final now = CampusClock.toCampusWallTime(instant);
     final startDate = dateOnly(now);
     final endDate = calendarEngine.definition.semesterEndDate;
-    final days = endDate.difference(startDate).inDays;
+    final days = calendarDaysBetween(endDate, startDate);
     if (days < 0) {
       return null;
     }
 
     for (var offset = 0; offset <= days; offset++) {
-      final date = startDate.add(Duration(days: offset));
+      final date = addCalendarDays(startDate, offset);
       final coursesForDate = _getCoursesForDate(date);
       for (final course in coursesForDate) {
         if (course.startTime.isAfter(now)) {
@@ -135,7 +169,7 @@ class ScheduleEngine {
     final start = calendarEngine.definition.weekStart(teachingWeek);
     final result = <EffectiveCourseInstance>[];
     for (var day = 0; day < 7; day++) {
-      result.addAll(_getCoursesForDate(start.add(Duration(days: day))));
+      result.addAll(_getCoursesForDate(addCalendarDays(start, day)));
     }
     result.sort(_compareInstances);
     return result;
@@ -161,7 +195,7 @@ class ScheduleEngine {
     final campusNow =
         now == null ? CampusClock.now() : CampusClock.toCampusWallTime(now);
     for (var offset = 0; offset < 7; offset++) {
-      final date = weekStart.add(Duration(days: offset));
+      final date = addCalendarDays(weekStart, offset);
       final resolved = calendarEngine.resolve(date);
       days.add(
         WeekDayColumn(
@@ -212,35 +246,33 @@ class ScheduleEngine {
     final templateWeek = calendarEngine.weekOf(templateDate);
     if (templateWeek == null) return const [];
     final result = <EffectiveCourseInstance>[];
-    for (final course in courses) {
-      if (course.deleted || course.hidden) continue;
-      for (final rule in meetingRules) {
-        if (rule.courseId != course.id ||
-            rule.weekday != templateDate.weekday ||
-            rule.includesWeek(templateWeek) ||
-            _hasSourceMoveOrCancel(actualDate, course.id, rule.id)) {
-          continue;
-        }
-        result.add(
-          _createInstance(
-            course: course,
-            rule: rule,
-            actualDate: actualDate,
-            templateDate: templateDate,
-            startSection: rule.startSection,
-            endSection: rule.endSection,
-            teacher: rule.teacher,
-            campus: rule.campus,
-            room: rule.room,
-          ),
-        );
+    for (final rule
+        in _rulesByWeekday[templateDate.weekday] ?? const <MeetingRule>[]) {
+      final course = _findCourse(rule.courseId);
+      if (course == null) continue;
+      if (rule.includesWeek(templateWeek) ||
+          _hasSourceMoveOrCancel(actualDate, course.id, rule.id)) {
+        continue;
       }
+      result.add(
+        _createInstance(
+          course: course,
+          rule: rule,
+          actualDate: actualDate,
+          templateDate: templateDate,
+          startSection: rule.startSection,
+          endSection: rule.endSection,
+          teacher: rule.teacher,
+          campus: rule.campus,
+          room: rule.room,
+        ),
+      );
     }
     return result;
   }
 
   bool _hasSourceMoveOrCancel(DateTime date, String courseId, String ruleId) {
-    return exceptions.any(
+    return (_sourceExceptions[dateKey(date)] ?? const <CourseException>[]).any(
       (exception) =>
           (exception.type == CourseExceptionType.move ||
               exception.type == CourseExceptionType.cancel) &&
@@ -256,6 +288,12 @@ class ScheduleEngine {
       const ['一', '二', '三', '四', '五', '六', '日'][weekday - 1];
 
   List<EffectiveCourseInstance> _getCoursesForDate(DateTime date) {
+    if (!_withinSemester(date)) return const [];
+    return _dateCache.putIfAbsent(
+        dateKey(date), () => _calculateCoursesForDate(date));
+  }
+
+  List<EffectiveCourseInstance> _calculateCoursesForDate(DateTime date) {
     final actualDate = dateOnly(date);
     final resolved = calendarEngine.resolve(actualDate);
     final result = <EffectiveCourseInstance>[];
@@ -271,7 +309,8 @@ class ScheduleEngine {
 
     // Source exceptions are applied to the visible source date. A target
     // exception is then inserted even if the target is a holiday.
-    for (final exception in exceptions) {
+    for (final exception in _sourceExceptions[dateKey(actualDate)] ??
+        const <CourseException>[]) {
       if (exception.sourceDate == null ||
           !isSameDate(exception.sourceDate!, actualDate)) {
         continue;
@@ -282,7 +321,8 @@ class ScheduleEngine {
       }
     }
 
-    for (final exception in exceptions) {
+    for (final exception in _targetExceptions[dateKey(actualDate)] ??
+        const <CourseException>[]) {
       if (exception.targetDate == null ||
           !isSameDate(exception.targetDate!, actualDate)) {
         continue;
@@ -309,30 +349,26 @@ class ScheduleEngine {
       return const [];
     }
     final result = <EffectiveCourseInstance>[];
-    for (final course in courses) {
-      if (course.deleted || course.hidden) {
+    for (final rule
+        in _rulesByWeekday[templateDate.weekday] ?? const <MeetingRule>[]) {
+      final course = _findCourse(rule.courseId);
+      if (course == null) continue;
+      if (!rule.includesWeek(week)) {
         continue;
       }
-      for (final rule in meetingRules) {
-        if (rule.courseId != course.id ||
-            rule.weekday != templateDate.weekday ||
-            !rule.includesWeek(week)) {
-          continue;
-        }
-        result.add(
-          _createInstance(
-            course: course,
-            rule: rule,
-            actualDate: actualDate,
-            templateDate: templateDate,
-            startSection: rule.startSection,
-            endSection: rule.endSection,
-            teacher: rule.teacher,
-            campus: rule.campus,
-            room: rule.room,
-          ),
-        );
-      }
+      result.add(
+        _createInstance(
+          course: course,
+          rule: rule,
+          actualDate: actualDate,
+          templateDate: templateDate,
+          startSection: rule.startSection,
+          endSection: rule.endSection,
+          teacher: rule.teacher,
+          campus: rule.campus,
+          room: rule.room,
+        ),
+      );
     }
     result.sort(_compareInstances);
     return result;
@@ -370,6 +406,7 @@ class ScheduleEngine {
     } else {
       if (exception.courseId != null) {
         course = _findCourse(exception.courseId!);
+        if (course == null) return null;
         sourceRule = _findRule(exception.courseId!, exception.sourceMeetingId);
       }
       course ??= Course(
@@ -377,6 +414,7 @@ class ScheduleEngine {
         semesterId: semesterId,
         sourceType: CourseSourceType.manual,
         name: exception.addedCourseName ?? '临时课程',
+        colorOverride: exception.colorOverride,
       );
       if (sourceRule != null) {
         teacher ??= sourceRule.teacher;
@@ -420,19 +458,13 @@ class ScheduleEngine {
   }
 
   Course? _findCourse(String id) {
-    for (final course in courses) {
-      if (course.id == id && !course.deleted && !course.hidden) {
-        return course;
-      }
-    }
-    return null;
+    final course = _coursesById[id];
+    return course == null || course.deleted || course.hidden ? null : course;
   }
 
   MeetingRule? _findRule(String courseId, String? ruleId) {
-    for (final rule in meetingRules) {
-      if (rule.courseId == courseId && (ruleId == null || rule.id == ruleId)) {
-        return rule;
-      }
+    for (final rule in _rulesByCourse[courseId] ?? const <MeetingRule>[]) {
+      if (ruleId == null || rule.id == ruleId) return rule;
     }
     return null;
   }

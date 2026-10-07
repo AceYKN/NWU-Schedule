@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/navigation.dart';
 import '../../../app/theme/schedule_theme.dart';
 import '../../../core/nwu/periods.dart';
 import '../../../core/utils/date_utils.dart';
@@ -11,6 +12,7 @@ import '../../../domain/course/course.dart';
 import '../../../domain/course/course_exception.dart';
 import '../../../domain/course/meeting_rule.dart';
 import '../../../domain/semester/semester.dart';
+import '../../../domain/schedule/schedule_data_repository.dart';
 import '../../shared/presentation/app_page_header.dart';
 
 class CourseDetailPage extends ConsumerWidget {
@@ -20,58 +22,47 @@ class CourseDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return FutureBuilder<_CourseDetail?>(
-      future: _loadCourse(ref),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final detail = snapshot.data;
-        if (detail == null) {
-          return const Center(child: Text('找不到这门课程'));
-        }
-        return _CourseDetail(
-          semester: detail.semester,
-          course: detail.course,
-          rules: detail.rules,
-          exception: detail.exception,
-        );
-      },
+    final load = ref.watch(courseSnapshotProvider(courseId));
+    return load.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stack) => Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('课程读取失败'),
+        TextButton(
+            onPressed: () => ref.invalidate(courseSnapshotProvider(courseId)),
+            child: const Text('重试')),
+      ])),
+      data: (snapshot) =>
+          _detail(snapshot) ?? const Center(child: Text('找不到这门课程')),
     );
   }
 
-  Future<_CourseDetail?> _loadCourse(WidgetRef ref) async {
-    final repository = ref.read(scheduleDataRepositoryProvider);
-    for (final semester in await repository.loadSemesters()) {
-      final snapshot = await repository.loadSemester(semester.id);
-      for (final course in snapshot.courses) {
-        if (course.id == courseId) {
-          return _CourseDetail(
-            semester: semester,
+  Widget? _detail(ScheduleDataSnapshot? snapshot) {
+    if (snapshot == null) return null;
+    for (final course in snapshot.courses) {
+      if (course.id == courseId) {
+        return _CourseDetail(
+            semester: snapshot.semester,
             course: course,
             rules: snapshot.meetingRules
-                .where((rule) => rule.courseId == course.id)
-                .toList(growable: false),
-          );
-        }
+                .where((r) => r.courseId == course.id)
+                .toList(growable: false));
       }
-      for (final exception in snapshot.exceptions) {
-        if (exception.id != courseId ||
-            exception.type != CourseExceptionType.add ||
-            exception.courseId != null ||
-            exception.targetDate == null ||
-            exception.targetStartSection == null ||
-            exception.targetEndSection == null) {
-          continue;
-        }
-        final course = Course(
+    }
+    for (final exception in snapshot.exceptions) {
+      if (exception.id != courseId ||
+          exception.type != CourseExceptionType.add ||
+          exception.courseId != null) {
+        continue;
+      }
+      final course = Course(
           id: exception.id,
-          semesterId: semester.id,
+          semesterId: snapshot.semester.id,
           sourceType: CourseSourceType.manual,
           name: exception.addedCourseName ?? '临时课程',
           note: exception.note,
-        );
-        final rule = MeetingRule(
+          colorOverride: exception.colorOverride);
+      final rule = MeetingRule(
           id: '${exception.id}-rule',
           courseId: course.id,
           weekday: exception.targetDate!.weekday,
@@ -80,15 +71,12 @@ class CourseDetailPage extends ConsumerWidget {
           teacher: exception.teacherOverride,
           campus: exception.campusOverride,
           room: exception.roomOverride,
-          weekMask: const WeekMask(0, rawText: '单次课程'),
-        );
-        return _CourseDetail(
-          semester: semester,
+          weekMask: const WeekMask(0, rawText: '单次课程'));
+      return _CourseDetail(
+          semester: snapshot.semester,
           course: course,
           rules: [rule],
-          exception: exception,
-        );
-      }
+          exception: exception);
     }
     return null;
   }
@@ -121,7 +109,7 @@ class _CourseDetail extends StatelessWidget {
         AppPageHeader(
           title: '课程详情',
           showBack: true,
-          onBack: context.pop,
+          onBack: () => popOrGo(context, '/schedule'),
           actions: [
             if (exception == null)
               IconButton(

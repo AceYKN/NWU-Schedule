@@ -18,6 +18,16 @@ String? normalizeRoomField(String? value) => _normalizeLabeledField(
       const ['上课地点', '教室', '地点'],
     );
 
+// Unlike ordinary fields, null inherits and an empty string deliberately clears.
+String? normalizeTeacherOverride(String? value) =>
+    value == null ? null : normalizeTeacherField(value) ?? '';
+
+String? normalizeCampusOverride(String? value) =>
+    value == null ? null : normalizeCampusField(value) ?? '';
+
+String? normalizeRoomOverride(String? value) =>
+    value == null ? null : normalizeRoomField(value) ?? '';
+
 String? _normalizeLabeledField(String? value, List<String> labels) {
   var normalized = normalizeOptionalCourseField(value);
   if (normalized == null) return null;

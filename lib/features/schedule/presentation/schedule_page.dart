@@ -1,3 +1,4 @@
+import '../../../../core/utils/date_utils.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -72,7 +73,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
       data: (value) {
         if (value is ScheduleNoSemester) {
           return _ScheduleEmptyState(
-            onImport: () => context.go('/import'),
+            onImport: () => context.push('/import'),
             onManual: () => context.go('/course/new'),
           );
         }
@@ -472,7 +473,7 @@ class WeekPageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final start = definition.weekStart(week);
-    final end = start.add(const Duration(days: 6));
+    final end = addCalendarDays(start, 6);
     final dateRange = '${start.month}/${start.day} - '
         '${end.month}/${end.day}';
     final scheme = Theme.of(context).colorScheme;
@@ -575,7 +576,7 @@ class TeachingWeekPicker extends StatelessWidget {
             }
             final item = index;
             final start = definition.weekStart(item);
-            final end = start.add(const Duration(days: 6));
+            final end = addCalendarDays(start, 6);
             return ListTile(
               selected: item == selectedWeek,
               leading: SizedBox(

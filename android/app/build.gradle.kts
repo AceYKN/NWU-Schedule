@@ -39,6 +39,10 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -78,7 +82,15 @@ android {
     }
 }
 
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16.1")
+}
+
 tasks.configureEach {
+    if (name == "packageDebugUnitTestForUnitTest") {
+        dependsOn("copyFlutterAssetsDebug")
+    }
     if (name == "assembleRelease" ||
         name == "bundleRelease" ||
         name == "validateSigningRelease") {

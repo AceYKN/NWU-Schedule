@@ -8,6 +8,7 @@ import '../../../core/nwu/periods.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/week_mask.dart';
 import '../../../domain/course/course_exception.dart';
+import '../../../domain/calendar/calendar_definition.dart';
 import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
 import 'course_color_resolver.dart';
@@ -239,7 +240,9 @@ void showCourseDetails(
                                         }
                                       },
                                 icon: const Icon(Icons.visibility_off_outlined),
-                                label: const Text('隐藏课程'),
+                                label: Text(onHideCourse == null
+                                    ? '停用课程及提醒'
+                                    : '仅在周课表隐藏'),
                               ),
                               TextButton.icon(
                                 onPressed: () => _deleteCourse(context,
@@ -259,12 +262,39 @@ void showCourseDetails(
   );
 }
 
+Future<CalendarDefinition?> _exceptionCalendar(
+    WidgetRef ref, String semesterId) async {
+  final snapshot =
+      await ref.read(scheduleDataRepositoryProvider).loadSemester(semesterId);
+  final id = snapshot.semester.calendarId;
+  return id == null
+      ? null
+      : ref.read(bundledCalendarRepositoryProvider).findById(id);
+}
+
+DateTime _clampSemesterDate(DateTime date, CalendarDefinition calendar) {
+  if (dateOnly(date).isBefore(calendar.semesterStartDate)) {
+    return calendar.semesterStartDate;
+  }
+  if (dateOnly(date).isAfter(calendar.semesterEndDate)) {
+    return calendar.semesterEndDate;
+  }
+  return dateOnly(date);
+}
+
 Future<void> showStandaloneAddException({
   required BuildContext pageContext,
   required WidgetRef ref,
   required String semesterId,
   required DateTime initialDate,
 }) async {
+  final calendar = await _exceptionCalendar(ref, semesterId);
+  if (!pageContext.mounted) return;
+  if (calendar == null) {
+    ScaffoldMessenger.of(pageContext)
+        .showSnackBar(const SnackBar(content: Text('请先为学期选择校历')));
+    return;
+  }
   final exception = await showModalBottomSheet<CourseException>(
     context: pageContext,
     isScrollControlled: true,
@@ -272,6 +302,7 @@ Future<void> showStandaloneAddException({
     builder: (context) => _StandaloneAddExceptionSheet(
       semesterId: semesterId,
       initialDate: initialDate,
+      calendar: calendar,
     ),
   );
   if (exception == null || !pageContext.mounted) return;
@@ -304,7 +335,7 @@ Future<void> _hideCourse(
     if (!sheetContext.mounted || !pageContext.mounted) return;
     final messenger = ScaffoldMessenger.of(pageContext);
     Navigator.of(sheetContext).pop();
-    messenger.showSnackBar(const SnackBar(content: Text('课程已隐藏')));
+    messenger.showSnackBar(const SnackBar(content: Text('课程已停用，相关提醒已停止')));
   } catch (error) {
     if (sheetContext.mounted) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
@@ -427,11 +458,19 @@ Future<void> _showExceptionEditor(
   WidgetRef ref,
   EffectiveCourseInstance instance,
 ) async {
+  final calendar = await _exceptionCalendar(ref, instance.course.semesterId);
+  if (!sheetContext.mounted) return;
+  if (calendar == null) {
+    ScaffoldMessenger.of(sheetContext)
+        .showSnackBar(const SnackBar(content: Text('请先为学期选择校历')));
+    return;
+  }
   final exception = await showModalBottomSheet<CourseException>(
     context: sheetContext,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (context) => _ExceptionEditorSheet(instance: instance),
+    builder: (context) =>
+        _ExceptionEditorSheet(instance: instance, calendar: calendar),
   );
   if (exception == null || !sheetContext.mounted) return;
   try {
@@ -513,13 +552,19 @@ Future<void> _showCourseColorPicker(
   try {
     final repository = ref.read(scheduleDataRepositoryProvider);
     final snapshot = await repository.loadSemester(instance.course.semesterId);
-    final rules = snapshot.meetingRules
-        .where((rule) => rule.courseId == instance.course.id)
-        .toList(growable: false);
-    await repository.saveCourse(
-      instance.course.copyWith(colorOverride: selected == -1 ? null : selected),
-      rules,
-    );
+    final color = selected == -1 ? null : selected;
+    if (instance.exceptionId == instance.course.id) {
+      final exception =
+          snapshot.exceptions.singleWhere((e) => e.id == instance.exceptionId);
+      await repository.saveException(exception.withColor(color));
+    } else {
+      final course =
+          snapshot.courses.singleWhere((c) => c.id == instance.course.id);
+      final rules = snapshot.meetingRules
+          .where((r) => r.courseId == course.id)
+          .toList(growable: false);
+      await repository.saveCourse(course.copyWith(colorOverride: color), rules);
+    }
     if (!sheetContext.mounted || !pageContext.mounted) return;
     final messenger = ScaffoldMessenger.of(pageContext);
     Navigator.of(sheetContext).pop();
@@ -545,7 +590,9 @@ const _courseColors = <int>[
 ];
 
 class _ExceptionEditorSheet extends StatefulWidget {
-  const _ExceptionEditorSheet({required this.instance});
+  const _ExceptionEditorSheet({required this.instance, required this.calendar});
+
+  final CalendarDefinition calendar;
 
   final EffectiveCourseInstance instance;
 
@@ -557,10 +604,12 @@ class _StandaloneAddExceptionSheet extends StatefulWidget {
   const _StandaloneAddExceptionSheet({
     required this.semesterId,
     required this.initialDate,
+    required this.calendar,
   });
 
   final String semesterId;
   final DateTime initialDate;
+  final CalendarDefinition calendar;
 
   @override
   State<_StandaloneAddExceptionSheet> createState() =>
@@ -582,7 +631,7 @@ class _StandaloneAddExceptionSheetState
   @override
   void initState() {
     super.initState();
-    _targetDate = dateOnly(widget.initialDate);
+    _targetDate = _clampSemesterDate(widget.initialDate, widget.calendar);
   }
 
   @override
@@ -602,8 +651,8 @@ class _StandaloneAddExceptionSheetState
     final selected = await showDatePicker(
       context: context,
       initialDate: _targetDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      firstDate: widget.calendar.semesterStartDate,
+      lastDate: widget.calendar.semesterEndDate,
     );
     if (selected != null && mounted) setState(() => _targetDate = selected);
   }
@@ -729,7 +778,7 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
   @override
   void initState() {
     super.initState();
-    _targetDate = dateOnly(_instance.date);
+    _targetDate = _clampSemesterDate(_instance.date, widget.calendar);
     _startSection = _instance.startSection;
     _endSection = _instance.endSection;
     _teacher = TextEditingController(text: _instance.teacher ?? '');
@@ -755,8 +804,8 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
     final selected = await showDatePicker(
       context: context,
       initialDate: _targetDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      firstDate: widget.calendar.semesterStartDate,
+      lastDate: widget.calendar.semesterEndDate,
     );
     if (selected != null && mounted) setState(() => _targetDate = selected);
   }

@@ -33,6 +33,10 @@ class ScheduleWeekGrid extends StatelessWidget {
         ? ScheduleGridMetrics.timeRailWidth
         : ScheduleGridMetrics.compactTimeRailWidth;
     final periodCount = NwuPeriodRepository.all.length;
+    final scale =
+        math.max(1.0, MediaQuery.textScalerOf(context).scale(14) / 14);
+    final rowHeight = ScheduleGridMetrics.periodHeight * scale;
+    final dayHeaderHeight = ScheduleGridMetrics.headerHeight * scale;
     return LayoutBuilder(
       builder: (context, constraints) {
         final dayWidth = math.max<double>(
@@ -43,10 +47,13 @@ class ScheduleWeekGrid extends StatelessWidget {
           visibleDays: visibleDays,
           entries: viewModel.entries,
         );
-        final current =
-            preferences.highlightCurrentPeriod ? _currentPeriod() : null;
+        final current = preferences.highlightCurrentPeriod
+            ? _currentPeriod(
+                rowHeight: rowHeight, dayHeaderHeight: dayHeaderHeight)
+            : null;
         final scheme = Theme.of(context).colorScheme;
-        final canvasHeight = ScheduleGridMetrics.canvasHeight(periodCount);
+        final canvasHeight = ScheduleGridMetrics.canvasHeight(periodCount,
+            rowHeight: rowHeight, dayHeaderHeight: dayHeaderHeight);
 
         return ColoredBox(
           color: scheme.surface,
@@ -76,6 +83,8 @@ class ScheduleWeekGrid extends StatelessWidget {
                         dayCount: visibleDays.length,
                         periodCount: periodCount,
                         lineColor: scheme.outlineVariant,
+                        rowHeight: rowHeight,
+                        dayHeaderHeight: dayHeaderHeight,
                       ),
                     ),
                   ),
@@ -84,15 +93,17 @@ class ScheduleWeekGrid extends StatelessWidget {
                       left: periodWidth + index * dayWidth,
                       top: 0,
                       width: dayWidth,
-                      height: ScheduleGridMetrics.headerHeight,
+                      height: dayHeaderHeight,
                       child: ScheduleDayHeader(day: visibleDays[index]),
                     ),
                   for (var section = 1; section <= periodCount; section++)
                     Positioned(
                       left: 0,
-                      top: ScheduleGridMetrics.sectionTop(section),
+                      top: ScheduleGridMetrics.sectionTop(section,
+                          rowHeight: rowHeight,
+                          dayHeaderHeight: dayHeaderHeight),
                       width: periodWidth,
-                      height: ScheduleGridMetrics.periodHeight,
+                      height: rowHeight,
                       child: ScheduleTimeAxis(
                         section: section,
                         showTime: preferences.showPeriodTimes,
@@ -106,6 +117,8 @@ class ScheduleWeekGrid extends StatelessWidget {
                       dayWidth: dayWidth,
                       visibleDayCount: visibleDays.length,
                       palette: coursePalette,
+                      rowHeight: rowHeight,
+                      dayHeaderHeight: dayHeaderHeight,
                     ),
                   if (current != null)
                     Positioned(
@@ -131,6 +144,8 @@ class ScheduleWeekGrid extends StatelessWidget {
     required double dayWidth,
     required int visibleDayCount,
     required Map<String, int> palette,
+    required double rowHeight,
+    required double dayHeaderHeight,
   }) {
     final width = math.max<double>(
       8,
@@ -141,6 +156,7 @@ class ScheduleWeekGrid extends StatelessWidget {
       ScheduleGridMetrics.sectionHeight(
             item.effectiveStartSection,
             item.effectiveEndSection,
+            rowHeight: rowHeight,
           ) -
           ScheduleGridMetrics.eventGap,
     );
@@ -148,7 +164,8 @@ class ScheduleWeekGrid extends StatelessWidget {
         item.dayIndex * dayWidth +
         item.lane * (dayWidth / item.laneCount) +
         ScheduleGridMetrics.eventGap / 2;
-    final top = ScheduleGridMetrics.sectionTop(item.effectiveStartSection) +
+    final top = ScheduleGridMetrics.sectionTop(item.effectiveStartSection,
+            rowHeight: rowHeight, dayHeaderHeight: dayHeaderHeight) +
         ScheduleGridMetrics.eventGap / 2;
 
     return Positioned(
@@ -169,7 +186,8 @@ class ScheduleWeekGrid extends StatelessWidget {
               height: height,
               visibleDayCount: visibleDayCount,
               paletteIndex: palette[item.entry!.course.id],
-              isCurrent: _isCurrentEntry(item.entry!),
+              isCurrent: preferences.highlightCurrentPeriod &&
+                  _isCurrentEntry(item.entry!),
               onTap: onEntryTap == null ? null : () => onEntryTap!(item.entry!),
             ),
     );
@@ -184,7 +202,9 @@ class ScheduleWeekGrid extends StatelessWidget {
         current.section <= entry.endSection;
   }
 
-  _CurrentPeriod? _currentPeriod() {
+  _CurrentPeriod? _currentPeriod(
+      {double rowHeight = ScheduleGridMetrics.periodHeight,
+      double dayHeaderHeight = ScheduleGridMetrics.headerHeight}) {
     final today = dateOnly(now);
     final dayIndex = visibleDays.indexWhere(
       (day) => day.isToday && isSameDate(day.date, today),
@@ -196,7 +216,8 @@ class ScheduleWeekGrid extends StatelessWidget {
         return _CurrentPeriod(
           dayIndex: dayIndex,
           section: period.number,
-          top: ScheduleGridMetrics.currentTimeTop(period.number, minutes),
+          top: ScheduleGridMetrics.currentTimeTop(period.number, minutes,
+              rowHeight: rowHeight, dayHeaderHeight: dayHeaderHeight),
           label: formatMinutes(minutes),
         );
       }
@@ -348,6 +369,8 @@ class _ScheduleGridPainter extends CustomPainter {
     required this.dayCount,
     required this.periodCount,
     required this.lineColor,
+    required this.rowHeight,
+    required this.dayHeaderHeight,
   });
 
   final double periodWidth;
@@ -355,6 +378,8 @@ class _ScheduleGridPainter extends CustomPainter {
   final int dayCount;
   final int periodCount;
   final Color lineColor;
+  final double rowHeight;
+  final double dayHeaderHeight;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -369,13 +394,14 @@ class _ScheduleGridPainter extends CustomPainter {
       ..strokeWidth = .7;
 
     canvas.drawLine(
-      Offset(0, ScheduleGridMetrics.headerHeight),
-      Offset(size.width, ScheduleGridMetrics.headerHeight),
+      Offset(0, dayHeaderHeight),
+      Offset(size.width, dayHeaderHeight),
       groupPaint,
     );
     for (var section = 1; section <= periodCount; section++) {
-      final y = ScheduleGridMetrics.sectionTop(section) +
-          ScheduleGridMetrics.periodHeight;
+      final y = ScheduleGridMetrics.sectionTop(section,
+              rowHeight: rowHeight, dayHeaderHeight: dayHeaderHeight) +
+          rowHeight;
       canvas.drawLine(
         Offset(0, y),
         Offset(size.width, y),
@@ -399,7 +425,9 @@ class _ScheduleGridPainter extends CustomPainter {
         oldDelegate.dayWidth != dayWidth ||
         oldDelegate.dayCount != dayCount ||
         oldDelegate.periodCount != periodCount ||
-        oldDelegate.lineColor != lineColor;
+        oldDelegate.lineColor != lineColor ||
+        oldDelegate.rowHeight != rowHeight ||
+        oldDelegate.dayHeaderHeight != dayHeaderHeight;
   }
 }
 
@@ -412,6 +440,8 @@ class ScheduleDayHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final marker = day.shortMarker;
+    final dateBadgeSize =
+        22.0 * math.max(1.0, MediaQuery.textScalerOf(context).scale(11) / 11);
     final semanticParts = [
       '星期${day.label}',
       '${day.date.month}月${day.date.day}日',
@@ -451,8 +481,8 @@ class ScheduleDayHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   SizedBox(
-                    width: 22,
-                    height: 22,
+                    width: math.min(dateBadgeSize, constraints.maxWidth - 4),
+                    height: dateBadgeSize,
                     child: DecoratedBox(
                       decoration: day.isToday
                           ? BoxDecoration(

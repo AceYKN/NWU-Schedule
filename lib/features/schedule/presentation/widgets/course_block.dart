@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/schedule_theme.dart';
@@ -105,14 +107,65 @@ class CourseEventCard extends StatelessWidget {
             ? BorderSide(color: scheme.primary, width: 2)
             : BorderSide.none;
     final label = CourseDisplayFormatter.semanticsLabel(entry);
-    final showDetails = height >= 46;
-    final showTeacher = density != CourseBlockDensity.dense &&
-        height >= 60 &&
-        preferences.showTeacher &&
-        entry.teacher != null &&
-        entry.teacher!.trim().isNotEmpty;
-    final titleMaxLines = height < 36 ? 1 : (height >= 100 ? 3 : 2);
     final compact = density != CourseBlockDensity.roomy;
+    final showBadge = status != null &&
+        width >=
+            (compact ? 8 : 12) +
+                MediaQuery.textScalerOf(context).scale(tokens.denseTitleSize) +
+                MediaQuery.textScalerOf(context).scale(9) +
+                8;
+    final verticalPadding = height < 36 ? 1.0 : (compact ? 3.0 : 4.0);
+    final textWidth =
+        math.max(1.0, width - (compact ? 8 : 12) - (showBadge ? 22 : 0));
+    double measure(String text, double size, double lineHeight,
+        {int? maxLines}) {
+      final painter = TextPainter(
+        text: TextSpan(
+            text: text,
+            style: DefaultTextStyle.of(context).style.copyWith(
+                fontSize: size,
+                height: lineHeight,
+                fontWeight: FontWeight.w700)),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+        maxLines: maxLines,
+      )..layout(maxWidth: textWidth);
+      final measured = painter.height;
+      painter.dispose();
+      return measured;
+    }
+
+    final titleLineHeight =
+        measure('国', tokens.denseTitleSize, 1.16, maxLines: 1);
+    final detailLineHeight =
+        measure('国', tokens.denseDetailSize, 1.2, maxLines: 1);
+    final available = math.max(0.0, height - verticalPadding * 2);
+    final reserveLocation =
+        location != null && available >= titleLineHeight + detailLineHeight + 1
+            ? detailLineHeight + 1
+            : 0.0;
+    final titleMaxLines = math.max(1,
+        math.min(3, ((available - reserveLocation) / titleLineHeight).floor()));
+    var remaining = available -
+        measure(title, tokens.denseTitleSize, 1.16, maxLines: titleMaxLines);
+    final locationMaxLines = math.max(
+        0,
+        math.min(
+            compact ? 1 : 100, ((remaining - 1) / detailLineHeight).floor()));
+    final showDetails =
+        height >= 46 && location != null && locationMaxLines > 0;
+    if (showDetails) {
+      remaining -= measure(location, tokens.denseDetailSize, 1.2,
+              maxLines: locationMaxLines) +
+          1;
+    }
+    final teacherMaxLines =
+        math.max(0, math.min(2, ((remaining - 1) / detailLineHeight).floor()));
+    final showTeacher = height >= 60 &&
+        density != CourseBlockDensity.dense &&
+        preferences.showTeacher &&
+        entry.teacher?.trim().isNotEmpty == true &&
+        teacherMaxLines > 0;
 
     return Semantics(
       button: true,
@@ -132,7 +185,7 @@ class CourseEventCard extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: compact ? 4 : 6,
-              vertical: height < 36 ? 1 : (compact ? 3 : 4),
+              vertical: verticalPadding,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -150,7 +203,7 @@ class CourseEventCard extends StatelessWidget {
                         fontSize: tokens.denseTitleSize,
                       ),
                     ),
-                    if (status != null) ...[
+                    if (showBadge) ...[
                       const SizedBox(width: 2),
                       _StatusBadge(
                         label: status.label,
@@ -159,24 +212,28 @@ class CourseEventCard extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (showDetails && location != null) ...[
+                if (showDetails) ...[
                   const SizedBox(height: 1),
                   _wrappedLine(
                     location,
                     secondaryForeground,
-                    maxLines: compact ? 1 : null,
+                    maxLines: !compact &&
+                            measure(location, tokens.denseDetailSize, 1.2) <=
+                                available -
+                                    measure(title, tokens.denseTitleSize, 1.16,
+                                        maxLines: titleMaxLines) -
+                                    1
+                        ? null
+                        : locationMaxLines,
                     fontSize: tokens.denseDetailSize,
                   ),
                 ],
-                if (showDetails && showTeacher) ...[
+                if (showTeacher) ...[
                   const SizedBox(height: 1),
                   _wrappedLine(
                     entry.teacher!.trim(),
                     secondaryForeground,
-                    maxLines:
-                        density == CourseBlockDensity.roomy && height >= 100
-                            ? 2
-                            : 1,
+                    maxLines: teacherMaxLines,
                     fontSize: tokens.denseDetailSize,
                   ),
                 ],

@@ -184,12 +184,12 @@ void main() {
     expect(find.text('软件测试 II'), findsOneWidget);
     await tester.tap(find.byType(PopupMenuButton<String>));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('隐藏'));
+    await tester.tap(find.text('停用课程及提醒'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('已隐藏'), findsOneWidget);
+    expect(find.textContaining('已停用'), findsOneWidget);
     await tester.tap(find.byType(PopupMenuButton<String>));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('取消隐藏'));
+    await tester.tap(find.text('启用课程及提醒'));
     await tester.pumpAndSettle();
     expect(
         (await DriftScheduleDataRepository(database)

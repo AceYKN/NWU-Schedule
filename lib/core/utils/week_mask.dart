@@ -39,6 +39,8 @@ class WeekMask {
   }
 
   static WeekMask all(int totalWeeks, {String rawText = ''}) {
+    RangeError.checkValueInInterval(
+        totalWeeks, 1, maxSupportedTeachingWeeks, 'totalWeeks');
     return fromWeeks(
       List<int>.generate(totalWeeks, (index) => index + 1),
       rawText: rawText,
@@ -70,6 +72,7 @@ class WeekMask {
       final end = int.parse(match.group(2)!);
       final lower = start <= end ? start : end;
       final upper = start <= end ? end : start;
+      fromWeeks([lower, upper]);
       for (var week = lower; week <= upper; week++) {
         if (_matchesParity(week, isOdd: isOdd, isEven: isEven)) {
           weeks.add(week);
@@ -83,12 +86,15 @@ class WeekMask {
     }
     for (final match in RegExp(r'\d+').allMatches(remainder)) {
       final week = int.parse(match.group(0)!);
+      fromWeeks([week]);
       if (_matchesParity(week, isOdd: isOdd, isEven: isEven)) {
         weeks.add(week);
       }
     }
 
     if (weeks.isEmpty && (isOdd || isEven)) {
+      RangeError.checkValueInInterval(
+          maxWeek, 1, maxSupportedTeachingWeeks, 'maxWeek');
       for (var week = 1; week <= maxWeek; week++) {
         if (_matchesParity(week, isOdd: isOdd, isEven: isEven)) {
           weeks.add(week);

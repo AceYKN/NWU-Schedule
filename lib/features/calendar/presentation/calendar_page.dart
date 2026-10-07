@@ -56,10 +56,10 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
         final totalDays = DateTime(month.year, month.month + 1, 0).day;
         final leading = firstDay.weekday - 1;
         final cellCount = ((leading + totalDays + 6) ~/ 7) * 7;
-        final gridStart = firstDay.subtract(Duration(days: leading));
+        final gridStart = addCalendarDays(firstDay, -leading);
         final gridDays = List<DateTime>.generate(
           cellCount,
-          (index) => gridStart.add(Duration(days: index)),
+          (index) => addCalendarDays(gridStart, index),
         );
         return _MonthContent(
           month: month,

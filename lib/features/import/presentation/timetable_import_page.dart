@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/navigation.dart';
 import '../../../core/nwu/constants.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/week_mask.dart';
@@ -87,8 +88,14 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
           },
           onHttpError: _recordHttpError,
         ),
-      )
-      ..loadRequest(NwuZhengfangV9Importer.entryUri);
+      );
+    unawaited(WebViewSessionService.waitForCleanup.then((_) async {
+      if (mounted) {
+        await _controller.loadRequest(NwuZhengfangV9Importer.entryUri);
+      }
+    }).catchError((Object error) {
+      if (mounted) _setError('打开教务页面失败');
+    }));
   }
 
   @override
@@ -101,7 +108,9 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     String url, {
     required int generation,
   }) async {
-    if (generation != _navigationGeneration || url != _latestStartedUrl) {
+    if (!mounted ||
+        generation != _navigationGeneration ||
+        url != _latestStartedUrl) {
       return;
     }
     final uri = Uri.tryParse(url);
@@ -110,20 +119,26 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       return;
     }
     await _bridgeTransition;
-    if (generation != _navigationGeneration || url != _latestStartedUrl) {
+    if (!mounted ||
+        generation != _navigationGeneration ||
+        url != _latestStartedUrl) {
       return;
     }
     if (mounted) setState(() => _currentUrl = url);
     if (NwuZhengfangV9Importer.isLoginUri(uri) ||
         !NwuZhengfangV9Importer.isTrustedTimetableUri(uri) ||
         await _currentTimetableContext() != 'timetable') {
-      if (generation != _navigationGeneration || url != _latestStartedUrl) {
+      if (!mounted ||
+          generation != _navigationGeneration ||
+          url != _latestStartedUrl) {
         return;
       }
       await _disableBridge();
       return;
     }
-    if (generation != _navigationGeneration || url != _latestStartedUrl) {
+    if (!mounted ||
+        generation != _navigationGeneration ||
+        url != _latestStartedUrl) {
       return;
     }
     if (_bridgeEnabled || !mounted) return;
@@ -545,8 +560,11 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     return uri?.path;
   }
 
-  Future<void> _clearSession() async {
-    await _disableBridge();
+  Future<void> _clearSession() =>
+      WebViewSessionService.serializeCleanup(_clearOwnSession);
+
+  Future<void> _clearOwnSession() async {
+    await _bestEffort(_disableBridge);
     await _bestEffort(
       () => _controller.runJavaScript(
         'try { localStorage.clear(); sessionStorage.clear(); '
@@ -580,7 +598,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
             children: [
               IconButton(
                 tooltip: '取消',
-                onPressed: () => context.pop(),
+                onPressed: () => popOrGo(context, '/'),
                 icon: const Icon(Icons.close),
               ),
               Expanded(
@@ -628,20 +646,24 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
               if (timetable != null)
                 Align(
                   alignment: Alignment.bottomCenter,
-                  child: TimetableImportPreviewCard(
-                    timetable: timetable,
-                    diff: _resolvedDiff,
-                    hasConflictItems: _diff?.hasConflicts == true ||
-                        _diff?.hasLocallyDeleted == true,
-                    saving: _saving,
-                    onConfirm: _confirmImport,
-                    onRetry: _readCurrentPage,
-                    onCancel: () => setState(() {
-                      _timetable = null;
-                      _diff = null;
-                      _resolution = ImportConflictResolution.empty;
-                    }),
-                    onResolveConflicts: _showConflictResolution,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height * .65),
+                    child: TimetableImportPreviewCard(
+                      timetable: timetable,
+                      diff: _resolvedDiff,
+                      hasConflictItems: _diff?.hasConflicts == true ||
+                          _diff?.hasLocallyDeleted == true,
+                      saving: _saving,
+                      onConfirm: _confirmImport,
+                      onRetry: _readCurrentPage,
+                      onCancel: () => setState(() {
+                        _timetable = null;
+                        _diff = null;
+                        _resolution = ImportConflictResolution.empty;
+                      }),
+                      onResolveConflicts: _showConflictResolution,
+                    ),
                   ),
                 ),
             ],
@@ -697,121 +719,151 @@ class TimetableImportPreviewCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '读取完成 · ${timetable.semester.label}',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text('${timetable.courses.length} 门课程 · $meetingCount 个上课安排'),
-            if (timetable.ignoredSelfStudyCourseCount > 0) ...[
-              const SizedBox(height: 6),
-              Text(
-                '已忽略 ${timetable.ignoredSelfStudyCourseCount} 门标记为自修的课程',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ],
-            if (dataIssues.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                '发现 ${dataIssues.length} 条可能异常的数据，已保留可识别的课程。',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              for (final issue in dataIssues.take(3))
-                Text(
-                  '· ${issue.message}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              if (dataIssues.length > 3)
-                Text(
-                  '还有 ${dataIssues.length - 3} 条异常…',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-            ],
-            if (diff != null) ...[
-              const SizedBox(height: 4),
-              if (diff!.isNewSemester)
-                const Text(
-                  '发现新的学期，确认后会建立独立的本地课表，不会覆盖其他学期。',
-                ),
-              Text(
-                '新增 ${diff!.addedCount} · 更新 ${diff!.modifiedCount} · '
-                '删除 ${diff!.removedCount} · '
-                '本地删除 ${diff!.locallyDeletedCount} · '
-                '冲突 ${diff!.conflictCount}',
-                style: TextStyle(
-                  color: diff!.hasConflicts
-                      ? Theme.of(context).colorScheme.error
-                      : null,
-                ),
-              ),
-              if (diff!.hasConflicts)
-                Text(
-                  '检测到本地与远端同时修改，请先解决冲突后再确认导入。',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                ),
-              if (hasConflictItems)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: onResolveConflicts,
-                    icon: const Icon(Icons.merge_type),
-                    label: Text(
-                      diff!.hasConflicts ? '解决冲突' : '处理本地删除课程',
-                    ),
-                  ),
-                ),
-            ],
-            const SizedBox(height: 8),
-            ...timetable.courses.take(3).map(
-                  (course) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
+            Flexible(
+                fit: FlexFit.loose,
+                child: SingleChildScrollView(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                      Text(
+                        '读取完成 · ${timetable.semester.label}',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                          '${timetable.courses.length} 门课程 · $meetingCount 个上课安排'),
+                      if (timetable.ignoredSelfStudyCourseCount > 0) ...[
+                        const SizedBox(height: 6),
                         Text(
-                          '${course.name} · ${course.meetings.length} 个安排',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                          '已忽略 ${timetable.ignoredSelfStudyCourseCount} 门标记为自修的课程',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
                         ),
-                        for (final meeting in course.meetings.take(2))
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8, top: 2),
-                            child: Text(
-                              _previewMeetingLabel(meeting),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
+                      ],
+                      if (dataIssues.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          '发现 ${dataIssues.length} 条可能异常的数据，已保留可识别的课程。',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        for (final issue in dataIssues.take(3))
+                          Text(
+                            '· ${issue.message}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        if (dataIssues.length > 3)
+                          Text(
+                            '还有 ${dataIssues.length - 3} 条异常…',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                      ],
+                      if (diff != null) ...[
+                        const SizedBox(height: 4),
+                        if (diff!.isNewSemester)
+                          const Text(
+                            '发现新的学期，确认后会建立独立的本地课表，不会覆盖其他学期。',
+                          ),
+                        Text(
+                          '新增 ${diff!.addedCount} · 更新 ${diff!.modifiedCount} · '
+                          '删除 ${diff!.removedCount} · '
+                          '本地删除 ${diff!.locallyDeletedCount} · '
+                          '冲突 ${diff!.conflictCount}',
+                          style: TextStyle(
+                            color: diff!.hasConflicts
+                                ? Theme.of(context).colorScheme.error
+                                : null,
+                          ),
+                        ),
+                        if (diff!.hasConflicts)
+                          Text(
+                            '检测到本地与远端同时修改，请先解决冲突后再确认导入。',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
                             ),
                           ),
-                        if (course.meetings.length > 2)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8, top: 2),
-                            child: Text(
-                              '还有 ${course.meetings.length - 2} 个安排…',
-                              style: Theme.of(context).textTheme.bodySmall,
+                        TextButton.icon(
+                            onPressed: () => showModalBottomSheet<void>(
+                                context: context,
+                                isScrollControlled: true,
+                                showDragHandle: true,
+                                builder: (_) => _ImportChangesSheet(
+                                    diff: diff!, timetable: timetable)),
+                            icon: const Icon(Icons.compare_arrows),
+                            label: const Text('查看完整变化清单')),
+                        if (hasConflictItems)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              onPressed: onResolveConflicts,
+                              icon: const Icon(Icons.merge_type),
+                              label: Text(
+                                diff!.hasConflicts ? '解决冲突' : '处理本地删除课程',
+                              ),
                             ),
                           ),
                       ],
-                    ),
-                  ),
-                ),
-            if (timetable.courses.length > 3)
-              Text('还有 ${timetable.courses.length - 3} 门课程…'),
+                      const SizedBox(height: 8),
+                      ...timetable.courses.take(3).map(
+                            (course) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${course.name} · ${course.meetings.length} 个安排',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700),
+                                  ),
+                                  for (final meeting in course.meetings.take(2))
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                          left: 8, top: 2),
+                                      child: Text(
+                                        _previewMeetingLabel(meeting),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    ),
+                                  if (course.meetings.length > 2)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                          left: 8, top: 2),
+                                      child: Text(
+                                        '还有 ${course.meetings.length - 2} 个安排…',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      if (timetable.courses.length > 3)
+                        Text('还有 ${timetable.courses.length - 3} 门课程…'),
+                    ]))),
             const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 TextButton(onPressed: onCancel, child: const Text('取消')),
                 TextButton(onPressed: onRetry, child: const Text('重新读取')),
@@ -851,6 +903,86 @@ String _previewMeetingLabel(ImportedMeeting meeting) {
     if (meeting.teacher != null) meeting.teacher!,
   ].join(' · ');
 }
+
+class _ImportChangesSheet extends StatelessWidget {
+  const _ImportChangesSheet({required this.diff, required this.timetable});
+  final ImportDiff diff;
+  final RemoteTimetable timetable;
+
+  @override
+  Widget build(BuildContext context) {
+    final changed = diff.changes
+        .where((c) => c.kind != ImportChangeKind.unchanged)
+        .toList();
+    return SafeArea(
+        child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * .8,
+            child: Column(children: [
+              const ListTile(
+                  title: Text('完整变化清单'),
+                  subtitle: Text('确认导入前可逐项核对；此页面不会保存课程')),
+              Expanded(
+                  child: ListView(children: [
+                if (changed.isEmpty) const ListTile(title: Text('没有变化')),
+                for (final change in changed)
+                  ExpansionTile(
+                      initiallyExpanded: true,
+                      title: Text(
+                          '${_changeLabel(change.kind)} · ${change.remoteCourse?.name ?? change.localCourse?.name ?? change.sourceCourseKey}'),
+                      children: [
+                        for (final field in change.fields.where((f) =>
+                            jsonEncode(f.localValue) !=
+                            jsonEncode(f.remoteValue)))
+                          ListTile(
+                              title:
+                                  Text(_changeFieldLabel(change, field.field)),
+                              subtitle: Text(
+                                  '${_displayValue(field.localValue, field.field)} → ${_displayValue(field.remoteValue, field.field)}'
+                                  '${field.decision == MergeDecision.local ? '（保留本地）' : field.hasConflict ? '（待解决）' : ''}')),
+                        if (change.kind == ImportChangeKind.added &&
+                            change.remoteCourse != null)
+                          for (final meeting in change.remoteCourse!.meetings)
+                            ListTile(
+                                title: Text(_previewMeetingLabel(meeting))),
+                        if (change.kind == ImportChangeKind.removed)
+                          const ListTile(title: Text('远端已移除此课程，确认后将从有效课表移除')),
+                      ]),
+                ExpansionTile(
+                    title: Text('全部课程（${timetable.courses.length}）'),
+                    children: [
+                      for (final course in timetable.courses)
+                        ListTile(
+                            title: Text(course.name),
+                            subtitle: Text(course.meetings
+                                .map(_previewMeetingLabel)
+                                .join('\n'))),
+                    ]),
+              ])),
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('返回核对')),
+            ])));
+  }
+}
+
+String _changeFieldLabel(ImportChange change, String field) {
+  if (!field.startsWith('meeting:')) return _fieldLabel(field);
+  final key = field.substring(8, field.lastIndexOf(':'));
+  final matches =
+      change.remoteCourse?.meetings.where((m) => m.sourceMeetingKey == key);
+  if (matches == null || matches.isEmpty) return _fieldLabel(field);
+  final meeting = matches.first;
+  return '${weekdayName(meeting.weekday)} · 第${meeting.startSection}-${meeting.endSection}节 · ${_meetingPropertyLabel(field)}';
+}
+
+String _changeLabel(ImportChangeKind kind) => switch (kind) {
+      ImportChangeKind.added => '新增',
+      ImportChangeKind.removed => '删除',
+      ImportChangeKind.modified => '修改',
+      ImportChangeKind.conflict => '冲突',
+      ImportChangeKind.locallyDeleted => '本地已删除',
+      ImportChangeKind.unchanged => '未变化',
+    };
 
 class _ConflictEntry {
   const _ConflictEntry(this.change, this.field);
@@ -1063,7 +1195,16 @@ String _meetingPropertyLabel(String field) {
 
 String _displayValue(Object? value, String field) {
   if (value == null) return '未填写';
-  if (field == 'meetings' && value is List) return '${value.length} 个上课安排';
+  if (field == 'meetings' && value is List) {
+    return value.map((item) {
+      if (item is! List || item.length < 4) return item.toString();
+      return '${weekdayName(item[0] as int)} · 第${item[1]}-${item[2]}节 · ${formatWeekMask(WeekMask(item[3] as int))}';
+    }).join('\n');
+  }
+  if (field.endsWith(':weekday') && value is int) return weekdayName(value);
+  if (field.endsWith(':weekMask') && value is int) {
+    return formatWeekMask(WeekMask(value));
+  }
   return value.toString();
 }
 

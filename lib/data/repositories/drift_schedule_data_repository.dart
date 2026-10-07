@@ -1,9 +1,14 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
 
 import '../../core/utils/week_mask.dart';
+import '../../core/nwu/constants.dart';
+import '../../core/utils/date_utils.dart';
+import '../../domain/calendar/calendar_definition.dart';
+import '../../infrastructure/calendar/bundled_calendar_repository.dart';
 import '../../domain/backup/schedule_backup.dart';
 import '../../domain/course/course.dart' as domain;
 import '../../domain/course/course_canonicalizer.dart';
@@ -20,7 +25,9 @@ import '../../domain/semester/semester.dart' as domain;
 import '../database/app_database.dart' as db;
 
 class DriftScheduleDataRepository implements ScheduleDataRepository {
-  const DriftScheduleDataRepository(this.database);
+  const DriftScheduleDataRepository(this.database, {this.calendarById});
+
+  final Future<CalendarDefinition?> Function(String)? calendarById;
 
   final db.AppDatabase database;
 
@@ -58,32 +65,58 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         semesterId: row.semesterId,
         courseId: row.courseId,
         sourceMeetingId: row.sourceMeetingId,
-        sourceDate: row.sourceDate,
+        sourceDate: db.storedTeachingDate(row.sourceDateKey, row.sourceDate),
         type: domain.CourseExceptionType.values.byName(row.type),
-        targetDate: row.targetDate,
+        targetDate: db.storedTeachingDate(row.targetDateKey, row.targetDate),
         targetStartSection: row.targetStartSection,
         targetEndSection: row.targetEndSection,
-        teacherOverride: normalizeTeacherField(row.teacherOverride),
-        campusOverride: normalizeCampusField(row.campusOverride),
-        roomOverride: normalizeRoomField(row.roomOverride),
+        teacherOverride: normalizeTeacherOverride(row.teacherOverride),
+        campusOverride: normalizeCampusOverride(row.campusOverride),
+        roomOverride: normalizeRoomOverride(row.roomOverride),
         addedCourseName: row.addedCourseName,
+        colorOverride: row.colorOverride,
         note: row.note,
       );
 
   @override
-  Stream<void> watchChanges() => database
-      .customSelect(
-        'SELECT 1',
-        readsFrom: {
-          database.semesters,
-          database.courses,
-          database.meetingRules,
-          database.courseExceptions,
-          database.appSettings,
+  Stream<void> watchChanges() {
+    late StreamController<void> controller;
+    final subscriptions = <StreamSubscription<Object?>>[];
+    var closed = 0;
+    void onDone() {
+      if (++closed == 2) unawaited(controller.close());
+    }
+
+    controller = StreamController<void>(
+        onListen: () {
+          subscriptions.add(database
+              .customSelect('SELECT 1', readsFrom: {
+                database.semesters,
+                database.courses,
+                database.meetingRules,
+                database.courseExceptions,
+              })
+              .watchSingle()
+              .listen((_) => controller.add(null),
+                  onError: controller.addError, onDone: onDone));
+          subscriptions.add((database.select(database.appSettings)
+                ..where((t) => t.key.isIn([
+                      'preferredSemesterId',
+                      'preferredSemesterSelectedAt',
+                      'notifications.enabled',
+                      'notifications.leadMinutes'
+                    ]))
+                ..orderBy([(t) => OrderingTerm.asc(t.key)]))
+              .watch()
+              .map((rows) =>
+                  jsonEncode({for (final row in rows) row.key: row.value}))
+              .distinct()
+              .listen((_) => controller.add(null),
+                  onError: controller.addError, onDone: onDone));
         },
-      )
-      .watchSingle()
-      .map((_) {});
+        onCancel: () => Future.wait(subscriptions.map((s) => s.cancel())));
+    return controller.stream;
+  }
 
   @override
   Future<List<domain.Semester>> loadSemesters() async {
@@ -166,20 +199,40 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
               semesterId: row.semesterId,
               courseId: row.courseId,
               sourceMeetingId: row.sourceMeetingId,
-              sourceDate: row.sourceDate,
+              sourceDate:
+                  db.storedTeachingDate(row.sourceDateKey, row.sourceDate),
               type: domain.CourseExceptionType.values.byName(row.type),
-              targetDate: row.targetDate,
+              targetDate:
+                  db.storedTeachingDate(row.targetDateKey, row.targetDate),
               targetStartSection: row.targetStartSection,
               targetEndSection: row.targetEndSection,
-              teacherOverride: normalizeTeacherField(row.teacherOverride),
-              campusOverride: normalizeCampusField(row.campusOverride),
-              roomOverride: normalizeRoomField(row.roomOverride),
+              teacherOverride: normalizeTeacherOverride(row.teacherOverride),
+              campusOverride: normalizeCampusOverride(row.campusOverride),
+              roomOverride: normalizeRoomOverride(row.roomOverride),
               addedCourseName: row.addedCourseName,
+              colorOverride: row.colorOverride,
               note: row.note,
             ),
           )
           .toList(growable: false),
     );
+  }
+
+  @override
+  Future<ScheduleDataSnapshot?> loadCourseSemester(String courseId) async {
+    final course = await (database.select(database.courses)
+          ..where((t) => t.id.equals(courseId)))
+        .getSingleOrNull();
+    final exception = course == null
+        ? await (database.select(database.courseExceptions)
+              ..where((t) =>
+                  t.id.equals(courseId) &
+                  t.type.equals('add') &
+                  t.courseId.isNull()))
+            .getSingleOrNull()
+        : null;
+    final semesterId = course?.semesterId ?? exception?.semesterId;
+    return semesterId == null ? null : loadSemester(semesterId);
   }
 
   @override
@@ -453,6 +506,9 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
 
   @override
   Future<void> saveException(domain.CourseException exception) async {
+    final semester = (await loadSemesters())
+        .singleWhere((s) => s.id == exception.semesterId);
+    await _validateExceptionDates(exception, semester);
     await database.into(database.courseExceptions).insertOnConflictUpdate(
           db.CourseExceptionsCompanion.insert(
             id: exception.id,
@@ -460,22 +516,45 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             courseId: Value(exception.courseId),
             sourceMeetingId: Value(exception.sourceMeetingId),
             sourceDate: Value(exception.sourceDate),
+            sourceDateKey: Value(exception.sourceDate == null
+                ? null
+                : dateKey(exception.sourceDate!)),
             type: exception.type.name,
             targetDate: Value(exception.targetDate),
+            targetDateKey: Value(exception.targetDate == null
+                ? null
+                : dateKey(exception.targetDate!)),
+            colorOverride: Value(exception.colorOverride),
             targetStartSection: Value(exception.targetStartSection),
             targetEndSection: Value(exception.targetEndSection),
             teacherOverride: Value(
-              normalizeTeacherField(exception.teacherOverride),
+              normalizeTeacherOverride(exception.teacherOverride),
             ),
             campusOverride: Value(
-              normalizeCampusField(exception.campusOverride),
+              normalizeCampusOverride(exception.campusOverride),
             ),
-            roomOverride: Value(normalizeRoomField(exception.roomOverride)),
+            roomOverride: Value(normalizeRoomOverride(exception.roomOverride)),
             addedCourseName: Value(exception.addedCourseName),
             note: Value(exception.note),
             createdAt: DateTime.now(),
           ),
         );
+  }
+
+  Future<void> _validateExceptionDates(
+      domain.CourseException exception, domain.Semester semester) async {
+    final id = semester.calendarId;
+    if (id == null) return; // Legacy backups may have no assigned calendar.
+    final calendar =
+        await (calendarById ?? const BundledCalendarRepository().findById)(id);
+    if (calendar == null) return;
+    for (final date in [exception.sourceDate, exception.targetDate]) {
+      if (date != null &&
+          (dateOnly(date).isBefore(calendar.semesterStartDate) ||
+              dateOnly(date).isAfter(calendar.semesterEndDate))) {
+        throw ArgumentError('临时变更日期必须在所属学期内');
+      }
+    }
   }
 
   @override
@@ -496,10 +575,10 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
           normalizeRoomField(row.room) != row.room;
     }).toList(growable: false);
     final dirtyExceptions = exceptions.where((row) {
-      return normalizeTeacherField(row.teacherOverride) !=
+      return normalizeTeacherOverride(row.teacherOverride) !=
               row.teacherOverride ||
-          normalizeCampusField(row.campusOverride) != row.campusOverride ||
-          normalizeRoomField(row.roomOverride) != row.roomOverride;
+          normalizeCampusOverride(row.campusOverride) != row.campusOverride ||
+          normalizeRoomOverride(row.roomOverride) != row.roomOverride;
     }).toList(growable: false);
     if (dirtyRules.isEmpty && dirtyExceptions.isEmpty) return;
 
@@ -522,9 +601,10 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         )..where((table) => table.id.equals(row.id)))
             .write(
           db.CourseExceptionsCompanion(
-            teacherOverride: Value(normalizeTeacherField(row.teacherOverride)),
-            campusOverride: Value(normalizeCampusField(row.campusOverride)),
-            roomOverride: Value(normalizeRoomField(row.roomOverride)),
+            teacherOverride:
+                Value(normalizeTeacherOverride(row.teacherOverride)),
+            campusOverride: Value(normalizeCampusOverride(row.campusOverride)),
+            roomOverride: Value(normalizeRoomOverride(row.roomOverride)),
           ),
         );
       }
@@ -621,7 +701,11 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   @override
   Future<ScheduleBackup> createBackup({
     Map<String, Object?> appearance = const {},
-  }) async {
+  }) =>
+      database.transaction(() => _createBackup(appearance: appearance));
+
+  Future<ScheduleBackup> _createBackup(
+      {required Map<String, Object?> appearance}) async {
     final semesters = await loadSemesters();
     final snapshots = <ScheduleDataSnapshot>[];
     for (final semester in semesters) {
@@ -633,6 +717,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     final deletedSourceItems =
         await database.select(database.deletedSourceItems).get();
     return ScheduleBackup(
+      appVersion: nwuAppVersion,
       createdAt: DateTime.now().toUtc(),
       semesters: semesters,
       courses: [for (final snapshot in snapshots) ...snapshot.courses],
@@ -670,6 +755,10 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
   @override
   Future<void> restoreBackup(ScheduleBackup backup) async {
     final validated = ScheduleBackup.fromJson(backup.toJson());
+    for (final exception in validated.exceptions) {
+      await _validateExceptionDates(exception,
+          validated.semesters.singleWhere((s) => s.id == exception.semesterId));
+    }
     final canonicalized = CourseCanonicalizer.canonicalize(
       courses: validated.courses,
       meetingRules: validated.meetingRules,
@@ -738,8 +827,15 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
                 courseId: Value(exception.courseId),
                 sourceMeetingId: Value(exception.sourceMeetingId),
                 sourceDate: Value(exception.sourceDate),
+                sourceDateKey: Value(exception.sourceDate == null
+                    ? null
+                    : dateKey(exception.sourceDate!)),
                 type: exception.type.name,
                 targetDate: Value(exception.targetDate),
+                targetDateKey: Value(exception.targetDate == null
+                    ? null
+                    : dateKey(exception.targetDate!)),
+                colorOverride: Value(exception.colorOverride),
                 targetStartSection: Value(exception.targetStartSection),
                 targetEndSection: Value(exception.targetEndSection),
                 teacherOverride: Value(exception.teacherOverride),
@@ -864,6 +960,14 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     RemoteTimetable timetable, {
     String adapterVersion = 'nwu-zhengfang-v1',
     ImportConflictResolution resolution = ImportConflictResolution.empty,
+  }) =>
+      database.transaction(() => _commitImportedTimetable(timetable,
+          adapterVersion: adapterVersion, resolution: resolution));
+
+  Future<void> _commitImportedTimetable(
+    RemoteTimetable timetable, {
+    required String adapterVersion,
+    required ImportConflictResolution resolution,
   }) async {
     final report = validateTimetable(timetable);
     if (!report.isValid) {

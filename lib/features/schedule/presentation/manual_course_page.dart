@@ -316,7 +316,9 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
 
   @override
   Widget build(BuildContext context) {
-    final load = ref.watch(scheduleLoadProvider);
+    final load = widget.courseId == null
+        ? ref.watch(scheduleLoadProvider)
+        : ref.watch(courseEditLoadProvider(widget.courseId!));
     return load.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, stackTrace) =>

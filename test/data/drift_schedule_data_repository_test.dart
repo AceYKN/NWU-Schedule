@@ -17,6 +17,7 @@ import 'package:nwu_schedule/domain/schedule/schedule_engine.dart';
 import 'package:nwu_schedule/domain/semester/semester.dart' as domain;
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test('writes notify watchers and preserve edited course fields', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);

@@ -2,6 +2,8 @@ package io.github.aceykn.nwuschedule
 
 import android.app.Activity
 import android.content.Intent
+import java.io.InputStream
+import java.io.ByteArrayOutputStream
 import android.net.Uri
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -33,22 +35,17 @@ class BackupFileChannelHandler(
         }
 
         val uri: Uri = data.data!!
-        try {
+        PlatformTaskRunner.submit(result, "file_io") {
             if (operation == OP_SAVE) {
-                requireNotNull(content)
-                activity.contentResolver.openOutputStream(uri)?.use { output ->
-                    output.write(content.toByteArray(Charsets.UTF_8))
-                } ?: error("无法写入所选文件")
-                result.success(true)
+                val bytes = requireNotNull(content).toByteArray(Charsets.UTF_8)
+                require(bytes.size <= MAX_BACKUP_BYTES) { "备份文件超过 20 MiB" }
+                activity.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                    ?: error("无法写入所选文件")
+                true
             } else {
-                val text = activity.contentResolver.openInputStream(uri)
-                    ?.bufferedReader(Charsets.UTF_8)
-                    ?.use { it.readText() }
+                activity.contentResolver.openInputStream(uri)?.use(::readBackup)
                     ?: error("无法读取所选文件")
-                result.success(text)
             }
-        } catch (error: Exception) {
-            result.error("file_io", error.message, null)
         }
         return true
     }
@@ -107,7 +104,21 @@ class BackupFileChannelHandler(
         pendingContent = null
     }
 
-    private companion object {
+    companion object {
+        internal const val MAX_BACKUP_BYTES = 20 * 1024 * 1024
+
+        internal fun readBackup(input: InputStream): String {
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                require(output.size().toLong() + count <= MAX_BACKUP_BYTES) { "备份文件超过 20 MiB" }
+                output.write(buffer, 0, count)
+            }
+            return output.toString(Charsets.UTF_8.name())
+        }
+
         const val REQUEST_SAVE = 4101
         const val REQUEST_PICK = 4102
         const val OP_SAVE = "save"

@@ -134,7 +134,7 @@ class TimeslotSemesterScheduleBuilder {
     required int endSection,
   }) {
     final date = dateOnly(
-      engine.weekStart(week).add(Duration(days: weekday - DateTime.monday)),
+      addCalendarDays(engine.weekStart(week), weekday - DateTime.monday),
     );
     for (final exception in engine.exceptions) {
       if (exception.sourceDate == null ||

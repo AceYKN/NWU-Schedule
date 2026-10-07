@@ -49,7 +49,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(await repository.getSetting('notifications.enabled'), 'false');
-      expect(calls, ['requestPermission', 'clearNotifications']);
+      expect(calls.where((c) => c != 'getStatus'),
+          ['requestPermission', 'clearNotifications']);
       expect(find.text('未获得通知权限，提醒未开启'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());

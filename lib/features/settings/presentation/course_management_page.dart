@@ -115,7 +115,7 @@ class CourseManagementPage extends ConsumerWidget {
                               : '教务导入',
                           '${arrangements.length} 个上课安排',
                           if (course.deleted) '已删除',
-                          if (course.hidden) '已隐藏',
+                          if (course.hidden) '已停用（同时停止提醒）',
                         ].join(' · '),
                       ),
                       for (final rule in arrangements.take(2))
@@ -144,7 +144,7 @@ class CourseManagementPage extends ConsumerWidget {
                         ),
                         PopupMenuItem(
                           value: course.hidden ? 'show' : 'hide',
-                          child: Text(course.hidden ? '取消隐藏' : '隐藏'),
+                          child: Text(course.hidden ? '启用课程及提醒' : '停用课程及提醒'),
                         ),
                         const PopupMenuItem(value: 'delete', child: Text('删除')),
                       ],

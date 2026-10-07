@@ -147,6 +147,7 @@ class ScheduleBackup {
     required this.exceptions,
     required this.settings,
     required this.appearance,
+    this.appVersion,
     this.importSnapshots = const [],
     this.deletedSourceItems = const [],
   });
@@ -155,6 +156,7 @@ class ScheduleBackup {
   static const schemaVersion = 1;
 
   final DateTime createdAt;
+  final String? appVersion;
   final List<Semester> semesters;
   final List<Course> courses;
   final List<MeetingRule> meetingRules;
@@ -166,6 +168,7 @@ class ScheduleBackup {
 
   Map<String, Object?> toJson() => {
         'format': format,
+        if (appVersion != null) 'appVersion': appVersion,
         'schemaVersion': schemaVersion,
         'createdAt': createdAt.toUtc().toIso8601String(),
         'semesters': semesters.map(_semesterToJson).toList(),
@@ -201,6 +204,7 @@ class ScheduleBackup {
     }
     final backup = ScheduleBackup(
       createdAt: _requiredDate(json, 'createdAt'),
+      appVersion: _optionalString(json['appVersion']),
       semesters: _records(json, 'semesters', (item) => _semesterFromJson(item)),
       courses: _records(json, 'courses', (item) => _courseFromJson(item)),
       meetingRules:
@@ -283,6 +287,7 @@ class ScheduleBackup {
         'campusOverride': exception.campusOverride,
         'roomOverride': exception.roomOverride,
         'addedCourseName': exception.addedCourseName,
+        'colorOverride': exception.colorOverride,
         'note': exception.note,
       };
 
@@ -356,10 +361,11 @@ class ScheduleBackup {
       targetDate: _optionalDomainDate(json['targetDate']),
       targetStartSection: _optionalInt(json['targetStartSection']),
       targetEndSection: _optionalInt(json['targetEndSection']),
-      teacherOverride: _optionalString(json['teacherOverride']),
-      campusOverride: _optionalString(json['campusOverride']),
-      roomOverride: _optionalString(json['roomOverride']),
+      teacherOverride: _optionalOverride(json['teacherOverride']),
+      campusOverride: _optionalOverride(json['campusOverride']),
+      roomOverride: _optionalOverride(json['roomOverride']),
       addedCourseName: _optionalString(json['addedCourseName']),
+      colorOverride: _optionalInt(json['colorOverride']),
       note: _optionalString(json['note']),
     );
   }
@@ -637,6 +643,14 @@ class ScheduleBackup {
     final value = json[key];
     if (value is String && value.trim().isNotEmpty) return value;
     throw BackupValidationException('$key 必须是非空字符串');
+  }
+
+  static String? _optionalOverride(Object? value) {
+    if (value == null) return null;
+    if (value is! String) {
+      throw const FormatException('Override must be a string');
+    }
+    return value.trim();
   }
 
   static String? _optionalString(Object? value) {

@@ -31,9 +31,9 @@ class PlannedNotification {
 }
 
 class NotificationPlanner {
-  const NotificationPlanner({this.maxRequests = 500});
+  const NotificationPlanner({this.maxRequests});
 
-  final int maxRequests;
+  final int? maxRequests;
 
   List<PlannedNotification> build({
     required ScheduleEngine engine,
@@ -44,7 +44,7 @@ class NotificationPlanner {
     if (leadMinutes < 0) {
       throw ArgumentError.value(leadMinutes, 'leadMinutes');
     }
-    if (maxRequests < 1) {
+    if (maxRequests != null && maxRequests! < 1) {
       throw ArgumentError.value(maxRequests, 'maxRequests');
     }
     final nowUtc = now.toUtc();
@@ -58,9 +58,9 @@ class NotificationPlanner {
     if (lastDate.isBefore(firstDate)) return const [];
 
     final result = <PlannedNotification>[];
-    final dayCount = lastDate.difference(firstDate).inDays;
+    final dayCount = calendarDaysBetween(lastDate, firstDate);
     for (var offset = 0; offset <= dayCount; offset++) {
-      final date = firstDate.add(Duration(days: offset));
+      final date = addCalendarDays(firstDate, offset);
       for (final instance in engine.getCoursesForDate(date)) {
         final fireAtUtc = CampusClock.campusWallTimeToUtc(
           instance.startTime.subtract(Duration(minutes: leadMinutes)),
@@ -68,7 +68,7 @@ class NotificationPlanner {
         if (!fireAtUtc.isAfter(nowUtc)) continue;
         if (until != null && fireAtUtc.isAfter(until.toUtc())) continue;
         result.add(_buildRequest(instance, fireAtUtc));
-        if (result.length >= maxRequests) {
+        if (maxRequests != null && result.length >= maxRequests!) {
           return List.unmodifiable(result);
         }
       }
@@ -99,12 +99,7 @@ class NotificationPlanner {
       title: instance.courseName,
       body: '$location · $teacher\n$start 上课',
       payload: key,
-      // A standalone ADD is represented by a synthetic in-memory course id
-      // rather than a persisted Course row. Open Home for that case; normal
-      // courses can take the user straight to their detail page.
-      route: instance.isException && instance.exceptionId == instance.course.id
-          ? '/'
-          : '/course/${instance.course.id}',
+      route: '/course/${Uri.encodeComponent(instance.course.id)}',
     );
   }
 

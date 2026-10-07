@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'bootstrap.dart';
 import '../domain/settings/appearance_preferences.dart';
@@ -14,12 +15,14 @@ class NwuScheduleApp extends ConsumerStatefulWidget {
   ConsumerState<NwuScheduleApp> createState() => _NwuScheduleAppState();
 }
 
-class _NwuScheduleAppState extends ConsumerState<NwuScheduleApp> {
+class _NwuScheduleAppState extends ConsumerState<NwuScheduleApp>
+    with WidgetsBindingObserver {
   static const _navigationChannel = MethodChannel('nwu_schedule/navigation');
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _navigationChannel.setMethodCallHandler((call) async {
       if (call.method == 'openRoute' && call.arguments is String) {
         appRouter.go(call.arguments as String);
@@ -30,8 +33,16 @@ class _NwuScheduleAppState extends ConsumerState<NwuScheduleApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _navigationChannel.setMethodCallHandler(null);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(notificationPlatformStatusProvider);
+    }
   }
 
   @override
@@ -45,6 +56,9 @@ class _NwuScheduleAppState extends ConsumerState<NwuScheduleApp> {
         ref.watch(themeModeProvider).asData?.value ?? AppThemeMode.system;
     return MaterialApp.router(
       title: '西北大学课程表',
+      locale: const Locale('zh', 'CN'),
+      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       debugShowCheckedModeBanner: false,
       theme: theme.light(),
       darkTheme: theme.dark(),

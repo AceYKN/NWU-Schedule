@@ -118,6 +118,8 @@ void main() {
           matchesGoldenFile(
               'goldens/actual/pages/${theme.id}_course_detail.png'),
         );
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 1));
       },
     );
 

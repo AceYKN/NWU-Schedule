@@ -1,3 +1,4 @@
+import '../../../../core/nwu/periods.dart';
 import '../../../../domain/schedule/week_schedule_view_model.dart';
 
 /// Shared geometry for the week canvas. Keeping these values in one place
@@ -14,63 +15,47 @@ class ScheduleGridMetrics {
   static const afternoonGap = 6.0;
   static const eveningGap = 8.0;
 
-  static double sectionTop(int section) {
-    if (section < 1) return headerHeight;
+  static double sectionTop(int section,
+      {double rowHeight = periodHeight,
+      double dayHeaderHeight = headerHeight}) {
+    if (section < 1) return dayHeaderHeight;
     var extra = 0.0;
     if (section > 5) extra += afternoonGap;
     if (section > 9) extra += eveningGap;
-    return headerHeight + (section - 1) * periodHeight + extra;
+    return dayHeaderHeight + (section - 1) * rowHeight + extra;
   }
 
-  static double sectionHeight(int startSection, int endSection) {
-    return sectionTop(endSection) + periodHeight - sectionTop(startSection);
+  static double sectionHeight(int startSection, int endSection,
+      {double rowHeight = periodHeight}) {
+    return sectionTop(endSection, rowHeight: rowHeight) +
+        rowHeight -
+        sectionTop(startSection, rowHeight: rowHeight);
   }
 
-  static double canvasHeight(int periodCount) {
-    return sectionTop(periodCount) + periodHeight;
+  static double canvasHeight(int periodCount,
+      {double rowHeight = periodHeight,
+      double dayHeaderHeight = headerHeight}) {
+    return sectionTop(periodCount,
+            rowHeight: rowHeight, dayHeaderHeight: dayHeaderHeight) +
+        rowHeight;
   }
 
-  static double currentTimeTop(int section, int minutes) {
+  static double currentTimeTop(int section, int minutes,
+      {double rowHeight = periodHeight,
+      double dayHeaderHeight = headerHeight}) {
     final periodStart = _periodStart(section);
     final periodEnd = _periodEnd(section);
     final fraction =
         ((minutes - periodStart) / (periodEnd - periodStart)).clamp(0.0, 1.0);
-    return sectionTop(section) + fraction * periodHeight;
+    return sectionTop(section,
+            rowHeight: rowHeight, dayHeaderHeight: dayHeaderHeight) +
+        fraction * rowHeight;
   }
 
-  static int _periodStart(int section) {
-    const starts = [
-      8 * 60,
-      9 * 60,
-      10 * 60 + 10,
-      11 * 60 + 10,
-      14 * 60,
-      15 * 60,
-      16 * 60,
-      17 * 60,
-      19 * 60,
-      20 * 60,
-      21 * 60,
-    ];
-    return starts[section - 1];
-  }
-
-  static int _periodEnd(int section) {
-    const ends = [
-      8 * 60 + 50,
-      9 * 60 + 50,
-      11 * 60,
-      12 * 60,
-      14 * 60 + 50,
-      15 * 60 + 50,
-      16 * 60 + 50,
-      17 * 60 + 50,
-      19 * 60 + 50,
-      20 * 60 + 50,
-      21 * 60 + 50,
-    ];
-    return ends[section - 1];
-  }
+  static int _periodStart(int section) =>
+      const NwuPeriodRepository().byNumber(section).startMinutes;
+  static int _periodEnd(int section) =>
+      const NwuPeriodRepository().byNumber(section).endMinutes;
 }
 
 /// A display item produced from the effective schedule. An overflow item

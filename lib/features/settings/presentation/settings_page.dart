@@ -37,6 +37,9 @@ class SettingsPage extends ConsumerWidget {
     );
     final selectedThemeMode =
         ref.watch(themeModeProvider).asData?.value ?? AppThemeMode.system;
+    final failures = ref.watch(platformSyncFailuresProvider);
+    final notificationStatus = ref.watch(notificationPlatformStatusProvider);
+    final platform = notificationStatus.asData?.value;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
       children: [
@@ -46,6 +49,16 @@ class SettingsPage extends ConsumerWidget {
                 fontWeight: FontWeight.w700,
               ),
         ),
+        if (failures.isNotEmpty)
+          Card(
+              child: ListTile(
+                  leading: const Icon(Icons.sync_problem),
+                  title: const Text('平台同步尚未完成'),
+                  subtitle: Text(
+                      '${failures.contains('notifications') ? '提醒排程或清理失败。' : ''}${failures.contains('widget') ? '小组件更新或清理失败。' : ''}'),
+                  trailing: TextButton(
+                      onPressed: () => _retryPlatformSync(context, ref),
+                      child: const Text('重试')))),
         const SizedBox(height: 20),
         _SectionTitle(title: '学期与课表'),
         Card(
@@ -79,7 +92,7 @@ class SettingsPage extends ConsumerWidget {
                 title: const Text('从教务系统导入'),
                 subtitle: const Text('在临时 WebView 中登录并读取课表'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.go('/import'),
+                onTap: () => context.push('/import'),
               ),
             ],
           ),
@@ -107,6 +120,21 @@ class SettingsPage extends ConsumerWidget {
                 title: const Text('上课提醒'),
                 subtitle: const Text('只使用本地通知，不上传课程数据'),
               ),
+              ListTile(
+                  title: const Text('提醒状态'),
+                  trailing: platform?['replenishFailed'] == true
+                      ? TextButton(
+                          onPressed: () => _retryPlatformSync(context, ref),
+                          child: const Text('重试'))
+                      : null,
+                  subtitle: Text(platform == null
+                      ? '暂时无法读取系统通知状态；系统省电可能延迟提醒'
+                      : '${platform['systemAllowed'] == true ? '系统通知允许' : '系统通知已关闭'} · '
+                          '${platform['channelAllowed'] == true ? '提醒渠道允许' : '提醒渠道已关闭'}\n'
+                          '${failures.contains('notifications') || platform['replenishFailed'] == true ? '排程失败，请重试' : platform['planStored'] == true ? '本地提醒计划已保存' : '尚未保存提醒计划'}\n'
+                          '系统可能延迟送达，提前时间不保证准点'),
+                  onTap: () =>
+                      ref.invalidate(notificationPlatformStatusProvider)),
               const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.timer_outlined),
@@ -214,9 +242,9 @@ class SettingsPage extends ConsumerWidget {
                 subtitle: Text('Android First · Local First · 无广告无账号'),
               ),
               const Divider(height: 1),
-              const ListTile(
-                leading: Icon(Icons.verified_outlined),
-                title: Text('应用版本'),
+              ListTile(
+                leading: const Icon(Icons.verified_outlined),
+                title: const Text('应用版本'),
                 subtitle: Text(nwuAppVersion),
               ),
               const Divider(height: 1),
@@ -509,8 +537,10 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
   if (confirmed != true || !context.mounted) return;
   try {
     await ref.read(scheduleDataRepositoryProvider).clearAllData();
-    await _bestEffort(() => ref.read(notificationServiceProvider).clear());
-    await _bestEffort(() => ref.read(widgetServiceProvider).clear());
+    await _bestEffort(
+      () => ref.read(notificationTaskQueueProvider).schedule(null),
+    );
+    await _bestEffort(() => ref.read(widgetTaskQueueProvider).schedule(null));
     await _bestEffort(() async {
       await WebViewCookieManager().clearCookies();
     });
@@ -522,7 +552,12 @@ Future<void> _clearAllData(BuildContext context, WidgetRef ref) async {
     ref.invalidate(notificationEnabledProvider);
     ref.invalidate(notificationLeadMinutesProvider);
     ref.invalidate(scheduleLoadProvider);
-    if (context.mounted) context.go('/');
+    if (context.mounted) {
+      context.go('/');
+      if (ref.read(platformSyncFailuresProvider).isNotEmpty) {
+        _showMessage(context, '本地数据已清除，平台清理失败，可在设置中重试');
+      }
+    }
   } catch (error) {
     if (context.mounted) {
       _showMessage(context, nwuUserMessage(error, action: '清除数据失败'));
@@ -535,6 +570,20 @@ Future<void> _bestEffort(Future<void> Function() operation) async {
     await operation();
   } on Object {
     // Local data is already cleared; platform cleanup is best effort.
+  }
+}
+
+Future<void> _retryPlatformSync(BuildContext context, WidgetRef ref) async {
+  final state = ref.read(scheduleLoadProvider).asData?.value;
+  try {
+    ref.read(notificationServiceProvider).invalidateCachedPlan();
+    await Future.wait([
+      ref.read(notificationTaskQueueProvider).schedule(state),
+      ref.read(widgetTaskQueueProvider).schedule(state),
+    ]);
+    if (context.mounted) _showMessage(context, '平台同步已完成');
+  } catch (error) {
+    if (context.mounted) _showMessage(context, '平台同步失败，请稍后重试');
   }
 }
 
@@ -584,7 +633,7 @@ Future<void> _setNotificationEnabled(
     final service = ref.read(notificationServiceProvider);
     if (!enabled) {
       await repository.setSetting('notifications.enabled', 'false');
-      await service.clear();
+      await ref.read(notificationTaskQueueProvider).schedule(null);
       ref.invalidate(notificationEnabledProvider);
       if (context.mounted) _showMessage(context, '上课提醒已关闭');
       return;
@@ -592,18 +641,18 @@ Future<void> _setNotificationEnabled(
     final granted = await service.requestPermission();
     if (!granted) {
       await repository.setSetting('notifications.enabled', 'false');
-      await _bestEffort(service.clear);
+      await _bestEffort(
+        () => ref.read(notificationTaskQueueProvider).schedule(null),
+      );
       ref.invalidate(notificationEnabledProvider);
       if (context.mounted) _showMessage(context, '未获得通知权限，提醒未开启');
       return;
     }
     await repository.setSetting('notifications.enabled', 'true');
     ref.invalidate(notificationEnabledProvider);
-    await rebuildNotificationsForCurrentSchedule(
-      repository: repository,
-      service: service,
-      state: ref.read(scheduleLoadProvider).asData?.value,
-    );
+    await ref.read(notificationTaskQueueProvider).schedule(
+          ref.read(scheduleLoadProvider).asData?.value,
+        );
     if (context.mounted) _showMessage(context, '上课提醒已开启');
   } catch (error) {
     if (context.mounted) {
@@ -639,11 +688,9 @@ Future<void> _selectNotificationLead(
     await repository.setSetting('notifications.leadMinutes', '$selected');
     ref.invalidate(notificationLeadMinutesProvider);
     if (await repository.getSetting('notifications.enabled') == 'true') {
-      await rebuildNotificationsForCurrentSchedule(
-        repository: repository,
-        service: ref.read(notificationServiceProvider),
-        state: ref.read(scheduleLoadProvider).asData?.value,
-      );
+      await ref.read(notificationTaskQueueProvider).schedule(
+            ref.read(scheduleLoadProvider).asData?.value,
+          );
     }
     if (context.mounted) _showMessage(context, '提醒时间已更新');
   } catch (error) {

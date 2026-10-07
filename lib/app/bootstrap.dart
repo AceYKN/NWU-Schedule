@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 
 import '../core/time/campus_clock.dart';
 import '../core/utils/date_utils.dart';
+import '../core/utils/latest_task_queue.dart';
 import '../data/database/app_database.dart' show AppDatabase;
 import '../data/repositories/drift_schedule_data_repository.dart';
 import '../domain/calendar/calendar_engine.dart';
@@ -150,7 +152,7 @@ final bundledCalendarRepositoryProvider = Provider<BundledCalendarRepository>(
 final scheduleLoadProvider = StreamProvider<ScheduleLoadState>((ref) {
   final today = dateOnly(CampusClock.now());
   final nextMidnightUtc = CampusClock.campusWallTimeToUtc(
-    today.add(const Duration(days: 1)),
+    addCalendarDays(today, 1),
   );
   final midnightTimer = Timer(
     nextMidnightUtc.difference(DateTime.now().toUtc()) +
@@ -207,31 +209,96 @@ final scheduleLoadProvider = StreamProvider<ScheduleLoadState>((ref) {
   });
 });
 
-final notificationCoordinatorProvider = Provider<void>((ref) {
-  ref.listen(scheduleLoadProvider, (_, next) {
-    if (next.hasValue) {
-      unawaited(
-        rebuildNotificationsForCurrentSchedule(
-          repository: ref.read(scheduleDataRepositoryProvider),
-          service: ref.read(notificationServiceProvider),
-          state: ref.read(scheduleLoadProvider).asData?.value,
-        ),
+final notificationPlatformStatusProvider =
+    FutureProvider<Map<String, dynamic>?>(
+        (ref) => ref.watch(notificationServiceProvider).status());
+
+class PlatformSyncFailures extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => const {};
+  void failed(String target) => state = {...state, target};
+  void succeeded(String target) => state = {...state}..remove(target);
+}
+
+final platformSyncFailuresProvider =
+    NotifierProvider<PlatformSyncFailures, Set<String>>(
+        PlatformSyncFailures.new);
+
+final notificationTaskQueueProvider =
+    Provider<LatestTaskQueue<ScheduleLoadState?>>((ref) {
+  final repository = ref.watch(scheduleDataRepositoryProvider);
+  final service = ref.watch(notificationServiceProvider);
+  final queue = LatestTaskQueue<ScheduleLoadState?>((state, isCurrent) async {
+    try {
+      await rebuildNotificationsForCurrentSchedule(
+        repository: repository,
+        service: service,
+        state: state,
+        isCurrent: isCurrent,
       );
+      if (ref.mounted && isCurrent()) {
+        ref
+            .read(platformSyncFailuresProvider.notifier)
+            .succeeded('notifications');
+        ref.invalidate(notificationPlatformStatusProvider);
+      }
+    } catch (error) {
+      if (ref.mounted) {
+        ref.read(platformSyncFailuresProvider.notifier).failed('notifications');
+      }
+      rethrow;
     }
   });
+  ref.onDispose(queue.dispose);
+  return queue;
+});
+
+final widgetTaskQueueProvider =
+    Provider<LatestTaskQueue<ScheduleLoadState?>>((ref) {
+  final service = ref.watch(widgetServiceProvider);
+  final queue = LatestTaskQueue<ScheduleLoadState?>((state, isCurrent) async {
+    try {
+      await rebuildWidgetForCurrentSchedule(service: service, state: state);
+      if (ref.mounted && isCurrent()) {
+        ref.read(platformSyncFailuresProvider.notifier).succeeded('widget');
+      }
+    } catch (error) {
+      if (ref.mounted) {
+        ref.read(platformSyncFailuresProvider.notifier).failed('widget');
+      }
+      rethrow;
+    }
+  });
+  ref.onDispose(queue.dispose);
+  return queue;
+});
+
+void _reportPlatformSyncError(Object error, StackTrace stackTrace) {
+  FlutterError.reportError(FlutterErrorDetails(
+    exception: error,
+    stack: stackTrace,
+    library: 'NWU schedule platform synchronization',
+  ));
+}
+
+final notificationCoordinatorProvider = Provider<void>((ref) {
+  final queue = ref.watch(notificationTaskQueueProvider);
+  ref.listen(scheduleLoadProvider, (_, next) {
+    if (next is AsyncData<ScheduleLoadState>) {
+      unawaited(
+          queue.schedule(next.value).catchError(_reportPlatformSyncError));
+    }
+  }, fireImmediately: true);
 });
 
 final widgetCoordinatorProvider = Provider<void>((ref) {
+  final queue = ref.watch(widgetTaskQueueProvider);
   ref.listen(scheduleLoadProvider, (_, next) {
-    if (next.hasValue) {
+    if (next is AsyncData<ScheduleLoadState>) {
       unawaited(
-        rebuildWidgetForCurrentSchedule(
-          service: ref.read(widgetServiceProvider),
-          state: ref.read(scheduleLoadProvider).asData?.value,
-        ),
-      );
+          queue.schedule(next.value).catchError(_reportPlatformSyncError));
     }
-  });
+  }, fireImmediately: true);
 });
 
 Future<void> rebuildWidgetForCurrentSchedule({
@@ -253,8 +320,10 @@ Future<void> rebuildNotificationsForCurrentSchedule({
   required ScheduleDataRepository repository,
   required NotificationService service,
   required ScheduleLoadState? state,
+  bool Function()? isCurrent,
 }) async {
   final enabled = await repository.getSetting('notifications.enabled');
+  if (isCurrent != null && !isCurrent()) return;
   if (enabled != 'true') {
     // Restoring a backup or clearing settings can disable reminders while
     // alarms from the previous dataset are still scheduled on Android.
@@ -266,6 +335,7 @@ Future<void> rebuildNotificationsForCurrentSchedule({
     return;
   }
   final rawLead = await repository.getSetting('notifications.leadMinutes');
+  if (isCurrent != null && !isCurrent()) return;
   final parsedLead = int.tryParse(rawLead ?? '');
   final leadMinutes = const [5, 10, 15, 20, 30, 60].contains(parsedLead)
       ? parsedLead!
@@ -277,3 +347,32 @@ Future<void> rebuildNotificationsForCurrentSchedule({
   );
   await service.rebuild(plan);
 }
+
+final courseSnapshotProvider = StreamProvider.autoDispose
+    .family<ScheduleDataSnapshot?, String>((ref, courseId) {
+  final repository = ref.watch(scheduleDataRepositoryProvider);
+  return repository
+      .watchChanges()
+      .asyncMap((_) => repository.loadCourseSemester(courseId));
+});
+
+final courseEditLoadProvider = StreamProvider.autoDispose
+    .family<ScheduleLoadState, String>((ref, courseId) {
+  final repository = ref.watch(scheduleDataRepositoryProvider);
+  final calendars = ref.watch(bundledCalendarRepositoryProvider);
+  return repository.watchChanges().asyncMap((_) async {
+    final data = await repository.loadCourseSemester(courseId);
+    if (data == null) return const ScheduleNoSemester();
+    final id = data.semester.calendarId;
+    final calendar = id == null ? null : await calendars.findById(id);
+    if (calendar == null) return ScheduleCalendarMissing(data.semester);
+    return ScheduleReady(
+        semester: data.semester,
+        engine: ScheduleEngine(
+            semesterId: data.semester.id,
+            calendarEngine: CalendarEngine(calendar),
+            courses: data.courses,
+            meetingRules: data.meetingRules,
+            exceptions: data.exceptions));
+  });
+});

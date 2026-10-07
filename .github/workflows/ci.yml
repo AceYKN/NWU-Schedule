@@ -14,9 +14,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.4'
           channel: stable
           cache: true
       - run: flutter pub get
+      - run: dart run tool/generate_app_version.dart --check
       - run: dart run tool/validate_calendars.dart
       - run: dart run tool/validate_privacy.dart
       - run: dart format --output=none --set-exit-if-changed lib test tool
@@ -24,6 +26,9 @@ jobs:
       - run: flutter analyze
       - run: flutter test
       - run: flutter build apk --debug
+      - name: Android scheduling regression tests
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest
       - run: >-
           dart run tool/validate_merged_manifest.dart
           build/app/intermediates/merged_manifests/debug/processDebugManifest/AndroidManifest.xml

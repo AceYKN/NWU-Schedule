@@ -68,7 +68,7 @@ class _HomePageState extends ConsumerState<HomePage>
               : _WelcomeContent(
                   onImport: () {
                     unawaited(_completeOnboarding(ref));
-                    context.go('/import');
+                    context.push('/import');
                   },
                   onLater: () => _completeOnboarding(ref),
                 );
@@ -114,7 +114,7 @@ class _NoSemesterContent extends StatelessWidget {
                 textAlign: TextAlign.center),
             SizedBox(height: themeTokens.sectionGap),
             FilledButton(
-              onPressed: () => context.go('/import'),
+              onPressed: () => context.push('/import'),
               child: const Text('导入课表'),
             ),
           ],

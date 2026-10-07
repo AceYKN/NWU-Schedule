@@ -3,6 +3,7 @@ package io.github.aceykn.nwuschedule
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.os.Bundle
+import android.os.Build
 import android.webkit.WebView
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -23,6 +24,15 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
+        MethodChannel(messenger, "nwu_schedule/app").setMethodCallHandler { call, result ->
+            if (call.method == "getAppVersion") {
+                PlatformTaskRunner.submit(result, "app_metadata_failed") {
+                    val info = packageManager.getPackageInfo(packageName, 0)
+                    val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else info.versionCode.toLong()
+                    "${info.versionName}+$code"
+                }
+            } else result.notImplemented()
+        }
 
         val backupHandler = BackupFileChannelHandler(this)
         backupFileChannelHandler = backupHandler

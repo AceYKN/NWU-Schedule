@@ -8,7 +8,7 @@ import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
 
 void main() {
-  test('migrates a schema v1 database to v3 without losing data', () async {
+  test('migrates a schema v1 database to v4 without losing data', () async {
     final directory = Directory.systemTemp.createTempSync('nwu-schedule-db-');
     addTearDown(() => directory.deleteSync(recursive: true));
     final file = File('${directory.path}/legacy.sqlite');
@@ -40,11 +40,19 @@ void main() {
       'ALTER TABLE semesters DROP COLUMN calendar_revision',
     );
     await database.customStatement('ALTER TABLE courses DROP COLUMN name_key');
+    for (final column in [
+      'source_date_key',
+      'target_date_key',
+      'color_override'
+    ]) {
+      await database
+          .customStatement('ALTER TABLE course_exceptions DROP COLUMN $column');
+    }
     await database.customStatement('PRAGMA user_version = 1');
     await database.close();
 
     database = AppDatabase(NativeDatabase(file));
-    expect(database.schemaVersion, 3);
+    expect(database.schemaVersion, 4);
     final semester = await database.select(database.semesters).getSingle();
     final course = await database.select(database.courses).getSingle();
     expect(semester.calendarRevision, isNull);
@@ -53,14 +61,14 @@ void main() {
     await database.close();
   });
 
-  test('schema v3 survives close and reopen with its course data', () async {
+  test('schema v4 survives close and reopen with its course data', () async {
     final directory = Directory.systemTemp.createTempSync('nwu-schedule-db-');
     addTearDown(() => directory.deleteSync(recursive: true));
     final file = File('${directory.path}/schedule.sqlite');
     final created = DateTime(2026, 9, 1);
 
     var database = AppDatabase(NativeDatabase(file));
-    expect(database.schemaVersion, 3);
+    expect(database.schemaVersion, 4);
     await database.into(database.semesters).insert(
           SemestersCompanion.insert(
             id: '2026-2027-1',
@@ -220,6 +228,14 @@ void main() {
           );
       await database
           .customStatement('ALTER TABLE courses DROP COLUMN name_key');
+      for (final column in [
+        'source_date_key',
+        'target_date_key',
+        'color_override'
+      ]) {
+        await database.customStatement(
+            'ALTER TABLE course_exceptions DROP COLUMN $column');
+      }
       await database.customStatement('PRAGMA user_version = 2');
       await database.close();
 

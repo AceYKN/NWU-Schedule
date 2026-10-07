@@ -27,6 +27,8 @@ abstract interface class ScheduleDataRepository {
 
   Future<ScheduleDataSnapshot> loadSemester(String semesterId);
 
+  Future<ScheduleDataSnapshot?> loadCourseSemester(String courseId);
+
   Future<String?> getPreferredSemesterId();
 
   Future<DateTime?> getPreferredSemesterSelectedAt();

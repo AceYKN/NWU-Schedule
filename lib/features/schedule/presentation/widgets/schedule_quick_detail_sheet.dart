@@ -158,7 +158,7 @@ class _QuickDetailContent extends StatelessWidget {
                     if (context.mounted) Navigator.of(context).pop();
                   },
                   icon: const Icon(Icons.visibility_off_outlined),
-                  label: const Text('隐藏课程'),
+                  label: const Text('仅在周课表隐藏'),
                 ),
               TextButton.icon(
                 onPressed: () {

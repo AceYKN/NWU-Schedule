@@ -14,6 +14,7 @@ import 'package:nwu_schedule/infrastructure/import/nwu_zhengfang_v9_importer.dar
 import '../support/zhengfang_fixture.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test(
       'runs the sanitized fixture through import, DB, engine, notification, and widget',
       () async {

@@ -26,6 +26,7 @@ class CourseException {
     this.campusOverride,
     this.roomOverride,
     this.addedCourseName,
+    this.colorOverride,
     this.note,
   }) {
     if (id.trim().isEmpty || semesterId.trim().isEmpty) {
@@ -79,5 +80,24 @@ class CourseException {
   final String? campusOverride;
   final String? roomOverride;
   final String? addedCourseName;
+  final int? colorOverride;
   final String? note;
+
+  CourseException withColor(int? color) => CourseException(
+        id: id,
+        semesterId: semesterId,
+        courseId: courseId,
+        sourceMeetingId: sourceMeetingId,
+        sourceDate: sourceDate,
+        type: type,
+        targetDate: targetDate,
+        targetStartSection: targetStartSection,
+        targetEndSection: targetEndSection,
+        teacherOverride: teacherOverride,
+        campusOverride: campusOverride,
+        roomOverride: roomOverride,
+        addedCourseName: addedCourseName,
+        colorOverride: color,
+        note: note,
+      );
 }

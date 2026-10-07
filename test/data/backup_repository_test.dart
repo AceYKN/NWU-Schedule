@@ -1,5 +1,6 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nwu_schedule/core/nwu/constants.dart';
 import 'package:nwu_schedule/core/utils/week_mask.dart';
 import 'package:nwu_schedule/data/database/app_database.dart';
 import 'package:nwu_schedule/data/repositories/drift_schedule_data_repository.dart';
@@ -14,6 +15,7 @@ import 'package:nwu_schedule/domain/schedule/schedule_engine.dart';
 import 'package:nwu_schedule/domain/semester/semester.dart' as domain;
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test('exports and restores the local dataset transactionally', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
@@ -57,6 +59,8 @@ void main() {
     expect(backup.importSnapshots, hasLength(1));
     expect(backup.deletedSourceItems, hasLength(1));
     expect(backup.appearance['themeId'], 'stone-blue');
+    expect(backup.appVersion, nwuAppVersion);
+    expect(ScheduleBackup.decode(backup.encode()).appVersion, nwuAppVersion);
 
     await repository.clearAllData();
     expect(await repository.loadSemesters(), isEmpty);

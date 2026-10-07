@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONArray
 import org.json.JSONObject
@@ -21,7 +23,11 @@ class CourseWidgetProvider : AppWidgetProvider() {
         when (intent.action) {
             Intent.ACTION_DATE_CHANGED,
             Intent.ACTION_TIME_CHANGED,
-            Intent.ACTION_TIMEZONE_CHANGED -> refresh(context)
+            Intent.ACTION_TIMEZONE_CHANGED,
+            WidgetBoundaryScheduler.ACTION_WIDGET_BOUNDARY_REFRESH -> {
+                refresh(context)
+                WidgetBoundaryScheduler.scheduleNext(context)
+            }
         }
     }
 
@@ -33,6 +39,15 @@ class CourseWidgetProvider : AppWidgetProvider() {
         for (appWidgetId in appWidgetIds) {
             render(context, appWidgetManager, appWidgetId)
         }
+        WidgetBoundaryScheduler.scheduleNext(context)
+    }
+
+    override fun onEnabled(context: Context) {
+        WidgetBoundaryScheduler.scheduleNext(context)
+    }
+
+    override fun onDisabled(context: Context) {
+        WidgetBoundaryScheduler.cancel(context)
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -55,6 +70,30 @@ class CourseWidgetProvider : AppWidgetProvider() {
             }
         }
 
+        internal fun chooseLayout(width: Int, height: Int, fontScale: Float): Int = when {
+            width >= 250 && height >= 240 * fontScale -> R.layout.widget_large
+            width >= 180 && height >= 130 * fontScale -> R.layout.widget_medium
+            else -> R.layout.widget_small
+        }
+
+        internal fun rowBudget(height: Int, twoDays: Boolean, fontScale: Float): Int {
+            val overhead = if (twoDays) 100 else 64
+            val perDay = (height - overhead).coerceAtLeast(0) / if (twoDays) 2 else 1
+            return (perDay / (68 * fontScale)).toInt().coerceIn(1, 8)
+        }
+
+        internal data class SmallContentBudget(val label: Boolean, val meta: Boolean, val titleLines: Int, val padding: Int)
+
+        internal fun smallContentBudget(height: Int, fontScale: Float): SmallContentBudget {
+            val padding = if (height < 80) 4 else 12
+            val available = (height - 2 * padding).coerceAtLeast(0)
+            val title = 22 * fontScale
+            val meta = available >= title + 3 + 17 * fontScale
+            val label = available >= title + (if (meta) 3 + 17 * fontScale else 0f) + 4 + 16 * fontScale
+            val used = title + (if (meta) 3 + 17 * fontScale else 0f) + (if (label) 4 + 16 * fontScale else 0f)
+            return SmallContentBudget(label, meta, if (available >= used + title) 2 else 1, padding)
+        }
+
         private fun render(
             context: Context,
             manager: AppWidgetManager,
@@ -62,17 +101,16 @@ class CourseWidgetProvider : AppWidgetProvider() {
         ) {
             val options = manager.getAppWidgetOptions(appWidgetId)
             val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
-            val layout = when {
-                minWidth >= 250 -> R.layout.widget_large
-                minWidth >= 180 -> R.layout.widget_medium
-                else -> R.layout.widget_small
-            }
+            val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 100)
+            val scale = context.resources.configuration.fontScale.coerceAtLeast(1f)
+            val layout = chooseLayout(minWidth, minHeight, scale)
+            val rows = rowBudget(minHeight, layout == R.layout.widget_large, scale)
             val views = RemoteViews(context.packageName, layout)
             val snapshot = readSnapshot(context)
             when (layout) {
-                R.layout.widget_small -> renderSmall(context, views, snapshot, appWidgetId)
-                R.layout.widget_medium -> renderMedium(context, views, snapshot, appWidgetId)
-                else -> renderLarge(context, views, snapshot, appWidgetId)
+                R.layout.widget_small -> renderSmall(context, views, snapshot, appWidgetId, smallContentBudget(minHeight, scale))
+                R.layout.widget_medium -> renderMedium(context, views, snapshot, appWidgetId, rows)
+                else -> renderLarge(context, views, snapshot, appWidgetId, rows)
             }
             manager.updateAppWidget(appWidgetId, views)
         }
@@ -82,14 +120,20 @@ class CourseWidgetProvider : AppWidgetProvider() {
             views: RemoteViews,
             snapshot: JSONObject,
             appWidgetId: Int,
+            budget: SmallContentBudget,
         ) {
+            val density = context.resources.displayMetrics.density
+            views.setViewPadding(R.id.widget_root, (12 * density).toInt(), (budget.padding * density).toInt(), (12 * density).toInt(), (budget.padding * density).toInt())
+            views.setViewVisibility(R.id.widget_small_label, if (budget.label) View.VISIBLE else View.GONE)
+            views.setViewVisibility(R.id.widget_small_meta, if (budget.meta) View.VISIBLE else View.GONE)
+            views.setInt(R.id.widget_small_name, "setMaxLines", budget.titleLines)
             val next = nextItem(snapshot)
             if (next == null) {
-                views.setTextViewText(R.id.widget_small_label, "NEXT")
-                views.setTextViewText(R.id.widget_small_name, "No Class")
+                views.setTextViewText(R.id.widget_small_label, "下一节")
+                views.setTextViewText(R.id.widget_small_name, "暂无课程")
                 views.setTextViewText(R.id.widget_small_meta, "")
             } else {
-                views.setTextViewText(R.id.widget_small_label, "NEXT")
+                views.setTextViewText(R.id.widget_small_label, "下一节")
                 views.setTextViewText(R.id.widget_small_name, next.text("courseName"))
                 views.setTextViewText(
                     R.id.widget_small_meta,
@@ -98,7 +142,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
             }
             views.setOnClickPendingIntent(
                 R.id.widget_root,
-                activityIntent(context, "/", widgetRequestCode(appWidgetId, 0)),
+                activityIntent(context, next?.let { "/course/${Uri.encode(it.text("courseId"))}" } ?: "/", widgetRequestCode(appWidgetId, 0)),
             )
         }
 
@@ -107,14 +151,15 @@ class CourseWidgetProvider : AppWidgetProvider() {
             views: RemoteViews,
             snapshot: JSONObject,
             appWidgetId: Int,
+            maxRows: Int,
         ) {
             val items = todayItems(snapshot)
             views.removeAllViews(R.id.widget_today_list)
             views.setTextViewText(
                 R.id.widget_empty,
-                if (items.isEmpty()) "No Class" else "",
+                if (items.isEmpty()) "今日无课" else if (items.size > maxRows) "还有 ${items.size - maxRows} 节 · 点击查看" else "",
             )
-            items.take(5).forEachIndexed { index, item ->
+            items.take(maxRows).forEachIndexed { index, item ->
                 views.addView(
                     R.id.widget_today_list,
                     row(context, item, widgetRequestCode(appWidgetId, index + 1)),
@@ -131,6 +176,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
             views: RemoteViews,
             snapshot: JSONObject,
             appWidgetId: Int,
+            maxRows: Int,
         ) {
             val today = todayItems(snapshot)
             val tomorrow = tomorrowItems(snapshot)
@@ -142,6 +188,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
                 R.id.widget_today_list,
                 today,
                 widgetRequestCode(appWidgetId, 100),
+                maxRows,
             )
             addItems(
                 context,
@@ -149,14 +196,15 @@ class CourseWidgetProvider : AppWidgetProvider() {
                 R.id.widget_tomorrow_list,
                 tomorrow,
                 widgetRequestCode(appWidgetId, 200),
+                maxRows,
             )
             views.setTextViewText(
                 R.id.widget_today_empty,
-                if (today.isEmpty()) "No Class" else "",
+                if (today.isEmpty()) "今日无课" else if (today.size > maxRows) "还有 ${today.size - maxRows} 节" else "",
             )
             views.setTextViewText(
                 R.id.widget_tomorrow_empty,
-                if (tomorrow.isEmpty()) "No Class" else "",
+                if (tomorrow.isEmpty()) "明日无课" else if (tomorrow.size > maxRows) "还有 ${tomorrow.size - maxRows} 节" else "",
             )
             views.setOnClickPendingIntent(
                 R.id.widget_root,
@@ -170,8 +218,9 @@ class CourseWidgetProvider : AppWidgetProvider() {
             containerId: Int,
             items: List<JSONObject>,
             requestCodeBase: Int,
+            maxRows: Int,
         ) {
-            items.take(8).forEachIndexed { index, item ->
+            items.take(maxRows).forEachIndexed { index, item ->
                 views.addView(
                     containerId,
                     row(context, item, requestCodeBase + index),
@@ -194,12 +243,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
                 listOfNotNull(location, teacher).joinToString(" · "),
             )
             val courseId = item.text("courseId")
-            val exceptionId = item.text("exceptionId")
-            val route = if (exceptionId.isNotBlank() && exceptionId == courseId) {
-                "/"
-            } else {
-                "/course/$courseId"
-            }
+            val route = "/course/${Uri.encode(courseId)}"
             row.setOnClickPendingIntent(
                 R.id.widget_row_root,
                 activityIntent(context, route, requestCode),

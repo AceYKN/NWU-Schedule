@@ -22,6 +22,7 @@ void main(List<String> args) {
   const allowedPermissions = {
     'android.permission.INTERNET',
     'android.permission.POST_NOTIFICATIONS',
+    'android.permission.RECEIVE_BOOT_COMPLETED',
   };
   final generatedPermission = RegExp(
     r'android:name="([^"]+\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION)"',
@@ -55,6 +56,8 @@ void main(List<String> args) {
     'android.intent.action.DATE_CHANGED',
     'android.intent.action.TIME_SET',
     'android.intent.action.TIMEZONE_CHANGED',
+    'android.intent.action.BOOT_COMPLETED',
+    'android.intent.action.MY_PACKAGE_REPLACED',
   };
   final missingWidgetActions = requiredWidgetActions
       .where((action) => !manifest.contains('<action android:name="$action"'))

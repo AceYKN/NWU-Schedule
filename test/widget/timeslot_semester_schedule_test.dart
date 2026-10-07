@@ -187,7 +187,7 @@ void main() {
     expect(find.textContaining('1-20周'), findsOneWidget);
     expect(find.text('1-20周 · 当前'), findsOneWidget);
 
-    await tester.tap(find.text('隐藏课程'));
+    await tester.tap(find.text('仅在周课表隐藏'));
     await tester.pumpAndSettle();
     expect(hidden, isTrue);
   });

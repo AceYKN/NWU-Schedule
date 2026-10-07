@@ -212,6 +212,7 @@ class CourseCanonicalizer {
       campusOverride: exception.campusOverride,
       roomOverride: exception.roomOverride,
       addedCourseName: exception.addedCourseName,
+      colorOverride: exception.colorOverride,
       note: exception.note,
     );
   }

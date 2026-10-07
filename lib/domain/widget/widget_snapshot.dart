@@ -71,6 +71,10 @@ class WidgetCourseItem {
         'date': dateOnly(date).toIso8601String(),
         'startTime': startTime.toIso8601String(),
         'endTime': endTime.toIso8601String(),
+        'startAtUtcMillis':
+            CampusClock.campusWallTimeToUtc(startTime).millisecondsSinceEpoch,
+        'endAtUtcMillis':
+            CampusClock.campusWallTimeToUtc(endTime).millisecondsSinceEpoch,
         'startSection': startSection,
         'endSection': endSection,
         'location': location,
@@ -90,12 +94,12 @@ class WidgetSnapshotBuilder {
     final nowUtc = now.toUtc();
     final campusNow = CampusClock.toCampusWallTime(nowUtc);
     final today = dateOnly(campusNow);
-    final tomorrow = today.add(const Duration(days: 1));
+    final tomorrow = addCalendarDays(today, 1);
     final instances = <WidgetCourseItem>[];
     final semesterEnd = engine.calendarDefinition.semesterEndDate;
     for (var date = today;
         !date.isAfter(semesterEnd);
-        date = date.add(const Duration(days: 1))) {
+        date = addCalendarDays(date, 1)) {
       for (final instance in engine.getCoursesForDate(date)) {
         instances.add(_item(instance)!);
       }

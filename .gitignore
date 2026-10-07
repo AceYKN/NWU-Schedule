@@ -21,6 +21,7 @@
 # Generated files
 *.g.dart
 !lib/data/database/app_database.g.dart
+!lib/core/nwu/app_version.g.dart
 *.freezed.dart
 
 # Local database and secrets

@@ -164,7 +164,7 @@ class HomeScheduleStatusResolver {
     DateTime today,
   ) {
     for (var offset = 0; offset <= lookAheadDays; offset++) {
-      final date = today.add(Duration(days: offset));
+      final date = addCalendarDays(today, offset);
       for (final course in engine.getCoursesForDate(date)) {
         if (course.startTime.isAfter(campusNow)) {
           return NextScheduleSummary(

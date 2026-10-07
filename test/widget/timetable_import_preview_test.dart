@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nwu_schedule/app/theme/schedule_theme.dart';
 import 'package:nwu_schedule/domain/import/import_diff.dart';
+import 'package:nwu_schedule/domain/course/course.dart';
+import 'package:nwu_schedule/core/utils/week_mask.dart';
 import 'package:nwu_schedule/domain/import/timetable_import.dart';
 import 'package:nwu_schedule/domain/import/three_way_merge.dart';
 import 'package:nwu_schedule/features/import/presentation/timetable_import_page.dart';
@@ -51,6 +53,92 @@ void main() {
 
     await tester.tap(find.text('建立新课表'));
     expect(confirmed, isTrue);
+  });
+
+  testWidgets(
+      'full diff exposes normal changes beyond the first three courses before confirmation',
+      (tester) async {
+    final courses = [
+      for (var i = 0; i < 5; i++)
+        ImportedCourse(sourceCourseKey: 'c$i', name: '合成课程${i + 1}', meetings: [
+          ImportedMeeting(
+              sourceMeetingKey: 'm$i',
+              weekday: 1,
+              startSection: 3,
+              endSection: 4,
+              teacher: null,
+              campus: null,
+              room: '新教室',
+              weekMask: WeekMask.all(16))
+        ])
+    ];
+    final incoming = RemoteTimetable(
+        semester: timetable.semester, totalWeeks: 20, courses: courses);
+    final diff = ImportDiff([
+      for (final course in courses.take(4))
+        ImportChange(
+            kind: ImportChangeKind.unchanged,
+            sourceCourseKey: course.sourceCourseKey,
+            remoteCourse: course),
+      ImportChange(
+          kind: ImportChangeKind.modified,
+          sourceCourseKey: 'c4',
+          remoteCourse: courses.last,
+          fields: [
+            const ImportFieldChange(
+                field: 'meeting:m4:room',
+                decision: MergeDecision.remote,
+                localValue: '原教室',
+                remoteValue: '新教室')
+          ]),
+      ImportChange(
+          kind: ImportChangeKind.removed,
+          sourceCourseKey: 'removed',
+          localCourse: Course(
+              id: 'removed',
+              semesterId: incoming.semester.id,
+              sourceType: CourseSourceType.imported,
+              name: '远端删除课程')),
+    ]);
+    var confirmed = false;
+    await _pumpCard(tester,
+        timetable: incoming, diff: diff, onConfirm: () => confirmed = true);
+    await tester.tap(find.text('查看完整变化清单'));
+    await tester.pumpAndSettle();
+    expect(find.text('修改 · 合成课程5'), findsOneWidget);
+    expect(find.text('原教室 → 新教室'), findsOneWidget);
+    expect(find.text('星期一 · 第3-4节 · 教室'), findsOneWidget);
+    expect(find.text('删除 · 远端删除课程'), findsOneWidget);
+    expect(confirmed, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'preview keeps confirmation visible with large text and a constrained height',
+      (tester) async {
+    final diff = const ImportDiffEngine()
+        .build(incoming: timetable, local: null, previousImport: null);
+    await tester.pumpWidget(MaterialApp(
+        home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: Scaffold(
+                body: Center(
+                    child: SizedBox(
+                        width: 360,
+                        height: 380,
+                        child: TimetableImportPreviewCard(
+                            timetable: timetable,
+                            diff: diff,
+                            saving: false,
+                            hasConflictItems: false,
+                            onConfirm: () {},
+                            onRetry: () {},
+                            onCancel: () {},
+                            onResolveConflicts: () {})))))));
+    await tester.pumpAndSettle();
+    final confirm = find.widgetWithText(FilledButton, '建立新课表');
+    expect(confirm.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('renders the conflict diff and disables confirmation',

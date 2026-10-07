@@ -2,6 +2,15 @@ DateTime dateOnly(DateTime value) {
   return DateTime(value.year, value.month, value.day);
 }
 
+/// Calendar arithmetic must not depend on a device's daylight-saving offset.
+DateTime addCalendarDays(DateTime date, int days) =>
+    DateTime(date.year, date.month, date.day + days);
+
+int calendarDaysBetween(DateTime end, DateTime start) =>
+    DateTime.utc(end.year, end.month, end.day)
+        .difference(DateTime.utc(start.year, start.month, start.day))
+        .inDays;
+
 bool isSameDate(DateTime left, DateTime right) {
   return left.year == right.year &&
       left.month == right.month &&

@@ -32,7 +32,7 @@ class CalendarEngine {
         value.isAfter(definition.semesterEndDate)) {
       return null;
     }
-    final week = value.difference(definition.week1StartDate).inDays ~/ 7 + 1;
+    final week = calendarDaysBetween(value, definition.week1StartDate) ~/ 7 + 1;
     if (week < 1 || week > definition.totalWeeks) {
       return null;
     }

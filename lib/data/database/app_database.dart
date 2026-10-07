@@ -2,6 +2,8 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
 import '../../core/utils/week_mask.dart';
+import '../../core/utils/date_utils.dart';
+import '../../core/time/campus_clock.dart';
 import '../../domain/course/course.dart' as domain;
 import '../../domain/course/course_canonicalizer.dart';
 import '../../domain/course/course_exception.dart' as domain;
@@ -75,6 +77,10 @@ class CourseExceptions extends Table {
   DateTimeColumn get sourceDate => dateTime().nullable()();
   TextColumn get type => text()();
   DateTimeColumn get targetDate => dateTime().nullable()();
+  // Keep legacy timestamp columns for compatibility; all new reads prefer keys.
+  TextColumn get sourceDateKey => text().nullable()();
+  TextColumn get targetDateKey => text().nullable()();
+  IntColumn get colorOverride => integer().nullable()();
   IntColumn get targetStartSection => integer().nullable()();
   IntColumn get targetEndSection => integer().nullable()();
   TextColumn get teacherOverride => text().nullable()();
@@ -140,7 +146,7 @@ class AppDatabase extends _$AppDatabase {
       AppDatabase(driftDatabase(name: 'nwu_schedule'));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -167,6 +173,19 @@ class AppDatabase extends _$AppDatabase {
           );
         },
         onUpgrade: (migrator, from, to) async {
+          if (from < 4) {
+            await migrator.addColumn(
+                courseExceptions, courseExceptions.sourceDateKey);
+            await migrator.addColumn(
+                courseExceptions, courseExceptions.targetDateKey);
+            await migrator.addColumn(
+                courseExceptions, courseExceptions.colorOverride);
+            // Old timestamps did not record the original device timezone. NWU's
+            // UTC+8 is the migration convention, independent of the current zone.
+            await customStatement('UPDATE course_exceptions SET '
+                "source_date_key = date(source_date, 'unixepoch', '+8 hours'), "
+                "target_date_key = date(target_date, 'unixepoch', '+8 hours')");
+          }
           if (from < 2) {
             await migrator.addColumn(semesters, semesters.calendarRevision);
           }
@@ -229,15 +248,16 @@ class AppDatabase extends _$AppDatabase {
             semesterId: row.semesterId,
             courseId: row.courseId,
             sourceMeetingId: row.sourceMeetingId,
-            sourceDate: row.sourceDate,
+            sourceDate: storedTeachingDate(row.sourceDateKey, row.sourceDate),
             type: domain.CourseExceptionType.values.byName(row.type),
-            targetDate: row.targetDate,
+            targetDate: storedTeachingDate(row.targetDateKey, row.targetDate),
             targetStartSection: row.targetStartSection,
             targetEndSection: row.targetEndSection,
             teacherOverride: row.teacherOverride,
             campusOverride: row.campusOverride,
             roomOverride: row.roomOverride,
             addedCourseName: row.addedCourseName,
+            colorOverride: row.colorOverride,
             note: row.note,
           ),
       ],
@@ -307,3 +327,9 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 }
+
+DateTime? storedTeachingDate(String? key, DateTime? legacy) => key != null
+    ? parseDateOnly(key)
+    : legacy == null
+        ? null
+        : dateOnly(CampusClock.toCampusWallTime(legacy));

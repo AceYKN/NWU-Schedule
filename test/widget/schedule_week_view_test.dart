@@ -125,6 +125,85 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets(
+      'large text keeps font sizes and fits narrow cards and conflict grids',
+      (tester) async {
+    final entry = _entry(
+        id: 'large',
+        name: '长课程名称 Software Engineering Laboratory',
+        weekday: 1,
+        startSection: 1,
+        endSection: 1,
+        room: '教学楼四层创新实验室409室',
+        teacher: '教师甲');
+    for (final scale in [1.0, 1.3, 1.6, 2.0]) {
+      await tester.pumpWidget(MaterialApp(
+          home: MediaQuery(
+              data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+              child: Scaffold(
+                  body: Center(
+                      child: SizedBox(
+                          width: 44,
+                          height: 66,
+                          child: CourseBlock(
+                              entry: entry,
+                              preferences:
+                                  const ScheduleDisplayPreferences.defaults(),
+                              width: 44,
+                              height: 66,
+                              visibleDayCount: 7)))))));
+      await tester.pumpAndSettle();
+      final title = tester.widget<Text>(find.text(entry.course.name));
+      expect(title.style!.fontSize, 12);
+      expect(title.softWrap, isTrue);
+      expect(tester.takeException(), isNull);
+      for (final width in [360.0, 412.0]) {
+        for (final days in [5, 7]) {
+          final model = _model(entries: [
+            entry,
+            _entry(
+                id: 'conflict',
+                name: '另一门较长的课程名称',
+                weekday: 1,
+                startSection: 1,
+                endSection: 1,
+                room: '3406'),
+            _entry(
+                id: 'multi',
+                name: '多节次课程名称',
+                weekday: 2,
+                startSection: 3,
+                endSection: 4,
+                room: '长教室名409室')
+          ]);
+          await tester.pumpWidget(MaterialApp(
+              home: MediaQuery(
+                  data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                  child: Scaffold(
+                      body: Center(
+                          child: SizedBox(
+                              width: width,
+                              child: SingleChildScrollView(
+                                  child: ScheduleWeekGrid(
+                                      visibleDays:
+                                          model.days.take(days).toList(),
+                                      viewModel: model,
+                                      preferences:
+                                          const ScheduleDisplayPreferences
+                                              .defaults(),
+                                      now: DateTime(2026, 9, 7, 13),
+                                      coursePalette: const {}))))))));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull,
+              reason: 'width=$width days=$days scale=$scale');
+          final block =
+              tester.widgetList<CourseBlock>(find.byType(CourseBlock)).first;
+          expect(block.height, greaterThanOrEqualTo(68 * scale - 3));
+        }
+      }
+    }
+  });
+
   testWidgets('course block content follows the available block height', (
     tester,
   ) async {
@@ -298,6 +377,48 @@ void main() {
 
     expect(find.byType(CurrentTimeIndicator), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('highlight setting controls the time line and course emphasis',
+      (tester) async {
+    final model = _model(entries: [
+      _entry(
+          id: 'current',
+          name: '当前课程',
+          weekday: DateTime.monday,
+          startSection: 1,
+          endSection: 2),
+    ], today: DateTime.monday);
+    for (final enabled in [true, false]) {
+      await tester.pumpWidget(MaterialApp(
+        home: Material(
+            child: SizedBox(
+                width: 360,
+                child: ScheduleWeekGrid(
+                  visibleDays: model.days.take(5).toList(),
+                  viewModel: model,
+                  coursePalette: CourseColorResolver.schedulePaletteForCourses(
+                    model.entries.map((entry) => entry.course),
+                  ),
+                  preferences: const ScheduleDisplayPreferences.defaults()
+                      .copyWith(highlightCurrentPeriod: enabled),
+                  now: DateTime(2026, 9, 7, 8, 20),
+                ))),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byType(CurrentTimeIndicator),
+          enabled ? findsOneWidget : findsNothing);
+      final material = tester.widget<Material>(find
+          .descendant(
+            of: find.byType(CourseEventCard),
+            matching: find.byType(Material),
+          )
+          .first);
+      expect(material.elevation, enabled ? 1 : 0);
+      expect((material.shape! as RoundedRectangleBorder).side.width,
+          enabled ? 2 : 0);
+      expect(tester.takeException(), isNull);
+    }
   });
 
   testWidgets('inactive course blocks remain ghost-like and concise', (

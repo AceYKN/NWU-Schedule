@@ -37,7 +37,7 @@ class SchoolBreak {
   final int? reportedWeeks;
   final int? reportedDays;
 
-  int get actualDays => endDate.difference(startDate).inDays + 1;
+  int get actualDays => calendarDaysBetween(endDate, startDate) + 1;
 
   factory SchoolBreak.fromJson(Map<String, dynamic> json) {
     final kind = SchoolBreakKind.values.byName(json['kind'] as String);
@@ -265,7 +265,7 @@ class CalendarDefinition {
     if (teachingWeek < 1 || teachingWeek > totalWeeks) {
       throw RangeError('Teaching week out of range: $teachingWeek');
     }
-    return week1StartDate.add(Duration(days: (teachingWeek - 1) * 7));
+    return addCalendarDays(week1StartDate, (teachingWeek - 1) * 7);
   }
 
   Map<String, Object?> toJson() {
@@ -293,13 +293,13 @@ List<CalendarDateOverride> _expandHolidayPeriods(Map<String, dynamic> json) {
     final name = item['name'] as String;
     final start = parseDateOnly(item['startDate'] as String);
     final end = parseDateOnly(item['endDate'] as String);
-    final days = end.difference(start).inDays + 1;
+    final days = calendarDaysBetween(end, start) + 1;
     if (name.trim().isEmpty || days < 1 || days > 366) {
       throw FormatException('Invalid holiday period: $name');
     }
     for (var offset = 0; offset < days; offset++) {
       result.add(CalendarDateOverride(
-        date: start.add(Duration(days: offset)),
+        date: addCalendarDays(start, offset),
         type: CalendarOverrideType.holiday,
         label: '$name放假',
       ));

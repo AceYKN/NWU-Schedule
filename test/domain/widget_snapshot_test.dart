@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nwu_schedule/core/utils/week_mask.dart';
+import 'package:nwu_schedule/core/time/campus_clock.dart';
 import 'package:nwu_schedule/domain/calendar/calendar_definition.dart';
 import 'package:nwu_schedule/domain/calendar/calendar_engine.dart';
 import 'package:nwu_schedule/domain/course/course.dart';
@@ -103,6 +104,15 @@ void main() {
     expect(first.startSection, 3);
     expect(first.endSection, 4);
     expect(first.teacher, '教师 A');
+    final encoded = first.toJson();
+    expect(
+      encoded['startAtUtcMillis'],
+      CampusClock.campusWallTimeToUtc(first.startTime).millisecondsSinceEpoch,
+    );
+    expect(
+      encoded['endAtUtcMillis'],
+      CampusClock.campusWallTimeToUtc(first.endTime).millisecondsSinceEpoch,
+    );
   });
 
   test('keeps the current class in today and advances next past it', () {
