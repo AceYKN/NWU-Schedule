@@ -543,7 +543,7 @@ String _activeCourseSubtitle(
 }
 
 String _nextScheduleDescription(NextScheduleSummary? next) {
-  if (next == null) return '暂无近期课程';
+  if (next == null) return '本学期暂无后续课程';
   final course = next.course;
   final time = _timeLabel(course.startTime);
   final when = switch (next.daysFromToday) {

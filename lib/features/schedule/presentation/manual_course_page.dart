@@ -324,6 +324,9 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
       error: (error, stackTrace) =>
           Center(child: Text(nwuUserMessage(error, action: '读取学期失败'))),
       data: (state) {
+        if (state is ScheduleCalendarMissing) {
+          return const Center(child: Text('学期已保存，但缺少校历，请更新应用后重试'));
+        }
         if (state is! ScheduleReady) {
           return const Center(child: Text('请先在设置中创建学期'));
         }

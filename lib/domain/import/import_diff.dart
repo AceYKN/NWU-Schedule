@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../course/course.dart';
+import '../course/course_exception.dart';
 import '../course/course_identity.dart';
 import '../course/meeting_rule.dart';
 import '../schedule/schedule_data_repository.dart';
@@ -45,6 +46,7 @@ class ImportChange {
     this.localCourse,
     this.remoteCourse,
     this.fields = const [],
+    this.exceptionImpacts = const [],
   });
 
   final ImportChangeKind kind;
@@ -52,15 +54,46 @@ class ImportChange {
   final Course? localCourse;
   final ImportedCourse? remoteCourse;
   final List<ImportFieldChange> fields;
+  final List<ImportExceptionImpact> exceptionImpacts;
 
   bool get hasConflict => fields.any((field) => field.hasConflict);
 }
 
+class ImportExceptionImpact {
+  const ImportExceptionImpact({
+    required this.courseName,
+    required this.exception,
+    this.removed = true,
+  });
+
+  final String courseName;
+  final CourseException exception;
+
+  /// Whole-course tombstones retain exceptions for a later course restore.
+  final bool removed;
+}
+
+class ImportPreviewExpiredException implements Exception {
+  const ImportPreviewExpiredException();
+}
+
+class ImportExceptionRemovalConfirmationRequired implements Exception {
+  const ImportExceptionRemovalConfirmationRequired();
+}
+
 class ImportDiff {
-  const ImportDiff(this.changes, {this.isNewSemester = false});
+  const ImportDiff(this.changes,
+      {this.isNewSemester = false, this.previewRevision});
 
   final List<ImportChange> changes;
   final bool isNewSemester;
+  final String? previewRevision;
+
+  List<ImportExceptionImpact> get exceptionImpacts => List.unmodifiable([
+        for (final change in changes)
+          if (change.kind != ImportChangeKind.locallyDeleted)
+            ...change.exceptionImpacts,
+      ]);
 
   bool get hasChanges =>
       changes.any((change) => change.kind != ImportChangeKind.unchanged);
@@ -90,7 +123,7 @@ class ImportDiff {
     if (!hasConflicts && !hasLocallyDeleted) return this;
     return ImportDiff([
       for (final change in changes) _resolveChange(change, resolution),
-    ], isNewSemester: isNewSemester);
+    ], isNewSemester: isNewSemester, previewRevision: previewRevision);
   }
 
   static ImportChange _resolveChange(
@@ -104,6 +137,7 @@ class ImportDiff {
         sourceCourseKey: change.sourceCourseKey,
         localCourse: change.localCourse,
         remoteCourse: change.remoteCourse,
+        exceptionImpacts: change.exceptionImpacts,
       );
     }
     if (!change.hasConflict) return change;
@@ -135,6 +169,11 @@ class ImportDiff {
       localCourse: change.localCourse,
       remoteCourse: change.remoteCourse,
       fields: fields,
+      exceptionImpacts: fields.any((field) =>
+              field.field == 'meetings' &&
+              field.decision == MergeDecision.local)
+          ? const []
+          : change.exceptionImpacts,
     );
   }
 }

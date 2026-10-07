@@ -74,6 +74,8 @@ abstract interface class ScheduleDataRepository {
     RemoteTimetable timetable, {
     String adapterVersion = 'nwu-zhengfang-v1',
     ImportConflictResolution resolution = ImportConflictResolution.empty,
+    String? expectedPreviewRevision,
+    Set<String> removeExceptionIds = const {},
   });
 
   Future<ScheduleBackup> createBackup({

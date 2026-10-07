@@ -22,7 +22,6 @@ class ScheduleRestoreReceiver : BroadcastReceiver() {
                     logDebugFailure(context, "Notification alarm restore failed", error)
                 }
                 try {
-                    WidgetBoundaryScheduler.scheduleNext(context)
                     CourseWidgetProvider.refresh(context)
                 } catch (error: Exception) {
                     logDebugFailure(context, "Widget restore failed", error)

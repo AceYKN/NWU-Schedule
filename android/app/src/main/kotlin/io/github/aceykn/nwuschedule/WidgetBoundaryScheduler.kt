@@ -33,6 +33,10 @@ object WidgetBoundaryScheduler {
         } catch (_: Exception) {
             null
         }
+        scheduleNext(context, boundary)
+    }
+
+    internal fun scheduleNext(context: Context, boundary: Long?) {
         cancel(context)
         if (boundary == null) return
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager

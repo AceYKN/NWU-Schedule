@@ -490,6 +490,74 @@ Future<void> _showExceptionEditor(
   }
 }
 
+Future<void> editCourseException({
+  required BuildContext context,
+  required WidgetRef ref,
+  required CourseException exception,
+}) async {
+  try {
+    final repository = ref.read(scheduleDataRepositoryProvider);
+    final snapshot = await repository.loadSemester(exception.semesterId);
+    final current =
+        snapshot.exceptions.singleWhere((e) => e.id == exception.id);
+    final calendar = await _exceptionCalendar(ref, current.semesterId);
+    if (!context.mounted) return;
+    if (calendar == null) throw const CalendarMissingError();
+    Widget editor;
+    if (current.courseId == null) {
+      editor = _StandaloneAddExceptionSheet(
+        semesterId: current.semesterId,
+        initialDate: current.targetDate!,
+        calendar: calendar,
+        existing: current,
+      );
+    } else {
+      final course =
+          snapshot.courses.singleWhere((c) => c.id == current.courseId);
+      final rules = snapshot.meetingRules.where((r) => r.courseId == course.id);
+      final rule = current.sourceMeetingId == null
+          ? (rules.isEmpty ? null : rules.first)
+          : rules.singleWhere((r) => r.id == current.sourceMeetingId);
+      final sourceDate = current.sourceDate ?? current.targetDate!;
+      final start = rule?.startSection ?? current.targetStartSection!;
+      final end = rule?.endSection ?? current.targetEndSection!;
+      final instance = EffectiveCourseInstance(
+        course: course,
+        meetingRule: rule,
+        date: sourceDate,
+        templateDate: sourceDate,
+        startSection: start,
+        endSection: end,
+        startTime:
+            const NwuPeriodRepository().byNumber(start).startAt(sourceDate),
+        endTime: const NwuPeriodRepository().byNumber(end).endAt(sourceDate),
+        teacher: rule?.teacher,
+        campus: rule?.campus,
+        room: rule?.room,
+      );
+      editor = _ExceptionEditorSheet(
+          instance: instance, calendar: calendar, existing: current);
+    }
+    final edited = await showModalBottomSheet<CourseException>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => editor,
+    );
+    if (edited == null || !context.mounted) return;
+    await repository.saveException(edited);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('临时变更已更新')));
+    }
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(nwuUserMessage(error, action: '编辑临时变更失败'))));
+    }
+  }
+}
+
 Future<void> _showCourseColorPicker(
   BuildContext pageContext,
   BuildContext sheetContext,
@@ -590,7 +658,10 @@ const _courseColors = <int>[
 ];
 
 class _ExceptionEditorSheet extends StatefulWidget {
-  const _ExceptionEditorSheet({required this.instance, required this.calendar});
+  const _ExceptionEditorSheet(
+      {required this.instance, required this.calendar, this.existing});
+
+  final CourseException? existing;
 
   final CalendarDefinition calendar;
 
@@ -605,11 +676,14 @@ class _StandaloneAddExceptionSheet extends StatefulWidget {
     required this.semesterId,
     required this.initialDate,
     required this.calendar,
+    this.existing,
   });
 
   final String semesterId;
   final DateTime initialDate;
   final CalendarDefinition calendar;
+
+  final CourseException? existing;
 
   @override
   State<_StandaloneAddExceptionSheet> createState() =>
@@ -632,6 +706,16 @@ class _StandaloneAddExceptionSheetState
   void initState() {
     super.initState();
     _targetDate = _clampSemesterDate(widget.initialDate, widget.calendar);
+    final existing = widget.existing;
+    if (existing != null) {
+      _name.text = existing.addedCourseName ?? '';
+      _teacher.text = existing.teacherOverride ?? '';
+      _campus.text = existing.campusOverride ?? '';
+      _room.text = existing.roomOverride ?? '';
+      _note.text = existing.note ?? '';
+      _startSection = existing.targetStartSection!;
+      _endSection = existing.targetEndSection!;
+    }
   }
 
   @override
@@ -661,7 +745,8 @@ class _StandaloneAddExceptionSheetState
     if (!_formKey.currentState!.validate()) return;
     Navigator.of(context).pop(
       CourseException(
-        id: 'exception-${DateTime.now().microsecondsSinceEpoch}',
+        id: widget.existing?.id ??
+            'exception-${DateTime.now().microsecondsSinceEpoch}',
         semesterId: widget.semesterId,
         type: CourseExceptionType.add,
         targetDate: dateOnly(_targetDate),
@@ -672,6 +757,7 @@ class _StandaloneAddExceptionSheetState
         roomOverride: _optional(_room),
         addedCourseName: _name.text.trim(),
         note: _optional(_note),
+        colorOverride: widget.existing?.colorOverride,
       ),
     );
   }
@@ -778,13 +864,19 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
   @override
   void initState() {
     super.initState();
-    _targetDate = _clampSemesterDate(_instance.date, widget.calendar);
-    _startSection = _instance.startSection;
-    _endSection = _instance.endSection;
-    _teacher = TextEditingController(text: _instance.teacher ?? '');
-    _campus = TextEditingController(text: _instance.campus ?? '');
-    _room = TextEditingController(text: _instance.room ?? '');
-    _note = TextEditingController();
+    final existing = widget.existing;
+    _type = existing?.type ?? CourseExceptionType.move;
+    _targetDate = _clampSemesterDate(
+        existing?.targetDate ?? _instance.date, widget.calendar);
+    _startSection = existing?.targetStartSection ?? _instance.startSection;
+    _endSection = existing?.targetEndSection ?? _instance.endSection;
+    _teacher = TextEditingController(
+        text: existing?.teacherOverride ?? _instance.teacher ?? '');
+    _campus = TextEditingController(
+        text: existing?.campusOverride ?? _instance.campus ?? '');
+    _room = TextEditingController(
+        text: existing?.roomOverride ?? _instance.room ?? '');
+    _note = TextEditingController(text: existing?.note ?? '');
   }
 
   @override
@@ -822,13 +914,16 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
       return;
     }
     final exception = CourseException(
-      id: 'exception-${DateTime.now().microsecondsSinceEpoch}',
+      id: widget.existing?.id ??
+          'exception-${DateTime.now().microsecondsSinceEpoch}',
       semesterId: _instance.course.semesterId,
       courseId: _instance.course.id,
       // ADD from an existing course still uses the clicked meeting as its
       // template. Keep its identity even though ADD has no source date, so a
       // course with multiple arrangements cannot fall back to the first one.
-      sourceMeetingId: sourceRule?.id,
+      sourceMeetingId: widget.existing != null
+          ? widget.existing!.sourceMeetingId
+          : sourceRule?.id,
       sourceDate:
           _type == CourseExceptionType.add ? null : dateOnly(_instance.date),
       type: _type,
@@ -839,18 +934,32 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
           _type == CourseExceptionType.cancel ? null : _endSection,
       teacherOverride: _type == CourseExceptionType.cancel
           ? null
-          : exceptionOverrideIfChanged(_teacher.text, _instance.teacher),
+          : _editedOverride(
+              _teacher, widget.existing?.teacherOverride, _instance.teacher),
       campusOverride: _type == CourseExceptionType.cancel
           ? null
-          : exceptionOverrideIfChanged(_campus.text, _instance.campus),
+          : _editedOverride(
+              _campus, widget.existing?.campusOverride, _instance.campus),
       roomOverride: _type == CourseExceptionType.cancel
           ? null
-          : exceptionOverrideIfChanged(_room.text, _instance.room),
-      addedCourseName:
-          _type == CourseExceptionType.add ? _instance.course.name : null,
+          : _editedOverride(
+              _room, widget.existing?.roomOverride, _instance.room),
+      addedCourseName: _type == CourseExceptionType.add
+          ? widget.existing?.addedCourseName ?? _instance.course.name
+          : null,
       note: _optional(_note),
+      colorOverride: widget.existing?.colorOverride,
     );
     Navigator.of(context).pop(exception);
+  }
+
+  String? _editedOverride(
+      TextEditingController field, String? originalOverride, String? baseline) {
+    if (widget.existing != null &&
+        field.text == (originalOverride ?? baseline ?? '')) {
+      return originalOverride;
+    }
+    return exceptionOverrideIfChanged(field.text, baseline);
   }
 
   @override
@@ -877,8 +986,9 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
                     ),
               ),
               const SizedBox(height: 6),
-              Text(
-                  '原安排：${_instance.date.year}-${_instance.date.month}-${_instance.date.day} · 第 ${_instance.startSection}-${_instance.endSection} 节'),
+              Text(_type == CourseExceptionType.add
+                  ? '参考安排：${weekdayName(_instance.meetingRule?.weekday ?? _instance.date.weekday)} · 第 ${_instance.startSection}-${_instance.endSection} 节'
+                  : '原安排：${_instance.date.year}-${_instance.date.month}-${_instance.date.day} · 第 ${_instance.startSection}-${_instance.endSection} 节'),
               const SizedBox(height: 16),
               DropdownButtonFormField<CourseExceptionType>(
                 initialValue: _type,
@@ -886,20 +996,22 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
                 items: const [
                   DropdownMenuItem(
                     value: CourseExceptionType.move,
-                    child: Text('MOVE · 移动本次课程'),
+                    child: Text('移动本次课程'),
                   ),
                   DropdownMenuItem(
                     value: CourseExceptionType.cancel,
-                    child: Text('CANCEL · 停止本次课程'),
+                    child: Text('停止本次课程'),
                   ),
                   DropdownMenuItem(
                     value: CourseExceptionType.add,
-                    child: Text('ADD · 临时增加一次课程'),
+                    child: Text('临时增加一次课程'),
                   ),
                 ],
-                onChanged: (value) {
-                  if (value != null) setState(() => _type = value);
-                },
+                onChanged: widget.existing != null
+                    ? null
+                    : (value) {
+                        if (value != null) setState(() => _type = value);
+                      },
               ),
               if (needsTarget) ...[
                 const SizedBox(height: 12),

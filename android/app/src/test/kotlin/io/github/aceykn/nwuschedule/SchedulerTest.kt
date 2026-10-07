@@ -160,6 +160,7 @@ class SchedulerTest {
         CourseWidgetProvider().onReceive(context, Intent(
             WidgetBoundaryScheduler.ACTION_WIDGET_BOUNDARY_REFRESH,
         ))
+        PlatformTaskRunner.awaitIdle()
         assertEquals(1, shadowOf(manager).scheduledAlarms.size)
         assertEquals(first, shadowOf(manager).scheduledAlarms.single().triggerAtTime)
         CourseWidgetProvider().onDisabled(context)

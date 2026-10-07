@@ -29,7 +29,6 @@ class WidgetChannelHandler(
                 .putString(MainActivity.WIDGET_SNAPSHOT, json)
                 .commit()) { "无法保存 Widget 快照" }
             CourseWidgetProvider.refresh(context)
-            WidgetBoundaryScheduler.scheduleNext(context)
             null
         }
     }

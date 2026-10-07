@@ -14,11 +14,28 @@ import '../../../domain/settings/schedule_display_preferences.dart';
 import '../../../infrastructure/backup/backup_file_service.dart';
 import '../../../infrastructure/import/webview_session_service.dart';
 
-class SettingsPage extends ConsumerWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends ConsumerState<SettingsPage> {
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() operation) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await operation();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final load = ref.watch(scheduleLoadProvider);
     final currentSemester = load.when(
       data: (state) => switch (state) {
@@ -40,234 +57,243 @@ class SettingsPage extends ConsumerWidget {
     final failures = ref.watch(platformSyncFailuresProvider);
     final notificationStatus = ref.watch(notificationPlatformStatusProvider);
     final platform = notificationStatus.asData?.value;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
-      children: [
-        Text(
-          '设置',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-        if (failures.isNotEmpty)
+    return IgnorePointer(
+      ignoring: _busy,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
+        children: [
+          if (_busy) const Text('正在处理…'),
+          Text(
+            '设置',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          if (failures.isNotEmpty)
+            Card(
+                child: ListTile(
+                    leading: const Icon(Icons.sync_problem),
+                    title: const Text('平台同步尚未完成'),
+                    subtitle: Text(
+                        '${failures.contains('notifications') ? '提醒排程或清理失败。' : ''}${failures.contains('widget') ? '小组件更新或清理失败。' : ''}'),
+                    trailing: TextButton(
+                        onPressed: () =>
+                            _run(() => _retryPlatformSync(context, ref)),
+                        child: const Text('重试')))),
+          const SizedBox(height: 20),
+          _SectionTitle(title: '学期与课表'),
           Card(
-              child: ListTile(
-                  leading: const Icon(Icons.sync_problem),
-                  title: const Text('平台同步尚未完成'),
-                  subtitle: Text(
-                      '${failures.contains('notifications') ? '提醒排程或清理失败。' : ''}${failures.contains('widget') ? '小组件更新或清理失败。' : ''}'),
-                  trailing: TextButton(
-                      onPressed: () => _retryPlatformSync(context, ref),
-                      child: const Text('重试')))),
-        const SizedBox(height: 20),
-        _SectionTitle(title: '学期与课表'),
-        Card(
-          child: Column(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.school_outlined),
-                title: const Text('当前学期'),
-                subtitle: Text(currentSemester),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _selectSemester(context, ref),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.add_circle_outline),
-                title: const Text('新建本地学期'),
-                subtitle: const Text('根据已收录校历创建空课表'),
-                onTap: () => _createSemester(context, ref),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.library_books_outlined),
-                title: const Text('课程管理'),
-                subtitle: const Text('编辑、隐藏、删除或恢复课程'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.go('/courses/manage'),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.download_outlined),
-                title: const Text('从教务系统导入'),
-                subtitle: const Text('在临时 WebView 中登录并读取课表'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push('/import'),
-              ),
-            ],
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.school_outlined),
+                  title: const Text('当前学期'),
+                  subtitle: Text(currentSemester),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _run(() => _selectSemester(context, ref)),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.add_circle_outline),
+                  title: const Text('新建本地学期'),
+                  subtitle: const Text('根据已收录校历创建空课表'),
+                  onTap: () => _run(() => _createSemester(context, ref)),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.library_books_outlined),
+                  title: const Text('课程管理'),
+                  subtitle: const Text('编辑、隐藏、删除或恢复课程'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.go('/courses/manage'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.download_outlined),
+                  title: const Text('从教务系统导入'),
+                  subtitle: const Text('在临时 WebView 中登录并读取课表'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/import'),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 20),
-        _SectionTitle(title: '课表显示'),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.view_week_outlined),
-            title: const Text('课表显示'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.go('/settings/schedule-display'),
+          const SizedBox(height: 20),
+          _SectionTitle(title: '课表显示'),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.view_week_outlined),
+              title: const Text('课表显示'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go('/settings/schedule-display'),
+            ),
           ),
-        ),
-        const SizedBox(height: 20),
-        _SectionTitle(title: '提醒'),
-        Card(
-          child: Column(
-            children: [
-              SwitchListTile.adaptive(
-                value: ref.watch(notificationEnabledProvider).asData?.value ??
-                    false,
-                onChanged: (enabled) =>
-                    _setNotificationEnabled(context, ref, enabled),
-                title: const Text('上课提醒'),
-                subtitle: const Text('只使用本地通知，不上传课程数据'),
-              ),
-              ListTile(
-                  title: const Text('提醒状态'),
-                  trailing: platform?['replenishFailed'] == true
-                      ? TextButton(
-                          onPressed: () => _retryPlatformSync(context, ref),
-                          child: const Text('重试'))
-                      : null,
-                  subtitle: Text(platform == null
-                      ? '暂时无法读取系统通知状态；系统省电可能延迟提醒'
-                      : '${platform['systemAllowed'] == true ? '系统通知允许' : '系统通知已关闭'} · '
-                          '${platform['channelAllowed'] == true ? '提醒渠道允许' : '提醒渠道已关闭'}\n'
-                          '${failures.contains('notifications') || platform['replenishFailed'] == true ? '排程失败，请重试' : platform['planStored'] == true ? '本地提醒计划已保存' : '尚未保存提醒计划'}\n'
-                          '系统可能延迟送达，提前时间不保证准点'),
+          const SizedBox(height: 20),
+          _SectionTitle(title: '提醒'),
+          Card(
+            child: Column(
+              children: [
+                SwitchListTile.adaptive(
+                  value: ref.watch(notificationEnabledProvider).asData?.value ??
+                      false,
+                  onChanged: (enabled) => _run(
+                      () => _setNotificationEnabled(context, ref, enabled)),
+                  title: const Text('上课提醒'),
+                  subtitle: const Text('只使用本地通知，不上传课程数据'),
+                ),
+                ListTile(
+                    title: const Text('提醒状态'),
+                    trailing: platform?['replenishFailed'] == true
+                        ? TextButton(
+                            onPressed: () =>
+                                _run(() => _retryPlatformSync(context, ref)),
+                            child: const Text('重试'))
+                        : null,
+                    subtitle: Text(platform == null
+                        ? '暂时无法读取系统通知状态；系统省电可能延迟提醒'
+                        : '${platform['systemAllowed'] == true ? '系统通知允许' : '系统通知已关闭'} · '
+                            '${platform['channelAllowed'] == true ? '提醒渠道允许' : '提醒渠道已关闭'}\n'
+                            '${failures.contains('notifications') || platform['replenishFailed'] == true ? '排程失败，请重试' : platform['planStored'] == true ? '本地提醒计划已保存' : '尚未保存提醒计划'}\n'
+                            '系统可能延迟送达，提前时间不保证准点'),
+                    onTap: () =>
+                        ref.invalidate(notificationPlatformStatusProvider)),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.timer_outlined),
+                  title: const Text('提前时间'),
+                  subtitle: const Text('统一应用于所有课程'),
+                  trailing: Text(
+                    '${ref.watch(notificationLeadMinutesProvider).asData?.value ?? notificationDefaultLeadMinutes} 分钟',
+                  ),
                   onTap: () =>
-                      ref.invalidate(notificationPlatformStatusProvider)),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.timer_outlined),
-                title: const Text('提前时间'),
-                subtitle: const Text('统一应用于所有课程'),
-                trailing: Text(
-                  '${ref.watch(notificationLeadMinutesProvider).asData?.value ?? notificationDefaultLeadMinutes} 分钟',
+                      _run(() => _selectNotificationLead(context, ref)),
                 ),
-                onTap: () => _selectNotificationLead(context, ref),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 20),
-        _SectionTitle(title: '外观'),
-        Card(
-          child: Column(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.palette_outlined),
-                title: const Text('模式'),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: SegmentedButton<AppThemeMode>(
-                  segments: [
-                    for (final mode in AppThemeMode.values)
-                      ButtonSegment(value: mode, label: Text(mode.label)),
-                  ],
-                  selected: {selectedThemeMode},
-                  onSelectionChanged: (selection) {
-                    if (selection.isNotEmpty) {
-                      _selectThemeMode(context, ref, selection.first);
-                    }
-                  },
+          const SizedBox(height: 20),
+          _SectionTitle(title: '外观'),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.palette_outlined),
+                  title: const Text('模式'),
                 ),
-              ),
-              const Divider(height: 1),
-              const ListTile(
-                leading: Icon(Icons.color_lens_outlined),
-                title: Text('主题色'),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Wrap(
-                  spacing: 8,
-                  children: officialThemes
-                      .map(
-                        (theme) => ChoiceChip(
-                          selected: theme.id == selectedTheme.id,
-                          onSelected: (selected) {
-                            if (selected) {
-                              _selectTheme(context, ref, theme.id);
-                            }
-                          },
-                          avatar: CircleAvatar(
-                            backgroundColor: theme.seedColor,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: SegmentedButton<AppThemeMode>(
+                    segments: [
+                      for (final mode in AppThemeMode.values)
+                        ButtonSegment(value: mode, label: Text(mode.label)),
+                    ],
+                    selected: {selectedThemeMode},
+                    onSelectionChanged: (selection) {
+                      if (selection.isNotEmpty) {
+                        _run(() =>
+                            _selectThemeMode(context, ref, selection.first));
+                      }
+                    },
+                  ),
+                ),
+                const Divider(height: 1),
+                const ListTile(
+                  leading: Icon(Icons.color_lens_outlined),
+                  title: Text('主题色'),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Wrap(
+                    spacing: 8,
+                    children: officialThemes
+                        .map(
+                          (theme) => ChoiceChip(
+                            selected: theme.id == selectedTheme.id,
+                            onSelected: (selected) {
+                              if (selected) {
+                                _run(
+                                    () => _selectTheme(context, ref, theme.id));
+                              }
+                            },
+                            avatar: CircleAvatar(
+                              backgroundColor: theme.seedColor,
+                            ),
+                            label: Text(theme.name),
                           ),
-                          label: Text(theme.name),
-                        ),
-                      )
-                      .toList(),
+                        )
+                        .toList(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 20),
-        _SectionTitle(title: '数据与隐私'),
-        Card(
-          child: Column(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.file_download_outlined),
-                title: const Text('导出完整备份'),
-                subtitle: const Text('只包含本地课程和设置，不包含账号或 Cookie'),
-                onTap: () => _exportBackup(context, ref),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.file_upload_outlined),
-                title: const Text('导入完整备份'),
-                onTap: () => _restoreBackup(context, ref),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: Icon(
-                  Icons.delete_outline,
-                  color: Theme.of(context).colorScheme.error,
+          const SizedBox(height: 20),
+          _SectionTitle(title: '数据与隐私'),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.file_download_outlined),
+                  title: const Text('导出完整备份'),
+                  subtitle: const Text('只包含本地课程和设置，不包含账号或 Cookie'),
+                  onTap: () => _run(() => _exportBackup(context, ref)),
                 ),
-                title: const Text('清除所有数据'),
-                onTap: () => _clearAllData(context, ref),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        _SectionTitle(title: '关于'),
-        Card(
-          child: Column(
-            children: [
-              const ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('西北大学课程表'),
-                subtitle: Text('Android First · Local First · 无广告无账号'),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.verified_outlined),
-                title: const Text('应用版本'),
-                subtitle: Text(nwuAppVersion),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.privacy_tip_outlined),
-                title: const Text('隐私说明'),
-                subtitle: const Text('本地存储，仅在主动导入时访问教务系统'),
-                onTap: () => _showPrivacyInfo(context),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.menu_book_outlined),
-                title: const Text('开源许可证'),
-                onTap: () => showLicensePage(
-                  context: context,
-                  applicationName: '西北大学课程表',
-                  applicationVersion: nwuAppVersion,
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.file_upload_outlined),
+                  title: const Text('导入完整备份'),
+                  onTap: () => _run(() => _restoreBackup(context, ref)),
                 ),
-              ),
-            ],
+                const Divider(height: 1),
+                ListTile(
+                  leading: Icon(
+                    Icons.delete_outline,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  title: const Text('清除所有数据'),
+                  onTap: () => _run(() => _clearAllData(context, ref)),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 20),
+          _SectionTitle(title: '关于'),
+          Card(
+            child: Column(
+              children: [
+                const ListTile(
+                  leading: Icon(Icons.info_outline),
+                  title: Text('西北大学课程表'),
+                  subtitle: Text('Android First · Local First · 无广告无账号'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.verified_outlined),
+                  title: const Text('应用版本'),
+                  subtitle: Text(nwuAppVersion),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip_outlined),
+                  title: const Text('隐私说明'),
+                  subtitle: const Text('本地存储，仅在主动导入时访问教务系统'),
+                  onTap: () => _showPrivacyInfo(context),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.menu_book_outlined),
+                  title: const Text('开源许可证'),
+                  onTap: () => showLicensePage(
+                    context: context,
+                    applicationName: '西北大学课程表',
+                    applicationVersion: nwuAppVersion,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -573,9 +599,25 @@ Future<void> _bestEffort(Future<void> Function() operation) async {
   }
 }
 
+Future<ScheduleLoadState> _loadScheduleForSync(WidgetRef ref) async {
+  ref.invalidate(scheduleLoadProvider);
+  final state = await ref.read(scheduleLoadProvider.future);
+  if (state is ScheduleCalendarMissing) throw const CalendarMissingError();
+  return state;
+}
+
 Future<void> _retryPlatformSync(BuildContext context, WidgetRef ref) async {
-  final state = ref.read(scheduleLoadProvider).asData?.value;
+  late final ScheduleLoadState state;
   try {
+    state = await _loadScheduleForSync(ref);
+  } catch (error) {
+    if (context.mounted) {
+      _showMessage(context, nwuUserMessage(error, action: '读取课表失败，已保留现有平台数据'));
+    }
+    return;
+  }
+  try {
+    if (!context.mounted) return;
     ref.read(notificationServiceProvider).invalidateCachedPlan();
     await Future.wait([
       ref.read(notificationTaskQueueProvider).schedule(state),
@@ -583,7 +625,9 @@ Future<void> _retryPlatformSync(BuildContext context, WidgetRef ref) async {
     ]);
     if (context.mounted) _showMessage(context, '平台同步已完成');
   } catch (error) {
-    if (context.mounted) _showMessage(context, '平台同步失败，请稍后重试');
+    if (context.mounted) {
+      _showMessage(context, nwuUserMessage(error, action: '平台同步失败，请稍后重试'));
+    }
   }
 }
 
@@ -648,11 +692,11 @@ Future<void> _setNotificationEnabled(
       if (context.mounted) _showMessage(context, '未获得通知权限，提醒未开启');
       return;
     }
+    final state = await _loadScheduleForSync(ref);
+    if (!context.mounted) return;
     await repository.setSetting('notifications.enabled', 'true');
     ref.invalidate(notificationEnabledProvider);
-    await ref.read(notificationTaskQueueProvider).schedule(
-          ref.read(scheduleLoadProvider).asData?.value,
-        );
+    await ref.read(notificationTaskQueueProvider).schedule(state);
     if (context.mounted) _showMessage(context, '上课提醒已开启');
   } catch (error) {
     if (context.mounted) {
@@ -685,12 +729,14 @@ Future<void> _selectNotificationLead(
   if (selected == null || !context.mounted) return;
   try {
     final repository = ref.read(scheduleDataRepositoryProvider);
+    final enabled =
+        await repository.getSetting('notifications.enabled') == 'true';
+    final state = enabled ? await _loadScheduleForSync(ref) : null;
+    if (!context.mounted) return;
     await repository.setSetting('notifications.leadMinutes', '$selected');
     ref.invalidate(notificationLeadMinutesProvider);
-    if (await repository.getSetting('notifications.enabled') == 'true') {
-      await ref.read(notificationTaskQueueProvider).schedule(
-            ref.read(scheduleLoadProvider).asData?.value,
-          );
+    if (enabled) {
+      await ref.read(notificationTaskQueueProvider).schedule(state);
     }
     if (context.mounted) _showMessage(context, '提醒时间已更新');
   } catch (error) {

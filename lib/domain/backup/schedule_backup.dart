@@ -6,6 +6,7 @@ import '../../core/utils/date_utils.dart';
 import '../../core/utils/week_mask.dart';
 import '../course/course.dart';
 import '../course/course_exception.dart';
+import '../course/exception_references.dart';
 import '../course/meeting_rule.dart';
 import '../semester/semester.dart';
 
@@ -548,34 +549,9 @@ class ScheduleBackup {
           '调课记录 ${exception.id} 引用了不存在的学期 ${exception.semesterId}',
         );
       }
-      if (exception.courseId != null &&
-          !courseIds.contains(exception.courseId)) {
-        throw BackupValidationException(
-          '调课记录 ${exception.id} 引用了不存在的课程 ${exception.courseId}',
-        );
-      }
-      final course =
-          exception.courseId == null ? null : coursesById[exception.courseId];
-      if (course != null && course.semesterId != exception.semesterId) {
-        throw BackupValidationException(
-          '调课记录 ${exception.id} 的课程与学期不一致',
-        );
-      }
-      if (exception.type != CourseExceptionType.add) {
-        final sourceMeetingId = exception.sourceMeetingId;
-        final rule =
-            sourceMeetingId == null ? null : rulesById[sourceMeetingId];
-        if (rule == null) {
-          throw BackupValidationException(
-            '调课记录 ${exception.id} 引用了不存在的上课安排 $sourceMeetingId',
-          );
-        }
-        if (rule.courseId != exception.courseId) {
-          throw BackupValidationException(
-            '调课记录 ${exception.id} 的上课安排与课程不一致',
-          );
-        }
-      }
+      final error = exceptionReferenceError(exception,
+          courses: coursesById, rules: rulesById);
+      if (error != null) throw BackupValidationException(error);
     }
     for (final snapshot in backup.importSnapshots) {
       if (!semesterIds.contains(snapshot.semesterId)) {

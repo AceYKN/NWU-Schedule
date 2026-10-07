@@ -9,6 +9,7 @@ import '../core/utils/latest_task_queue.dart';
 import '../data/database/app_database.dart' show AppDatabase;
 import '../data/repositories/drift_schedule_data_repository.dart';
 import '../domain/calendar/calendar_engine.dart';
+import '../domain/errors/app_error.dart';
 import '../domain/notification/notification_planner.dart';
 import '../domain/schedule/schedule_data_repository.dart';
 import '../domain/schedule/schedule_engine.dart';
@@ -305,6 +306,7 @@ Future<void> rebuildWidgetForCurrentSchedule({
   required WidgetService service,
   required ScheduleLoadState? state,
 }) async {
+  if (state is ScheduleCalendarMissing) throw const CalendarMissingError();
   if (state is! ScheduleReady) {
     await service.clear();
     return;
@@ -330,6 +332,7 @@ Future<void> rebuildNotificationsForCurrentSchedule({
     await service.clear();
     return;
   }
+  if (state is ScheduleCalendarMissing) throw const CalendarMissingError();
   if (state is! ScheduleReady) {
     await service.clear();
     return;

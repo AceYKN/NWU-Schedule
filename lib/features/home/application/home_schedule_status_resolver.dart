@@ -91,9 +91,7 @@ final class HomeOutsideTeachingTermState extends HomeScheduleState {
 /// the week view. Calendar labels are secondary context and never suppress a
 /// real current or upcoming course.
 class HomeScheduleStatusResolver {
-  const HomeScheduleStatusResolver({this.lookAheadDays = 7});
-
-  final int lookAheadDays;
+  const HomeScheduleStatusResolver();
 
   HomeScheduleState resolve({
     required ScheduleEngine engine,
@@ -103,7 +101,7 @@ class HomeScheduleStatusResolver {
     final today = dateOnly(campusNow);
     final todayCourses = engine.getCoursesForDate(today);
     final todayType = _dayType(engine, today);
-    final next = _findNext(engine, campusNow, today);
+    final next = _findNext(engine, now, today);
 
     for (final course in todayCourses) {
       if (!campusNow.isBefore(course.startTime) &&
@@ -160,22 +158,16 @@ class HomeScheduleStatusResolver {
 
   NextScheduleSummary? _findNext(
     ScheduleEngine engine,
-    DateTime campusNow,
+    DateTime now,
     DateTime today,
   ) {
-    for (var offset = 0; offset <= lookAheadDays; offset++) {
-      final date = addCalendarDays(today, offset);
-      for (final course in engine.getCoursesForDate(date)) {
-        if (course.startTime.isAfter(campusNow)) {
-          return NextScheduleSummary(
-            course: course,
-            dayType: _dayType(engine, date),
-            daysFromToday: offset,
-          );
-        }
-      }
-    }
-    return null;
+    final course = engine.getNextCourse(now);
+    if (course == null) return null;
+    return NextScheduleSummary(
+      course: course,
+      dayType: _dayType(engine, course.date),
+      daysFromToday: calendarDaysBetween(course.date, today),
+    );
   }
 
   AcademicDayType _dayType(ScheduleEngine engine, DateTime date) {

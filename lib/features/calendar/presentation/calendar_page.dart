@@ -45,8 +45,11 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
         child: Text(nwuUserMessage(error, action: '读取本地课表失败')),
       ),
       data: (value) {
+        if (value is ScheduleCalendarMissing) {
+          return const Center(child: Text('学期已保存，但缺少校历，请更新应用后重试'));
+        }
         if (value is! ScheduleReady) {
-          return const Center(child: Text('当前没有可展示的校历'));
+          return const Center(child: Text('尚未创建或导入学期'));
         }
         final engine = value.engine;
         final campusNow = CampusClock.toCampusWallTime(

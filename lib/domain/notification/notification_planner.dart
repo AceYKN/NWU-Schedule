@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../core/time/campus_clock.dart';
 import '../../core/utils/date_utils.dart';
 import '../schedule/effective_course_instance.dart';
@@ -31,9 +33,10 @@ class PlannedNotification {
 }
 
 class NotificationPlanner {
-  const NotificationPlanner({this.maxRequests});
+  const NotificationPlanner({this.maxRequests, this.idHash = _stableId});
 
   final int? maxRequests;
+  final int Function(String) idHash;
 
   List<PlannedNotification> build({
     required ScheduleEngine engine,
@@ -68,13 +71,35 @@ class NotificationPlanner {
         if (!fireAtUtc.isAfter(nowUtc)) continue;
         if (until != null && fireAtUtc.isAfter(until.toUtc())) continue;
         result.add(_buildRequest(instance, fireAtUtc));
-        if (maxRequests != null && result.length >= maxRequests!) {
-          return List.unmodifiable(result);
-        }
       }
     }
-    result.sort((left, right) => left.fireAtUtc.compareTo(right.fireAtUtc));
-    return List.unmodifiable(result);
+    // Assign in identity order so collisions do not depend on database order.
+    // A rebuild replaces the entire plan, including IDs from the previous plan.
+    result.sort((left, right) => left.payload.compareTo(right.payload));
+    final usedIds = <int>{};
+    final assigned = <PlannedNotification>[];
+    for (final request in result) {
+      var id = idHash(request.payload) & 0x7fffffff;
+      if (id == 0) id = 1;
+      while (!usedIds.add(id)) {
+        id = id == 0x7fffffff ? 1 : id + 1;
+      }
+      assigned.add(PlannedNotification(
+        id: id,
+        fireAtUtc: request.fireAtUtc,
+        title: request.title,
+        body: request.body,
+        payload: request.payload,
+        route: request.route,
+      ));
+    }
+    assigned.sort((left, right) {
+      final time = left.fireAtUtc.compareTo(right.fireAtUtc);
+      return time != 0 ? time : left.payload.compareTo(right.payload);
+    });
+    return List.unmodifiable(
+      maxRequests == null ? assigned : assigned.take(maxRequests!),
+    );
   }
 
   PlannedNotification _buildRequest(
@@ -86,13 +111,14 @@ class NotificationPlanner {
         ? instance.teacher!.trim()
         : '教师待定';
     final start = _formatTime(instance.startTime);
-    final key = [
+    final key = jsonEncode([
       instance.course.id,
-      instance.meetingRule?.id ?? 'exception',
+      instance.meetingRule?.id,
+      instance.exceptionId,
       dateOnly(instance.date).toIso8601String(),
       instance.startSection,
       instance.endSection,
-    ].join('|');
+    ]);
     return PlannedNotification(
       id: _stableId(key),
       fireAtUtc: fireAtUtc,

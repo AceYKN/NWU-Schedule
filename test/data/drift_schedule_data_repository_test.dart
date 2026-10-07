@@ -1608,15 +1608,18 @@ void main() {
         ),
       );
 
-      await repository.commitImportedTimetable(
-        timetable(
+      final incoming = timetable(
           meetingKey: 'new-meeting',
           weekday: 5,
           startSection: 7,
           endSection: 8,
-          weekMask: WeekMask.fromWeeks([17, 18, 19, 20]),
-        ),
-      );
+          weekMask: WeekMask.fromWeeks([17, 18, 19, 20]));
+      final preview = await repository.previewImportedTimetable(incoming);
+      expect(preview.exceptionImpacts.single.exception.id,
+          'cancel-structural-identity');
+      await repository.commitImportedTimetable(incoming,
+          expectedPreviewRevision: preview.previewRevision,
+          removeExceptionIds: {'cancel-structural-identity'});
 
       final second = await repository.loadSemester('nwu-2026-2027-1');
       expect(second.meetingRules.single.id, isNot(oldRule.id));

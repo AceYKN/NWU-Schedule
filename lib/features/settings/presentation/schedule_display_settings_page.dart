@@ -8,13 +8,37 @@ import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
 import '../../../core/nwu/periods.dart';
 import '../../../domain/settings/schedule_display_preferences.dart';
+import '../../../domain/errors/app_error.dart';
 import '../../shared/presentation/app_page_header.dart';
 
-class ScheduleDisplaySettingsPage extends ConsumerWidget {
+class ScheduleDisplaySettingsPage extends ConsumerStatefulWidget {
   const ScheduleDisplaySettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ScheduleDisplaySettingsPage> createState() =>
+      _ScheduleDisplaySettingsPageState();
+}
+
+class _ScheduleDisplaySettingsPageState
+    extends ConsumerState<ScheduleDisplaySettingsPage> {
+  bool _busy = false;
+  Future<void> _run(Future<void> Function() operation) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await operation();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(nwuUserMessage(error, action: '更新课表显示失败'))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final preferences =
         ref.watch(scheduleDisplayPreferencesProvider).asData?.value ??
             const ScheduleDisplayPreferences.defaults();
@@ -25,89 +49,96 @@ class ScheduleDisplaySettingsPage extends ConsumerWidget {
         courseNames[course.id] = course.name;
       }
     }
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
-      children: [
-        AppPageHeader(
-          title: '课表显示',
-          showBack: true,
-          onBack: () => context.go('/settings'),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '预览',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontSize: scheduleThemeTokensOf(context).sectionTitleSize,
-                fontWeight: FontWeight.w700,
+    return IgnorePointer(
+        ignoring: _busy,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
+          children: [
+            if (_busy) const Text('正在处理…'),
+            AppPageHeader(
+              title: '课表显示',
+              showBack: true,
+              onBack: () => context.go('/settings'),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '预览',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontSize: scheduleThemeTokensOf(context).sectionTitleSize,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            _SchedulePreview(preferences: preferences),
+            const SizedBox(height: 20),
+            Card(
+              child: Column(
+                children: [
+                  _PreferenceSwitch(
+                    title: '始终显示周末',
+                    subtitle: '关闭时，有周末课程的周会提示你临时查看周末',
+                    value: preferences.showWeekend,
+                    onChanged: (value) =>
+                        _run(() => _save(ref, 'showWeekend', value)),
+                  ),
+                  const Divider(height: 1),
+                  _PreferenceSwitch(
+                    title: '显示教师',
+                    value: preferences.showTeacher,
+                    onChanged: (value) =>
+                        _run(() => _save(ref, 'showTeacher', value)),
+                  ),
+                  const Divider(height: 1),
+                  _PreferenceSwitch(
+                    title: '显示非本周课程',
+                    value: preferences.showInactiveCourses,
+                    onChanged: (value) =>
+                        _run(() => _save(ref, 'showInactiveCourses', value)),
+                  ),
+                  const Divider(height: 1),
+                  _PreferenceSwitch(
+                    title: '显示节次时间',
+                    value: preferences.showPeriodTimes,
+                    onChanged: (value) =>
+                        _run(() => _save(ref, 'showPeriodTimes', value)),
+                  ),
+                  const Divider(height: 1),
+                  _PreferenceSwitch(
+                    title: '高亮当前节次',
+                    value: preferences.highlightCurrentPeriod,
+                    onChanged: (value) =>
+                        _save(ref, 'highlightCurrentPeriod', value),
+                  ),
+                  const Divider(height: 1),
+                  _PreferenceSwitch(
+                    title: '显示“返回本周”按钮',
+                    value: preferences.showBackToCurrentWeekFab,
+                    onChanged: (value) =>
+                        _save(ref, 'showBackToCurrentWeekFab', value),
+                  ),
+                ],
               ),
-        ),
-        const SizedBox(height: 8),
-        _SchedulePreview(preferences: preferences),
-        const SizedBox(height: 20),
-        Card(
-          child: Column(
-            children: [
-              _PreferenceSwitch(
-                title: '始终显示周末',
-                subtitle: '关闭时，有周末课程的周会提示你临时查看周末',
-                value: preferences.showWeekend,
-                onChanged: (value) => _save(ref, 'showWeekend', value),
-              ),
-              const Divider(height: 1),
-              _PreferenceSwitch(
-                title: '显示教师',
-                value: preferences.showTeacher,
-                onChanged: (value) => _save(ref, 'showTeacher', value),
-              ),
-              const Divider(height: 1),
-              _PreferenceSwitch(
-                title: '显示非本周课程',
-                value: preferences.showInactiveCourses,
-                onChanged: (value) => _save(ref, 'showInactiveCourses', value),
-              ),
-              const Divider(height: 1),
-              _PreferenceSwitch(
-                title: '显示节次时间',
-                value: preferences.showPeriodTimes,
-                onChanged: (value) => _save(ref, 'showPeriodTimes', value),
-              ),
-              const Divider(height: 1),
-              _PreferenceSwitch(
-                title: '高亮当前节次',
-                value: preferences.highlightCurrentPeriod,
-                onChanged: (value) =>
-                    _save(ref, 'highlightCurrentPeriod', value),
-              ),
-              const Divider(height: 1),
-              _PreferenceSwitch(
-                title: '显示“返回本周”按钮',
-                value: preferences.showBackToCurrentWeekFab,
-                onChanged: (value) =>
-                    _save(ref, 'showBackToCurrentWeekFab', value),
+            ),
+            if (preferences.hiddenCourseIds.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              _HiddenCoursesCard(
+                courseIds: preferences.hiddenCourseIds,
+                courseNames: courseNames,
+                onRestore: (courseId) => _run(() => _restoreHidden(
+                      context,
+                      ref,
+                      courseId,
+                      courseNames[courseId] ?? courseId,
+                    )),
+                onRestoreAll: () => _run(() => _restoreAllHidden(
+                      context,
+                      ref,
+                      preferences.hiddenCourseIds,
+                    )),
               ),
             ],
-          ),
-        ),
-        if (preferences.hiddenCourseIds.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          _HiddenCoursesCard(
-            courseIds: preferences.hiddenCourseIds,
-            courseNames: courseNames,
-            onRestore: (courseId) => _restoreHidden(
-              context,
-              ref,
-              courseId,
-              courseNames[courseId] ?? courseId,
-            ),
-            onRestoreAll: () => _restoreAllHidden(
-              context,
-              ref,
-              preferences.hiddenCourseIds,
-            ),
-          ),
-        ],
-      ],
-    );
+          ],
+        ));
   }
 
   Future<void> _save(WidgetRef ref, String name, bool value) async {
@@ -140,7 +171,7 @@ class ScheduleDisplaySettingsPage extends ConsumerWidget {
         duration: const Duration(seconds: 5),
         action: SnackBarAction(
           label: '撤销',
-          onPressed: () => unawaited(_addHidden(ref, courseId)),
+          onPressed: () => unawaited(_run(() => _addHidden(ref, courseId))),
         ),
       ),
     );
@@ -161,7 +192,8 @@ class ScheduleDisplaySettingsPage extends ConsumerWidget {
         duration: const Duration(seconds: 5),
         action: SnackBarAction(
           label: '撤销',
-          onPressed: () => unawaited(_setHidden(ref, previousHidden)),
+          onPressed: () =>
+              unawaited(_run(() => _setHidden(ref, previousHidden))),
         ),
       ),
     );

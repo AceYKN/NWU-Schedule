@@ -22,6 +22,7 @@ import '../../../infrastructure/import/nwu_dom_extractor.dart';
 import '../../../infrastructure/import/nwu_zhengfang_v9_importer.dart';
 import '../../../infrastructure/import/webview_diagnostics.dart';
 import '../../../infrastructure/import/webview_session_service.dart';
+import 'import_exception_impacts.dart';
 
 class TimetableImportPage extends ConsumerStatefulWidget {
   const TimetableImportPage({super.key});
@@ -430,13 +431,41 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     }
     setState(() => _saving = true);
     try {
+      final impacts = diff.exceptionImpacts;
+      final confirmed = await confirmImportExceptionImpacts(context, impacts);
+      if (!confirmed || !mounted) return;
       await ref.read(scheduleDataRepositoryProvider).commitImportedTimetable(
-            timetable,
-            adapterVersion: NwuZhengfangV9Importer.adapterVersion,
-            resolution: _resolution,
-          );
+        timetable,
+        adapterVersion: NwuZhengfangV9Importer.adapterVersion,
+        resolution: _resolution,
+        expectedPreviewRevision: diff.previewRevision,
+        removeExceptionIds: {
+          for (final impact in impacts)
+            if (impact.removed) impact.exception.id
+        },
+      );
       ref.invalidate(scheduleLoadProvider);
       if (mounted) context.go('/');
+    } on ImportPreviewExpiredException {
+      try {
+        final refreshed = await _buildDiff(timetable);
+        if (mounted) {
+          setState(() {
+            _diff = refreshed;
+            _resolution = ImportConflictResolution.empty;
+            _error = '本地课表已变化，预览已更新。请重新检查后确认导入。';
+          });
+        }
+      } catch (error) {
+        if (mounted) {
+          setState(() {
+            _diff = null;
+            _error = nwuUserMessage(error, action: '更新预览失败，请重新读取');
+          });
+        }
+      }
+    } on ImportExceptionRemovalConfirmationRequired {
+      _setError('受影响的临时变更已变化，请重新读取课表并确认。');
     } on TimetableImportConflictException {
       _setError('发现本地与教务系统同时修改的课程，导入已取消，未写入部分数据');
     } on Object catch (error) {
@@ -506,6 +535,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   }
 
   Future<void> _showConflictResolution() async {
+    if (_saving || _reading) return;
     final diff = _diff;
     if (diff == null || (!diff.hasConflicts && !diff.hasLocallyDeleted)) {
       return;
@@ -772,6 +802,15 @@ class TimetableImportPreviewCard extends StatelessWidget {
                       ],
                       if (diff != null) ...[
                         const SizedBox(height: 4),
+                        if (diff!.exceptionImpacts.isNotEmpty) ...[
+                          Text('影响 ${diff!.exceptionImpacts.length} 条临时变更',
+                              style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontWeight: FontWeight.w700)),
+                          Text(importExceptionImpactSummary(
+                              diff!.exceptionImpacts)),
+                          const SizedBox(height: 8),
+                        ],
                         if (diff!.isNewSemester)
                           const Text(
                             '发现新的学期，确认后会建立独立的本地课表，不会覆盖其他学期。',
@@ -807,7 +846,7 @@ class TimetableImportPreviewCard extends StatelessWidget {
                           Align(
                             alignment: Alignment.centerLeft,
                             child: OutlinedButton.icon(
-                              onPressed: onResolveConflicts,
+                              onPressed: saving ? null : onResolveConflicts,
                               icon: const Icon(Icons.merge_type),
                               label: Text(
                                 diff!.hasConflicts ? '解决冲突' : '处理本地删除课程',
@@ -865,8 +904,12 @@ class TimetableImportPreviewCard extends StatelessWidget {
               alignment: WrapAlignment.end,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                TextButton(onPressed: onCancel, child: const Text('取消')),
-                TextButton(onPressed: onRetry, child: const Text('重新读取')),
+                TextButton(
+                    onPressed: saving ? null : onCancel,
+                    child: const Text('取消')),
+                TextButton(
+                    onPressed: saving ? null : onRetry,
+                    child: const Text('重新读取')),
                 const SizedBox(width: 4),
                 FilledButton(
                   onPressed:

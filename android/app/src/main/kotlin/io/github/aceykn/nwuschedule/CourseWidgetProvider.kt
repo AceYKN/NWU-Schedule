@@ -9,6 +9,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.net.Uri
+import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONArray
@@ -19,6 +20,20 @@ import java.util.TimeZone
 
 class CourseWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
+        val pending = goAsync()
+        val appContext = context.applicationContext
+        PlatformTaskRunner.execute {
+            try {
+                dispatchReceive(appContext, intent)
+            } catch (error: Exception) {
+                Log.e("CourseWidget", "Widget refresh failed", error)
+            } finally {
+                pending?.finish()
+            }
+        }
+    }
+
+    private fun dispatchReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         when (intent.action) {
             Intent.ACTION_DATE_CHANGED,
@@ -26,7 +41,6 @@ class CourseWidgetProvider : AppWidgetProvider() {
             Intent.ACTION_TIMEZONE_CHANGED,
             WidgetBoundaryScheduler.ACTION_WIDGET_BOUNDARY_REFRESH -> {
                 refresh(context)
-                WidgetBoundaryScheduler.scheduleNext(context)
             }
         }
     }
@@ -36,10 +50,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
-        for (appWidgetId in appWidgetIds) {
-            render(context, appWidgetManager, appWidgetId)
-        }
-        WidgetBoundaryScheduler.scheduleNext(context)
+        refresh(context, appWidgetIds)
     }
 
     override fun onEnabled(context: Context) {
@@ -57,17 +68,77 @@ class CourseWidgetProvider : AppWidgetProvider() {
         newOptions: Bundle,
     ) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
-        render(context, appWidgetManager, appWidgetId)
+        refresh(context, intArrayOf(appWidgetId))
     }
 
     companion object {
         fun refresh(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
-            val component = ComponentName(context, CourseWidgetProvider::class.java)
-            val ids = manager.getAppWidgetIds(component)
-            for (id in ids) {
-                render(context, manager, id)
+            val ids = manager.getAppWidgetIds(ComponentName(context, CourseWidgetProvider::class.java))
+            refresh(context, ids)
+        }
+
+        internal fun refresh(
+            context: Context,
+            ids: IntArray,
+            snapshotLoader: () -> JSONObject = { readSnapshot(context) },
+        ) {
+            if (ids.isEmpty()) {
+                WidgetBoundaryScheduler.cancel(context)
+                return
             }
+            val manager = AppWidgetManager.getInstance(context)
+            val snapshot = snapshotLoader()
+            val now = System.currentTimeMillis()
+            val projection = project(snapshot, now)
+            for (id in ids) render(context, manager, id, projection)
+            WidgetBoundaryScheduler.scheduleNext(context, WidgetBoundaryScheduler.nextBoundary(snapshot, now))
+        }
+
+        internal data class Projection(
+            val next: JSONObject?,
+            val today: List<JSONObject>,
+            val tomorrow: List<JSONObject>,
+            val todayKey: String,
+            val tomorrowKey: String,
+        )
+
+        internal fun project(snapshot: JSONObject, now: Long): Projection {
+            val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Shanghai"), Locale.US)
+            calendar.timeInMillis = now
+            val today = dateKey(calendar)
+            val nowKey = "${today}T" + String.format(Locale.US, "%02d:%02d",
+                calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE))
+            calendar.add(Calendar.DAY_OF_MONTH, 1)
+            val tomorrow = dateKey(calendar)
+            if (!snapshot.has("instances")) return Projection(snapshot.optJSONObject("next"),
+                array(snapshot.optJSONArray("today")), array(snapshot.optJSONArray("tomorrow")), today, tomorrow)
+            val todayItems = mutableListOf<JSONObject>()
+            val tomorrowItems = mutableListOf<JSONObject>()
+            var next: JSONObject? = null
+            var nextKey: String? = null
+            val instances = snapshot.optJSONArray("instances")
+            for (index in 0 until (instances?.length() ?: 0)) {
+                val item = instances?.optJSONObject(index) ?: continue
+                when (itemDate(item)) {
+                    today -> todayItems.add(item)
+                    tomorrow -> tomorrowItems.add(item)
+                }
+                val start = startKey(item)
+                if (start != null && start > nowKey && (nextKey == null || start < nextKey)) {
+                    next = item
+                    nextKey = start
+                }
+            }
+            return Projection(next, todayItems.sortedBy { startKey(it) },
+                tomorrowItems.sortedBy { startKey(it) }, today, tomorrow)
+        }
+
+        internal fun relativeDate(item: JSONObject, projection: Projection): String = when (val date = itemDate(item)) {
+            projection.todayKey -> "今天"
+            projection.tomorrowKey -> "明天"
+            "" -> "日期待补充"
+            else -> date
         }
 
         internal fun chooseLayout(width: Int, height: Int, fontScale: Float): Int = when {
@@ -98,6 +169,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
             context: Context,
             manager: AppWidgetManager,
             appWidgetId: Int,
+            snapshot: Projection,
         ) {
             val options = manager.getAppWidgetOptions(appWidgetId)
             val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
@@ -106,7 +178,6 @@ class CourseWidgetProvider : AppWidgetProvider() {
             val layout = chooseLayout(minWidth, minHeight, scale)
             val rows = rowBudget(minHeight, layout == R.layout.widget_large, scale)
             val views = RemoteViews(context.packageName, layout)
-            val snapshot = readSnapshot(context)
             when (layout) {
                 R.layout.widget_small -> renderSmall(context, views, snapshot, appWidgetId, smallContentBudget(minHeight, scale))
                 R.layout.widget_medium -> renderMedium(context, views, snapshot, appWidgetId, rows)
@@ -118,7 +189,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
         private fun renderSmall(
             context: Context,
             views: RemoteViews,
-            snapshot: JSONObject,
+            snapshot: Projection,
             appWidgetId: Int,
             budget: SmallContentBudget,
         ) {
@@ -127,17 +198,19 @@ class CourseWidgetProvider : AppWidgetProvider() {
             views.setViewVisibility(R.id.widget_small_label, if (budget.label) View.VISIBLE else View.GONE)
             views.setViewVisibility(R.id.widget_small_meta, if (budget.meta) View.VISIBLE else View.GONE)
             views.setInt(R.id.widget_small_name, "setMaxLines", budget.titleLines)
-            val next = nextItem(snapshot)
+            val next = snapshot.next
             if (next == null) {
                 views.setTextViewText(R.id.widget_small_label, "下一节")
                 views.setTextViewText(R.id.widget_small_name, "暂无课程")
                 views.setTextViewText(R.id.widget_small_meta, "")
             } else {
-                views.setTextViewText(R.id.widget_small_label, "下一节")
-                views.setTextViewText(R.id.widget_small_name, next.text("courseName"))
+                val date = relativeDate(next, snapshot)
+                views.setTextViewText(R.id.widget_small_label, "$date · 下一节")
+                views.setTextViewText(R.id.widget_small_name,
+                    if (!budget.label && !budget.meta) "$date · ${next.text("courseName")}" else next.text("courseName"))
                 views.setTextViewText(
                     R.id.widget_small_meta,
-                    "${time(next.text("startTime"))}  ${locationOrPlaceholder(next)}",
+                    "${if (budget.label) "" else "$date "}${time(next.text("startTime"))}  ${locationOrPlaceholder(next)}",
                 )
             }
             views.setOnClickPendingIntent(
@@ -149,11 +222,11 @@ class CourseWidgetProvider : AppWidgetProvider() {
         private fun renderMedium(
             context: Context,
             views: RemoteViews,
-            snapshot: JSONObject,
+            snapshot: Projection,
             appWidgetId: Int,
             maxRows: Int,
         ) {
-            val items = todayItems(snapshot)
+            val items = snapshot.today
             views.removeAllViews(R.id.widget_today_list)
             views.setTextViewText(
                 R.id.widget_empty,
@@ -174,12 +247,12 @@ class CourseWidgetProvider : AppWidgetProvider() {
         private fun renderLarge(
             context: Context,
             views: RemoteViews,
-            snapshot: JSONObject,
+            snapshot: Projection,
             appWidgetId: Int,
             maxRows: Int,
         ) {
-            val today = todayItems(snapshot)
-            val tomorrow = tomorrowItems(snapshot)
+            val today = snapshot.today
+            val tomorrow = snapshot.tomorrow
             views.removeAllViews(R.id.widget_today_list)
             views.removeAllViews(R.id.widget_tomorrow_list)
             addItems(
@@ -291,42 +364,6 @@ class CourseWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private fun nextItem(snapshot: JSONObject): JSONObject? {
-            if (!snapshot.has("instances")) {
-                return snapshot.optJSONObject("next")
-            }
-            val nowKey = campusNowKey()
-            return array(snapshot.optJSONArray("instances"))
-                .mapNotNull { item ->
-                    val startKey = startKey(item)
-                    if (startKey != null && startKey > nowKey) {
-                        startKey to item
-                    } else {
-                        null
-                    }
-                }
-                .minByOrNull { it.first }
-                ?.second
-        }
-
-        private fun todayItems(snapshot: JSONObject): List<JSONObject> {
-            if (!snapshot.has("instances")) {
-                return array(snapshot.optJSONArray("today"))
-            }
-            val today = campusDateKey()
-            return array(snapshot.optJSONArray("instances"))
-                .filter { itemDate(it) == today }
-        }
-
-        private fun tomorrowItems(snapshot: JSONObject): List<JSONObject> {
-            if (!snapshot.has("instances")) {
-                return array(snapshot.optJSONArray("tomorrow"))
-            }
-            val tomorrow = campusDateKey(offsetDays = 1)
-            return array(snapshot.optJSONArray("instances"))
-                .filter { itemDate(it) == tomorrow }
-        }
-
         private fun itemDate(item: JSONObject): String {
             val date = item.optString("date", "")
             if (date.length >= 10) return date.substring(0, 10)
@@ -336,29 +373,6 @@ class CourseWidgetProvider : AppWidgetProvider() {
         private fun startKey(item: JSONObject): String? {
             val value = item.optString("startTime", "")
             return value.takeIf { it.length >= 16 }?.substring(0, 16)
-        }
-
-        private fun campusDateKey(offsetDays: Int = 0): String {
-            val calendar = Calendar.getInstance(
-                TimeZone.getTimeZone("Asia/Shanghai"),
-                Locale.US,
-            )
-            calendar.add(Calendar.DAY_OF_MONTH, offsetDays)
-            return dateKey(calendar)
-        }
-
-        private fun campusNowKey(): String {
-            val calendar = Calendar.getInstance(
-                TimeZone.getTimeZone("Asia/Shanghai"),
-                Locale.US,
-            )
-            return "${dateKey(calendar)}T" +
-                String.format(
-                    Locale.US,
-                    "%02d:%02d",
-                    calendar.get(Calendar.HOUR_OF_DAY),
-                    calendar.get(Calendar.MINUTE),
-                )
         }
 
         private fun dateKey(calendar: Calendar): String = String.format(

@@ -15,6 +15,7 @@ import '../../domain/course/course_canonicalizer.dart';
 import '../../domain/course/course_field_normalizer.dart';
 import '../../domain/course/course_exception.dart' as domain;
 import '../../domain/course/course_identity.dart';
+import '../../domain/course/exception_references.dart';
 import '../../domain/course/meeting_rule.dart' as domain;
 import '../../domain/import/import_diff.dart';
 import '../../domain/import/import_identity.dart';
@@ -381,6 +382,10 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         database.courseExceptions,
       )..where((table) => table.courseId.equals(course.id)))
           .get();
+      if (!exceptionIds
+          .every((id) => exceptionRows.any((row) => row.id == id))) {
+        throw ArgumentError('只能移除当前课程关联的临时变更');
+      }
       final canonicalized = CourseCanonicalizer.canonicalize(
         courses: [course],
         meetingRules: rules,
@@ -389,6 +394,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             if (!exceptionIds.contains(row.id)) _exceptionFromRow(row),
         ],
       );
+      _validateRetainedExceptions(canonicalized);
       await _upsertCourse(
         canonicalized.courses.single,
         canonicalized.meetingRules,
@@ -457,6 +463,10 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         database.courseExceptions,
       )..where((table) => table.courseId.isIn(courseIds)))
           .get();
+      if (!exceptionIds
+          .every((id) => exceptionRows.any((row) => row.id == id))) {
+        throw ArgumentError('只能移除当前课程关联的临时变更');
+      }
       final canonicalized = CourseCanonicalizer.canonicalize(
         courses: [editedCourse, target],
         meetingRules: [...editedRules, ...targetRules],
@@ -465,6 +475,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             if (!exceptionIds.contains(row.id)) _exceptionFromRow(row),
         ],
       );
+      _validateRetainedExceptions(canonicalized);
       final canonicalCourse = canonicalized.courses.single;
 
       await (database.delete(
@@ -504,42 +515,76 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     });
   }
 
-  @override
-  Future<void> saveException(domain.CourseException exception) async {
-    final semester = (await loadSemesters())
-        .singleWhere((s) => s.id == exception.semesterId);
-    await _validateExceptionDates(exception, semester);
-    await database.into(database.courseExceptions).insertOnConflictUpdate(
-          db.CourseExceptionsCompanion.insert(
-            id: exception.id,
-            semesterId: exception.semesterId,
-            courseId: Value(exception.courseId),
-            sourceMeetingId: Value(exception.sourceMeetingId),
-            sourceDate: Value(exception.sourceDate),
-            sourceDateKey: Value(exception.sourceDate == null
-                ? null
-                : dateKey(exception.sourceDate!)),
-            type: exception.type.name,
-            targetDate: Value(exception.targetDate),
-            targetDateKey: Value(exception.targetDate == null
-                ? null
-                : dateKey(exception.targetDate!)),
-            colorOverride: Value(exception.colorOverride),
-            targetStartSection: Value(exception.targetStartSection),
-            targetEndSection: Value(exception.targetEndSection),
-            teacherOverride: Value(
-              normalizeTeacherOverride(exception.teacherOverride),
-            ),
-            campusOverride: Value(
-              normalizeCampusOverride(exception.campusOverride),
-            ),
-            roomOverride: Value(normalizeRoomOverride(exception.roomOverride)),
-            addedCourseName: Value(exception.addedCourseName),
-            note: Value(exception.note),
-            createdAt: DateTime.now(),
-          ),
-        );
+  void _validateRetainedExceptions(CanonicalizedSchedule schedule) {
+    final courses = {for (final course in schedule.courses) course.id: course};
+    final rules = {for (final rule in schedule.meetingRules) rule.id: rule};
+    for (final exception in schedule.exceptions) {
+      final error =
+          exceptionReferenceError(exception, courses: courses, rules: rules);
+      if (error != null) throw StateError('$error，请先确认移除关联的临时变更');
+    }
   }
+
+  Future<void> _validateExceptionReferences(
+      domain.CourseException exception) async {
+    final course = exception.courseId == null
+        ? null
+        : await (database.select(database.courses)
+              ..where((t) => t.id.equals(exception.courseId!)))
+            .getSingleOrNull();
+    final rule = exception.sourceMeetingId == null
+        ? null
+        : await (database.select(database.meetingRules)
+              ..where((t) => t.id.equals(exception.sourceMeetingId!)))
+            .getSingleOrNull();
+    final error = exceptionReferenceError(exception,
+        courses: {if (course != null) course.id: _courseFromRow(course)},
+        rules: {if (rule != null) rule.id: _meetingRuleFromRow(rule)});
+    if (error != null) throw ArgumentError(error);
+  }
+
+  @override
+  Future<void> saveException(domain.CourseException exception) =>
+      database.transaction(() async {
+        final semester = (await loadSemesters())
+            .singleWhere((s) => s.id == exception.semesterId);
+        await _validateExceptionDates(exception, semester);
+        await _validateExceptionReferences(exception);
+        final previous = await (database.select(database.courseExceptions)
+              ..where((t) => t.id.equals(exception.id)))
+            .getSingleOrNull();
+        await database.into(database.courseExceptions).insertOnConflictUpdate(
+              db.CourseExceptionsCompanion.insert(
+                id: exception.id,
+                semesterId: exception.semesterId,
+                courseId: Value(exception.courseId),
+                sourceMeetingId: Value(exception.sourceMeetingId),
+                sourceDate: Value(exception.sourceDate),
+                sourceDateKey: Value(exception.sourceDate == null
+                    ? null
+                    : dateKey(exception.sourceDate!)),
+                type: exception.type.name,
+                targetDate: Value(exception.targetDate),
+                targetDateKey: Value(exception.targetDate == null
+                    ? null
+                    : dateKey(exception.targetDate!)),
+                colorOverride: Value(exception.colorOverride),
+                targetStartSection: Value(exception.targetStartSection),
+                targetEndSection: Value(exception.targetEndSection),
+                teacherOverride: Value(
+                  normalizeTeacherOverride(exception.teacherOverride),
+                ),
+                campusOverride: Value(
+                  normalizeCampusOverride(exception.campusOverride),
+                ),
+                roomOverride:
+                    Value(normalizeRoomOverride(exception.roomOverride)),
+                addedCourseName: Value(exception.addedCourseName),
+                note: Value(exception.note),
+                createdAt: previous?.createdAt ?? DateTime.now(),
+              ),
+            );
+      });
 
   Future<void> _validateExceptionDates(
       domain.CourseException exception, domain.Semester semester) async {
@@ -716,7 +761,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         await database.select(database.importSnapshots).get();
     final deletedSourceItems =
         await database.select(database.deletedSourceItems).get();
-    return ScheduleBackup(
+    final backup = ScheduleBackup(
       appVersion: nwuAppVersion,
       createdAt: DateTime.now().toUtc(),
       semesters: semesters,
@@ -750,6 +795,7 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
           ),
       ],
     );
+    return ScheduleBackup.fromJson(backup.toJson());
   }
 
   @override
@@ -951,8 +997,10 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     if (!report.isValid) {
       throw TimetableImportValidationException(report);
     }
-    final context = await _loadImportDiffContext(timetable);
-    return context.diff;
+    return database.transaction(() async {
+      final context = await _loadImportDiffContext(timetable);
+      return context.diff;
+    });
   }
 
   @override
@@ -960,14 +1008,21 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     RemoteTimetable timetable, {
     String adapterVersion = 'nwu-zhengfang-v1',
     ImportConflictResolution resolution = ImportConflictResolution.empty,
+    String? expectedPreviewRevision,
+    Set<String> removeExceptionIds = const {},
   }) =>
       database.transaction(() => _commitImportedTimetable(timetable,
-          adapterVersion: adapterVersion, resolution: resolution));
+          adapterVersion: adapterVersion,
+          resolution: resolution,
+          expectedPreviewRevision: expectedPreviewRevision,
+          removeExceptionIds: removeExceptionIds));
 
   Future<void> _commitImportedTimetable(
     RemoteTimetable timetable, {
     required String adapterVersion,
     required ImportConflictResolution resolution,
+    required String? expectedPreviewRevision,
+    required Set<String> removeExceptionIds,
   }) async {
     final report = validateTimetable(timetable);
     if (!report.isValid) {
@@ -978,9 +1033,22 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
     final existingSemester = context.existingSemester;
     final local = context.local;
     final rawDiff = context.diff;
+    if (expectedPreviewRevision != null &&
+        expectedPreviewRevision != rawDiff.previewRevision) {
+      throw const ImportPreviewExpiredException();
+    }
     final diff = rawDiff.resolve(resolution);
     if (diff.hasConflicts) {
       throw TimetableImportConflictException(diff);
+    }
+    final affectedIds = {
+      for (final impact in diff.exceptionImpacts)
+        if (impact.removed) impact.exception.id,
+    };
+    if (affectedIds.length != removeExceptionIds.length ||
+        !affectedIds.containsAll(removeExceptionIds) ||
+        (affectedIds.isNotEmpty && expectedPreviewRevision == null)) {
+      throw const ImportExceptionRemovalConfirmationRequired();
     }
 
     final now = DateTime.now();
@@ -1107,10 +1175,75 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
       previousImport: previous,
       deletedSourceCourseKeys: deletedSourceCourseKeys,
     );
+    final changes = <ImportChange>[];
+    for (final change in diff.changes) {
+      final course = change.localCourse;
+      final impacts = <ImportExceptionImpact>[];
+      if (course != null && change.kind != ImportChangeKind.unchanged) {
+        final exceptions =
+            local!.exceptions.where((e) => e.courseId == course.id);
+        final remote = change.remoteCourse;
+        if (remote == null) {
+          impacts.addAll(exceptions.map((e) => ImportExceptionImpact(
+              courseName: course.name, exception: e, removed: false)));
+        } else {
+          final existing =
+              local.meetingRules.where((r) => r.courseId == course.id).toList();
+          final reconciled = _rulesFromRemote(
+              remote: remote,
+              courseId: course.id,
+              existing: existing,
+              fields: change.fields);
+          final retained = {for (final r in reconciled.rules) r.id};
+          final removed = {
+            for (final r in existing)
+              if (!retained.contains(r.id) &&
+                  !reconciled.idRemap.containsKey(r.id))
+                r.id
+          };
+          impacts.addAll(exceptions
+              .where((e) => removed.contains(e.sourceMeetingId))
+              .map((e) => ImportExceptionImpact(
+                  courseName: course.name, exception: e)));
+        }
+      }
+      changes.add(ImportChange(
+          kind: change.kind,
+          sourceCourseKey: change.sourceCourseKey,
+          localCourse: change.localCourse,
+          remoteCourse: change.remoteCourse,
+          fields: change.fields,
+          exceptionImpacts: List.unmodifiable(impacts)));
+    }
+    final localBackup = local == null
+        ? null
+        : ScheduleBackup(
+            appVersion: nwuAppVersion,
+            createdAt: DateTime.utc(2000),
+            semesters: [local.semester],
+            courses: [...local.courses]..sort((a, b) => a.id.compareTo(b.id)),
+            meetingRules: [...local.meetingRules]
+              ..sort((a, b) => a.id.compareTo(b.id)),
+            exceptions: [...local.exceptions]
+              ..sort((a, b) => a.id.compareTo(b.id)),
+            settings: const {},
+            appearance: const {},
+            importSnapshots: const [],
+            deletedSourceItems: const [],
+          );
+    final revision = sha256
+        .convert(utf8.encode(jsonEncode([
+          timetable.toJson(),
+          localBackup?.toJson(),
+          previous?.toJson(),
+          deletedSourceCourseKeys.toList()..sort(),
+        ])))
+        .toString();
     return _ImportDiffContext(
       existingSemester: existingSemester,
       local: local,
-      diff: diff,
+      diff: ImportDiff(List.unmodifiable(changes),
+          isNewSemester: diff.isNewSemester, previewRevision: revision),
     );
   }
 

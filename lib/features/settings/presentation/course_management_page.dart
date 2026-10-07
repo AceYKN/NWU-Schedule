@@ -9,9 +9,29 @@ import '../../../domain/course/course_exception.dart';
 import '../../../domain/course/meeting_rule.dart';
 import '../../../domain/errors/app_error.dart';
 import '../../shared/presentation/app_page_header.dart';
+import '../../shared/presentation/course_card.dart';
 
-class CourseManagementPage extends ConsumerWidget {
+class CourseManagementPage extends ConsumerStatefulWidget {
   const CourseManagementPage({super.key});
+
+  @override
+  ConsumerState<CourseManagementPage> createState() =>
+      _CourseManagementPageState();
+}
+
+class _CourseManagementPageState extends ConsumerState<CourseManagementPage> {
+  final _busy = <String>{};
+
+  Future<void> _run(String id, Future<void> Function() operation) async {
+    if (!_busy.add(id)) return;
+    setState(() {});
+    try {
+      await operation();
+    } finally {
+      _busy.remove(id);
+      if (mounted) setState(() {});
+    }
+  }
 
   Future<void> _act(
     BuildContext context,
@@ -65,13 +85,21 @@ class CourseManagementPage extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final load = ref.watch(scheduleLoadProvider);
     return load.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) =>
-          Center(child: Text(nwuUserMessage(error, action: '读取课程失败'))),
+      error: (error, stackTrace) => Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(nwuUserMessage(error, action: '读取课程失败')),
+        TextButton(
+            onPressed: () => ref.invalidate(scheduleLoadProvider),
+            child: const Text('重试读取')),
+      ])),
       data: (value) {
+        if (value is ScheduleCalendarMissing) {
+          return const Center(child: Text('学期已保存，但缺少校历，请更新应用后重试'));
+        }
         if (value is! ScheduleReady) {
           return const Center(child: Text('请先创建或导入学期'));
         }
@@ -130,7 +158,9 @@ class CourseManagementPage extends ConsumerWidget {
                   ),
                   trailing: PopupMenuButton<String>(
                     tooltip: '课程操作',
-                    onSelected: (action) => _act(context, ref, course, action),
+                    enabled: !_busy.contains(course.id),
+                    onSelected: (action) => _run(
+                        course.id, () => _act(context, ref, course, action)),
                     itemBuilder: (context) => [
                       if (course.deleted)
                         const PopupMenuItem(
@@ -167,14 +197,40 @@ class CourseManagementPage extends ConsumerWidget {
                 (exception) => Card(
                   child: ListTile(
                     leading: const Icon(Icons.edit_calendar_outlined),
-                    title: Text(_exceptionTitle(exception)),
+                    title: Text(
+                        '${_exceptionCourseName(exception, courses)} · ${_exceptionTitle(exception)}'),
                     subtitle: Text(_exceptionSubtitle(exception)),
-                    trailing: IconButton(
-                      tooltip: '撤销临时变更',
-                      icon: const Icon(Icons.undo_outlined),
-                      onPressed: () =>
-                          _deleteException(context, ref, exception),
-                    ),
+                    onTap: _busy.contains(exception.id)
+                        ? null
+                        : () => _run(
+                            exception.id,
+                            () => editCourseException(
+                                context: context,
+                                ref: ref,
+                                exception: exception)),
+                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                      IconButton(
+                          tooltip: '编辑临时变更',
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: _busy.contains(exception.id)
+                              ? null
+                              : () => _run(
+                                  exception.id,
+                                  () => editCourseException(
+                                      context: context,
+                                      ref: ref,
+                                      exception: exception))),
+                      IconButton(
+                        tooltip: '撤销临时变更',
+                        icon: const Icon(Icons.undo_outlined),
+                        onPressed: _busy.contains(exception.id)
+                            ? null
+                            : () => _run(
+                                exception.id,
+                                () =>
+                                    _deleteException(context, ref, exception)),
+                      ),
+                    ]),
                   ),
                 ),
               ),
@@ -184,6 +240,13 @@ class CourseManagementPage extends ConsumerWidget {
       },
     );
   }
+}
+
+String _exceptionCourseName(CourseException exception, List<Course> courses) {
+  for (final course in courses) {
+    if (course.id == exception.courseId) return course.name;
+  }
+  return exception.addedCourseName ?? '课程来源已不可用';
 }
 
 String _arrangementSummary(MeetingRule rule) {
@@ -240,9 +303,9 @@ Future<void> _deleteException(
 }
 
 String _exceptionTitle(CourseException exception) => switch (exception.type) {
-      CourseExceptionType.move => 'MOVE · 调课',
-      CourseExceptionType.cancel => 'CANCEL · 停课',
-      CourseExceptionType.add => 'ADD · 临时加课',
+      CourseExceptionType.move => '调课',
+      CourseExceptionType.cancel => '停课',
+      CourseExceptionType.add => '临时加课',
     };
 
 String _exceptionSubtitle(CourseException exception) {
@@ -250,10 +313,10 @@ String _exceptionSubtitle(CourseException exception) {
   final target = _shortDate(exception.targetDate);
   return switch (exception.type) {
     CourseExceptionType.move =>
-      '$source → $target · 第 ${exception.targetStartSection}-${exception.targetEndSection} 节',
-    CourseExceptionType.cancel => '$source · 本次课程已取消',
+      '原日期 $source → 目标日期 $target · 第 ${exception.targetStartSection}-${exception.targetEndSection} 节',
+    CourseExceptionType.cancel => '原日期 $source · 本次课程已取消',
     CourseExceptionType.add =>
-      '$target · 第 ${exception.targetStartSection}-${exception.targetEndSection} 节 · ${exception.addedCourseName ?? '课程'}',
+      '目标日期 $target · 第 ${exception.targetStartSection}-${exception.targetEndSection} 节',
   };
 }
 
