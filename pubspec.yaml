@@ -1,7 +1,7 @@
 name: nwu_schedule
 description: 西小课：面向西北大学本科生的本地优先课表应用。
 publish_to: "none"
-version: 0.1.0-beta.1+2
+version: 0.1.0-beta.2+3
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
