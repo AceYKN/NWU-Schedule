@@ -78,6 +78,8 @@ const parseFixtureDocument = (html) => {
       const table = {
         id: attribute(tableAttributes, 'id') ?? '',
         rows,
+        innerText: decodeText(tableMatch[2]),
+        textContent: decodeText(tableMatch[2]),
       };
       table.querySelectorAll = (selector) =>
         selector === 'tr' ? table.rows : [];
@@ -230,6 +232,7 @@ const runStructuredExtraction = ({
   secondTitle = '结构课程★',
   bodyText = '2026-2027学年第1学期结构化课表',
   tableText = '2026-2027学年第1学期结构化课表',
+  gridCourseCount = null,
 } = {}) => {
   const makeRow = (cells) => ({ cells, parentElement: null });
   const firstWeekday = makeStructuredElement({
@@ -283,11 +286,18 @@ const runStructuredExtraction = ({
     rows,
     innerText: tableText,
     textContent: tableText,
-    querySelectorAll: (selector) => selector === 'tr' ? rows : [],
+    querySelectorAll: (selector) => selector === 'tr' ? rows
+      : selector === '.timetable_con'
+        ? rows.flatMap((row) => row.cells.flatMap((cell) =>
+            cell.querySelectorAll('.timetable_con')))
+        : [],
   };
   const document = {
     body: { innerText: bodyText },
-    querySelector: (selector) => selector === '#kblist_table' ? table : null,
+    querySelector: (selector) => selector === '#kblist_table' ? table
+      : selector === '#kbgrid_table_0' && gridCourseCount !== null
+        ? { querySelectorAll: () => Array.from({ length: gridCourseCount }, () => ({})) }
+        : null,
     querySelectorAll: () => [],
   };
   const context = {
@@ -374,6 +384,31 @@ assert.equal(
   structuredWithScopedSemester.semester.academicYear,
   '2026-2027',
 );
+
+assert.equal(runStructuredExtraction({
+  bodyText: '2032-2033学年第1学期选项 2026-2027学年第1学期页面',
+  tableText: '课程列表 星期 节次',
+}), null, 'a list without semester metadata must not import an option year');
+assert.equal(runStructuredExtraction({
+  bodyText: '2032-2033学年第1学期选项',
+  tableText: '2026-2027学年课程列表',
+}), null, 'a list must not borrow the term from unrelated document text');
+assert.equal(runStructuredExtraction({
+  bodyText: '2032-2033学年第1学期选项',
+  tableText: '',
+}), null, 'an empty list must not fall back to document semester metadata');
+
+assert.equal(runStructuredExtraction({ gridCourseCount: 2 }).issues.length, 0);
+for (const gridCourseCount of [0, 1, 3]) {
+  const incomplete = runStructuredExtraction({ gridCourseCount });
+  const issue = incomplete.issues.find((item) =>
+    item.path === 'tables#kblist_table.completeness');
+  assert.equal(issue.severity, 'error');
+  assert.deepEqual(issue.details, {
+    tableId: 'kblist_table', listCourseNodeCount: 2,
+    gridCourseNodeCount: gridCourseCount,
+  });
+}
 
 // Keep the generic merged-cell fallback covered for variants that do not expose
 // NWU's verified #kblist_table list view.
@@ -674,6 +709,7 @@ const sameShapeTeachingClassesFixture = `
 <html><body>
   <div>2026-2027年第1学期某同学的课表</div>
   <table id="kblist_table">
+    <tr><td colspan="3">2026-2027年第1学期某同学的课表</td></tr>
     <tr><td>星期</td><td>节次</td><td>课表信息</td></tr>
     <tr><td id="xq_rowspan_1">星期一</td></tr>
     <tr>
@@ -717,6 +753,7 @@ const sameTeachingClassDifferentMeetingsFixture = `
 <html><body>
   <div>2026-2027年第1学期某同学的课表</div>
   <table id="kblist_table">
+    <tr><td colspan="3">2026-2027年第1学期某同学的课表</td></tr>
     <tr><td>星期</td><td>节次</td><td>课表信息</td></tr>
     <tr><td id="xq_rowspan_1">星期一</td></tr>
     <tr>

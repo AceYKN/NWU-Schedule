@@ -19,22 +19,22 @@ class NwuDomExtractor {
   }
 
   const bodyText = document.body ? document.body.innerText : '';
+  const listTable = typeof document.querySelector === 'function'
+    ? document.querySelector('#kblist_table')
+    : null;
   const timetableText = (() => {
-    const listTable = typeof document.querySelector === 'function'
-      ? document.querySelector('#kblist_table')
-      : null;
     const value = listTable && (listTable.innerText || listTable.textContent);
     return value ? String(value) : '';
   })();
   // Hidden select options can appear before the selected academic year in
   // Android WebView innerText. Prefer the actual timetable table, whose
-  // heading belongs to the data being imported, and only fall back to the
-  // document text for older pages/fixtures without a table heading.
-  const metadataText = timetableText || bodyText;
-  const year = metadataText.match(/(20\d{2})\s*[-—~至]\s*(20\d{2})/) ||
-    bodyText.match(/(20\d{2})\s*[-—~至]\s*(20\d{2})/);
-  const termText = metadataText.match(/第\s*([一二三123])\s*学期/) ||
-    bodyText.match(/第\s*([一二三123])\s*学期/);
+  // heading belongs to the data being imported. If a recognized list loses
+  // that heading, fail closed instead of borrowing unrelated select options
+  // or a stale document heading. Legacy pages without a list retain the
+  // document-level metadata fallback.
+  const metadataText = listTable ? timetableText : bodyText;
+  const year = metadataText.match(/(20\d{2})\s*[-—~至]\s*(20\d{2})/);
+  const termText = metadataText.match(/第\s*([一二三123])\s*学期/);
   if (!year || !termText) return JSON.stringify(null);
 
   const termMap = { '一': 1, '二': 2, '三': 3, '1': 1, '2': 2, '3': 3 };
@@ -498,6 +498,25 @@ class NwuDomExtractor {
         ? document.querySelector('#kblist_table')
         : null;
     if (!table) return false;
+
+    // The current authenticated page renders both views from the same kbList.
+    // A whole course row can disappear without leaving a malformed field.
+    // Use the sibling view only as a completeness check, never as a parser
+    // fallback, so a truncated list cannot remove otherwise valid meetings.
+    const gridTable = document.querySelector('#kbgrid_table_0');
+    if (gridTable && typeof gridTable.querySelectorAll === 'function' &&
+        typeof table.querySelectorAll === 'function') {
+      const listCourseNodeCount = table.querySelectorAll('.timetable_con').length;
+      const gridCourseNodeCount = gridTable.querySelectorAll('.timetable_con').length;
+      if (listCourseNodeCount !== gridCourseNodeCount) {
+        issue(
+          'tables#kblist_table.completeness',
+          '课表列表与表格的课程条目数量不一致，请重新查询后再读取',
+          'error',
+          { tableId: 'kblist_table', listCourseNodeCount, gridCourseNodeCount },
+        );
+      }
+    }
 
     const rows = Array.from(table.rows || table.querySelectorAll('tr'));
     let currentWeekday = null;

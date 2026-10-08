@@ -244,6 +244,8 @@ void main() {
         'rowIndex': 2,
         'courseIndex': 1,
         'rowCount': 9,
+        'listCourseNodeCount': 8,
+        'gridCourseNodeCount': 9,
         'columnCount': 8,
         'rawLength': 3,
         'rawShape': 'mixed',
@@ -258,6 +260,8 @@ void main() {
     expect(restored!.details['tableId'], 'kblist_table');
     expect(restored.details['courseIndex'], 1);
     expect(restored.details['rowCount'], 9);
+    expect(restored.details['listCourseNodeCount'], 8);
+    expect(restored.details['gridCourseNodeCount'], 9);
     expect(restored.details['rawShape'], 'mixed');
     expect(restored.details['parsedNumbers'], [321]);
     expect(restored.details['unexpectedCharacterClasses'], ['han']);

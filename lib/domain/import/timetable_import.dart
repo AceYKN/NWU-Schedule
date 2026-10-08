@@ -134,6 +134,8 @@ class ImportIssue {
     'rowIndex',
     'courseIndex',
     'rowCount',
+    'listCourseNodeCount',
+    'gridCourseNodeCount',
     'headerRow',
     'columnCount',
     'rawLength',

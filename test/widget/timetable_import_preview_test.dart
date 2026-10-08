@@ -202,6 +202,78 @@ void main() {
     expect(find.text('已忽略 1 门标记为自修的课程'), findsOneWidget);
     expect(find.textContaining('发现 '), findsNothing);
   });
+
+  testWidgets('conflict sheet requires explicit choices for every field',
+      (tester) async {
+    final remote = timetable.courses.first;
+    final diff = ImportDiff([
+      ImportChange(
+        kind: ImportChangeKind.conflict,
+        sourceCourseKey: remote.sourceCourseKey,
+        remoteCourse: remote,
+        fields: const [
+          ImportFieldChange(
+            field: 'meeting:m1:teacher',
+            decision: MergeDecision.conflict,
+            localValue: '本地教师',
+            remoteValue: '远端教师',
+          ),
+          ImportFieldChange(
+            field: 'meeting:m1:room',
+            decision: MergeDecision.conflict,
+            localValue: '本地教室',
+            remoteValue: '远端教室',
+          ),
+        ],
+      ),
+    ]);
+    ImportConflictResolution? result;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(builder: (context) {
+          return TextButton(
+            onPressed: () async {
+              result = await showModalBottomSheet<ImportConflictResolution>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => TimetableImportConflictResolutionSheet(
+                  diff: diff,
+                  initial: ImportConflictResolution.empty,
+                ),
+              );
+            },
+            child: const Text('打开冲突选择'),
+          );
+        }),
+      ),
+    ));
+    await tester.tap(find.text('打开冲突选择'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('保留本地'), findsNWidgets(2));
+    expect(find.text('采用教务'), findsNWidgets(2));
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, '请完成全部选择'),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.text('保留本地').first);
+    await tester.pumpAndSettle();
+    expect(find.text('请完成全部选择'), findsOneWidget);
+    await tester.tap(find.text('采用教务').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('应用选择'));
+    await tester.pumpAndSettle();
+    expect(result?.choiceFor(remote.sourceCourseKey, 'meeting:m1:teacher'),
+        MergeDecision.local);
+    expect(result?.choiceFor(remote.sourceCourseKey, 'meeting:m1:room'),
+        MergeDecision.remote);
+    expect(diff.resolve(result!).hasConflicts, isFalse);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pumpCard(

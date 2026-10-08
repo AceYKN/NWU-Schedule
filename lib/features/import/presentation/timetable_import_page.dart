@@ -90,7 +90,11 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
           onHttpError: _recordHttpError,
         ),
       );
-    unawaited(WebViewSessionService.waitForCleanup.then((_) async {
+    // A force-stop can bypass dispose() and leave persisted login cookies.
+    // Clear them before loading each new import session.
+    unawaited(WebViewSessionService.serializeCleanup(
+      const WebViewSessionService().clear,
+    ).then((_) async {
       if (mounted) {
         await _controller.loadRequest(NwuZhengfangV9Importer.entryUri);
       }
@@ -543,7 +547,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     final resolution = await showModalBottomSheet<ImportConflictResolution>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _ConflictResolutionSheet(
+      builder: (context) => TimetableImportConflictResolutionSheet(
         diff: diff,
         initial: _resolution,
       ),
@@ -1034,8 +1038,9 @@ class _ConflictEntry {
   final ImportFieldChange field;
 }
 
-class _ConflictResolutionSheet extends StatefulWidget {
-  const _ConflictResolutionSheet({
+class TimetableImportConflictResolutionSheet extends StatefulWidget {
+  const TimetableImportConflictResolutionSheet({
+    super.key,
     required this.diff,
     required this.initial,
   });
@@ -1044,11 +1049,12 @@ class _ConflictResolutionSheet extends StatefulWidget {
   final ImportConflictResolution initial;
 
   @override
-  State<_ConflictResolutionSheet> createState() =>
+  State<TimetableImportConflictResolutionSheet> createState() =>
       _ConflictResolutionSheetState();
 }
 
-class _ConflictResolutionSheetState extends State<_ConflictResolutionSheet> {
+class _ConflictResolutionSheetState
+    extends State<TimetableImportConflictResolutionSheet> {
   late final Map<String, Map<String, MergeDecision>> _choices = {
     for (final entry in widget.initial.choices.entries)
       entry.key: Map<String, MergeDecision>.from(entry.value),
@@ -1163,6 +1169,7 @@ class _ConflictResolutionSheetState extends State<_ConflictResolutionSheet> {
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 16),
                               child: SegmentedButton<MergeDecision>(
+                                emptySelectionAllowed: selected == null,
                                 segments: const [
                                   ButtonSegment(
                                     value: MergeDecision.local,
