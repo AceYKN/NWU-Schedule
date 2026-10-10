@@ -224,6 +224,11 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(800, 1000));
     await tester.pumpAndSettle();
     final clearDataTile = find.text('清除所有数据', skipOffstage: false);
+    await tester.scrollUntilVisible(
+      clearDataTile,
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(clearDataTile, findsOneWidget);
     await tester.ensureVisible(clearDataTile);
     await tester.pumpAndSettle();

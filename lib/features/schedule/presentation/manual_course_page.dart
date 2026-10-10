@@ -178,15 +178,18 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
     }
     if (sameNameCourse != null) {
       final isEditing = _existingCourse != null;
+      final restoresCourse = sameNameCourse.deleted;
+      final restorationNotice = restoresCourse ? '这门同名课程已删除，本次操作会恢复它。\n' : '';
+      final mergeDescription = isEditing
+          ? '“${sameNameCourse.name}”已存在。本次修改会把当前课程及其上课安排合并到该课程。'
+          : '“${sameNameCourse.name}”已存在，将把本次内容作为新的上课安排添加到该课程。课程备注和颜色保持现有设置。';
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: Text(isEditing ? '合并同名课程？' : '已存在同名课程'),
-          content: Text(
-            isEditing
-                ? '“${sameNameCourse!.name}”已存在。本次修改会把当前课程及其上课安排合并到该课程。'
-                : '“${sameNameCourse!.name}”已存在，将把本次内容作为新的上课安排添加到该课程。课程备注和颜色保持现有设置。',
-          ),
+          title: Text(restoresCourse
+              ? (isEditing ? '恢复并合并同名课程？' : '恢复同名课程？')
+              : (isEditing ? '合并同名课程？' : '已存在同名课程')),
+          content: Text('$restorationNotice$mergeDescription'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -194,7 +197,9 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(isEditing ? '合并课程' : '添加安排'),
+              child: Text(restoresCourse
+                  ? (isEditing ? '恢复并合并' : '恢复并添加安排')
+                  : (isEditing ? '合并课程' : '添加安排')),
             ),
           ],
         ),
@@ -266,7 +271,7 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
         final existingRules = ready.engine.meetingRules
             .where((rule) => rule.courseId == sameNameCourse!.id)
             .toList(growable: false);
-        await repository.saveCourse(sameNameCourse, [
+        await repository.saveCourse(sameNameCourse.copyWith(deleted: false), [
           ...existingRules,
           ...rules,
         ]);
@@ -290,7 +295,9 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
             sameNameCourse == null
                 ? '课程已保存到本地'
                 : _existingCourse == null
-                    ? '已添加为现有课程的新上课安排'
+                    ? sameNameCourse.deleted
+                        ? '课程已恢复并添加上课安排'
+                        : '已添加为现有课程的新上课安排'
                     : '同名课程及上课安排已合并',
           ),
         ),

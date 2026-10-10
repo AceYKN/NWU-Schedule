@@ -399,6 +399,13 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
         canonicalized.courses.single,
         canonicalized.meetingRules,
       );
+      if (!canonicalized.courses.single.deleted) {
+        // Restore the course and its import identity in the same transaction.
+        await _removeCourseTombstones(
+          semesterId: course.semesterId,
+          sourceCourseKeys: {course.sourceCourseKey},
+        );
+      }
       for (final exception in canonicalized.exceptions) {
         await (database.update(
           database.courseExceptions,
@@ -506,6 +513,16 @@ class DriftScheduleDataRepository implements ScheduleDataRepository {
             .go();
       }
       await _upsertCourse(canonicalCourse, canonicalized.meetingRules);
+      if (!canonicalCourse.deleted) {
+        await _removeCourseTombstones(
+          semesterId: canonicalCourse.semesterId,
+          sourceCourseKeys: {
+            sourceRow.sourceCourseKey,
+            targetRow.sourceCourseKey,
+            canonicalCourse.sourceCourseKey,
+          },
+        );
+      }
       if (exceptionIds.isNotEmpty) {
         await (database.delete(
           database.courseExceptions,
