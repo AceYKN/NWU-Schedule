@@ -81,6 +81,9 @@ class WidgetRefreshTest {
         val manager = AppWidgetManager.getInstance(context)
         val shadow = shadowOf(manager)
         val id = shadow.createWidget(CourseWidgetProvider::class.java, R.layout.widget_small)
+        // Widget creation queues an initial refresh. Finish it before changing
+        // the stored snapshot so it cannot race the broadcast under test.
+        PlatformTaskRunner.awaitIdle()
         CourseWidgetProvider.refresh(context, intArrayOf(id)) { JSONObject() }
         context.getSharedPreferences(MainActivity.WIDGET_PREFERENCES, Context.MODE_PRIVATE).edit()
             .putString(MainActivity.WIDGET_SNAPSHOT,
