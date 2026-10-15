@@ -43,13 +43,13 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: CourseCard(instance: instance, status: 'NEXT'),
+          body: CourseCard(instance: instance, status: '下一节'),
         ),
       ),
     );
 
     expect(
-      find.bySemanticsLabel('NEXT，软件测试，长安校区 · 3406，10:10–12:00，苏老师'),
+      find.bySemanticsLabel('下一节，软件测试，长安校区 · 3406，10:10–12:00，苏老师'),
       findsOneWidget,
     );
     expect(find.semantics.byFlag(ui.SemanticsFlag.isButton), findsWidgets);

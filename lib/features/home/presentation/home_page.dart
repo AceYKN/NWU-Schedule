@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
 import '../../../core/nwu/constants.dart';
+import '../../../core/time/campus_clock.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../domain/calendar/calendar_engine.dart';
 import '../../../domain/errors/app_error.dart';
@@ -17,11 +19,14 @@ import '../../shared/presentation/course_card.dart';
 import '../application/home_schedule_status_resolver.dart';
 
 class HomePage extends ConsumerStatefulWidget {
-  const HomePage({super.key, this.now});
+  const HomePage({super.key, this.now, this.clock});
 
   /// Optional fixed instant for deterministic UI tests. Production callers
   /// leave this null and use the device clock.
   final DateTime? now;
+
+  /// Injectable live clock for testing countdowns and schedule transitions.
+  final DateTime Function()? clock;
 
   @override
   ConsumerState<HomePage> createState() => _HomePageState();
@@ -30,24 +35,73 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage>
     with WidgetsBindingObserver {
   Timer? _clockTimer;
+  late final ValueNotifier<DateTime> _campusNow;
+  HomeScheduleState? _displayedState;
+
+  DateTime get _instant =>
+      widget.now ?? widget.clock?.call() ?? DateTime.now().toUtc();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
-    });
+    _campusNow = ValueNotifier(CampusClock.toCampusWallTime(_instant));
+    _startClock();
+  }
+
+  void _startClock() {
+    _clockTimer?.cancel();
+    if (widget.now == null) {
+      _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    }
+  }
+
+  void _tick({bool forceRefresh = false}) {
+    if (!mounted) return;
+    final now = CampusClock.toCampusWallTime(_instant);
+    final previous = _campusNow.value;
+    final state = _displayedState;
+    final crossedBoundary = switch (state) {
+      HomeInClassState() => !now.isBefore(state.current.endTime),
+      HomeBeforeNextClassState() => !now.isBefore(state.course.startTime),
+      _ => false,
+    };
+    _campusNow.value = now;
+    // Only countdown text ticks each second. Recompute the effective schedule
+    // at minute/date changes, course boundaries, or after a clock correction.
+    if (forceRefresh ||
+        crossedBoundary ||
+        now.isBefore(previous) ||
+        !isSameDate(now, previous) ||
+        now.hour != previous.hour ||
+        now.minute != previous.minute) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.now != widget.now || oldWidget.clock != widget.clock) {
+      _campusNow.value = CampusClock.toCampusWallTime(_instant);
+      _startClock();
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted) setState(() {});
+    if (state == AppLifecycleState.resumed) {
+      _tick(forceRefresh: true);
+      _startClock();
+    } else {
+      _clockTimer?.cancel();
+    }
   }
 
   @override
   void dispose() {
     _clockTimer?.cancel();
+    _campusNow.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -78,19 +132,21 @@ class _HomePageState extends ConsumerState<HomePage>
           return _MissingCalendarContent(semester: value.semester);
         }
         final ready = value as ScheduleReady;
-        final now = widget.now ?? DateTime.now().toUtc();
+        final now = _instant;
         final state = const HomeScheduleStatusResolver().resolve(
           engine: ready.engine,
           now: now,
         );
+        _displayedState = state;
         return _HomeContent(
           engine: ready.engine,
           state: state,
+          clock: _campusNow,
           calendarUpdated: ready.calendarUpdated,
           onDismissCalendarUpdate: ready.calendarUpdated
               ? () => _dismissCalendarUpdate(ref, ready)
               : null,
-          onRefresh: () async => setState(() {}),
+          onRefresh: () async => _tick(forceRefresh: true),
         );
       },
     );
@@ -229,6 +285,7 @@ class _HomeContent extends StatelessWidget {
   const _HomeContent({
     required this.engine,
     required this.state,
+    required this.clock,
     required this.calendarUpdated,
     required this.onDismissCalendarUpdate,
     required this.onRefresh,
@@ -236,6 +293,7 @@ class _HomeContent extends StatelessWidget {
 
   final ScheduleEngine engine;
   final HomeScheduleState state;
+  final ValueListenable<DateTime> clock;
   final bool calendarUpdated;
   final VoidCallback? onDismissCalendarUpdate;
   final Future<void> Function() onRefresh;
@@ -243,6 +301,12 @@ class _HomeContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolved = engine.resolveDate(state.now);
+    final showTomorrow = state.now.hour >= 22;
+    final agendaLabel = showTomorrow ? '明天' : '今天';
+    final agendaDayLabel = showTomorrow ? '明日' : '今日';
+    final agendaCourses = showTomorrow
+        ? engine.getCoursesForDate(addCalendarDays(state.now, 1))
+        : state.todayCourses;
     final themeTokens = scheduleThemeTokensOf(context);
     return RefreshIndicator(
       onRefresh: onRefresh,
@@ -271,28 +335,32 @@ class _HomeContent extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 18),
-          _HeroState(state: state),
+          _HeroState(
+            state: state,
+            clock: clock,
+            tomorrowCourses: showTomorrow ? agendaCourses : const [],
+          ),
           const SizedBox(height: 24),
           Row(
             children: [
               Text(
-                '今天',
+                agendaLabel,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
               ),
               const Spacer(),
               Text(
-                '${state.todayCourses.length} 节',
+                '${agendaCourses.length} 节',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           ),
           const SizedBox(height: 10),
-          if (state.todayCourses.isEmpty)
-            const _EmptyAgenda()
+          if (agendaCourses.isEmpty)
+            _EmptyAgenda(dayLabel: agendaLabel)
           else
-            ...state.todayCourses.take(5).map(
+            ...agendaCourses.take(5).map(
                   (course) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: CourseCard(
@@ -302,13 +370,17 @@ class _HomeContent extends StatelessWidget {
                     ),
                   ),
                 ),
-          if (state.todayCourses.length > 5)
+          if (agendaCourses.length > 5)
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: () => _showFullAgenda(context, state.todayCourses),
+                onPressed: () => _showFullAgenda(
+                  context,
+                  agendaCourses,
+                  dayLabel: agendaDayLabel,
+                ),
                 icon: const Icon(Icons.list_alt_outlined),
-                label: Text('查看今日全部课程（${state.todayCourses.length}）'),
+                label: Text('查看$agendaDayLabel全部课程（${agendaCourses.length}）'),
               ),
             ),
         ],
@@ -321,10 +393,10 @@ class _HomeContent extends StatelessWidget {
     HomeScheduleState state,
   ) {
     if (state is HomeInClassState && state.current == course) {
-      return 'NOW';
+      return '进行中';
     }
     if (state is HomeBeforeNextClassState && state.course == course) {
-      return 'NEXT';
+      return '下一节';
     }
     if (!course.endTime.isAfter(state.now)) {
       return '已结束';
@@ -359,8 +431,10 @@ class _HomeHeader extends StatelessWidget {
       children: [
         Text(
           '${date.year}年${date.month}月${date.day}日 ${weekdayName(date.weekday)}',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
         ),
         const SizedBox(height: 6),
@@ -368,7 +442,9 @@ class _HomeHeader extends StatelessWidget {
           children: [
             Text(
               week == null ? '当前不在校历教学周内' : '第 $week 教学周',
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
             if (label != null && label.isNotEmpty) ...[
               const SizedBox(width: 10),
@@ -389,9 +465,15 @@ class _HomeHeader extends StatelessWidget {
 }
 
 class _HeroState extends StatelessWidget {
-  const _HeroState({required this.state});
+  const _HeroState({
+    required this.state,
+    required this.clock,
+    required this.tomorrowCourses,
+  });
 
   final HomeScheduleState state;
+  final ValueListenable<DateTime> clock;
+  final List<EffectiveCourseInstance> tomorrowCourses;
 
   @override
   Widget build(BuildContext context) {
@@ -401,12 +483,15 @@ class _HeroState extends StatelessWidget {
       return _HeroCard(
         eyebrow: '正在上课',
         title: currentState.current.courseName,
-        subtitle: _activeCourseSubtitle(
-          currentState.current,
-          trailing: '距离下课 ${_formatDuration(currentState.remaining)}',
+        subtitle: _CourseCountdown(
+          course: currentState.current,
+          target: currentState.current.endTime,
+          prefix: '距离下课',
+          clock: clock,
           dayContext: _dayContext(currentState.todayType, currentState.now),
         ),
         background: scheme.primaryContainer,
+        onTap: () => showCourseDetails(context, currentState.current),
       );
     }
     if (state is HomeBeforeNextClassState) {
@@ -414,12 +499,42 @@ class _HeroState extends StatelessWidget {
       return _HeroCard(
         eyebrow: '下一节',
         title: nextState.course.courseName,
-        subtitle: _activeCourseSubtitle(
-          nextState.course,
-          trailing: '还有 ${_formatDuration(nextState.untilStart)}',
+        subtitle: _CourseCountdown(
+          course: nextState.course,
+          target: nextState.course.startTime,
+          prefix: '还有',
+          clock: clock,
           dayContext: _dayContext(nextState.todayType, nextState.now),
         ),
         background: scheme.secondaryContainer,
+        onTap: () => showCourseDetails(context, nextState.course),
+      );
+    }
+    if (state.now.hour >= 22) {
+      if (tomorrowCourses.isNotEmpty) {
+        final course = tomorrowCourses.first;
+        return _HeroCard(
+          eyebrow: '明日安排',
+          title: course.courseName,
+          subtitle: Text(_activeCourseSubtitle(
+            course,
+            trailing: '明天第一节',
+            dayContext: state.next == null
+                ? null
+                : _dayContext(state.next!.dayType, course.date),
+          )),
+          background: scheme.secondaryContainer,
+          onTap: () => showCourseDetails(context, course),
+        );
+      }
+      return _HeroCard(
+        eyebrow: '明日安排',
+        title: '明天暂无课程',
+        subtitle: Text(_nextScheduleDescription(state.next)),
+        background: scheme.surfaceContainerHighest,
+        onTap: state.next == null
+            ? null
+            : () => showCourseDetails(context, state.next!.course),
       );
     }
     if (state is HomeTodayFinishedState) {
@@ -427,16 +542,22 @@ class _HeroState extends StatelessWidget {
       return _HeroCard(
         eyebrow: '今日完成',
         title: '今天的课程已结束',
-        subtitle: _nextScheduleDescription(finishedState.next),
+        subtitle: Text(_nextScheduleDescription(finishedState.next)),
         background: scheme.surfaceContainerHighest,
+        onTap: finishedState.next == null
+            ? null
+            : () => showCourseDetails(context, finishedState.next!.course),
       );
     }
     if (state is HomeOutsideTeachingTermState) {
       return _HeroCard(
         eyebrow: '非教学期',
         title: '当前不在教学周',
-        subtitle: _nextScheduleDescription(state.next),
+        subtitle: Text(_nextScheduleDescription(state.next)),
         background: scheme.surfaceContainerHighest,
+        onTap: state.next == null
+            ? null
+            : () => showCourseDetails(context, state.next!.course),
       );
     }
     final noClass = state as HomeNoClassTodayState;
@@ -444,12 +565,15 @@ class _HeroState extends StatelessWidget {
     return _HeroCard(
       eyebrow: holiday ? '休息日' : '今日安排',
       title: holiday ? '今天休息' : '今天暂无课程',
-      subtitle: [
+      subtitle: Text([
         if (_dayContext(noClass.todayType, noClass.now) case final context?)
           context,
         _nextScheduleDescription(noClass.next),
-      ].join('\n'),
+      ].join('\n')),
       background: scheme.surfaceContainerHighest,
+      onTap: noClass.next == null
+          ? null
+          : () => showCourseDetails(context, noClass.next!.course),
     );
   }
 }
@@ -460,51 +584,123 @@ class _HeroCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.background,
+    this.onTap,
   });
 
   final String eyebrow;
   final String title;
-  final String subtitle;
+  final Widget subtitle;
   final Color background;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final themeTokens = scheduleThemeTokensOf(context);
     return Card(
+      key: const ValueKey('home-status-card'),
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(themeTokens.todayCardRadius),
       ),
       color: background,
-      child: Padding(
-        padding: EdgeInsets.all(themeTokens.todayCardPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              eyebrow,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    letterSpacing: 1.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(subtitle),
-          ],
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.all(themeTokens.todayCardPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                eyebrow,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      letterSpacing: 0.2,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              subtitle,
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
+class _CourseCountdown extends StatelessWidget {
+  const _CourseCountdown({
+    required this.course,
+    required this.target,
+    required this.prefix,
+    required this.clock,
+    this.dayContext,
+  });
+
+  final EffectiveCourseInstance course;
+  final DateTime target;
+  final String prefix;
+  final ValueListenable<DateTime> clock;
+  final String? dayContext;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final details = [
+      if (course.location case final location?) location,
+      if (course.teacher case final teacher?) teacher,
+    ].join(' · ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(_courseTimeRange(course), style: theme.textTheme.bodyMedium),
+        if (details.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(details, style: theme.textTheme.bodyMedium),
+        ],
+        const SizedBox(height: 12),
+        ValueListenableBuilder<DateTime>(
+          valueListenable: clock,
+          builder: (context, now, child) => Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: '$prefix '),
+                for (final part in RegExp(r'\d+|\D+')
+                    .allMatches(_formatDuration(target.difference(now))))
+                  TextSpan(
+                    text: part.group(0),
+                    style: int.tryParse(part.group(0)!) == null
+                        ? null
+                        : const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                  ),
+              ],
+            ),
+            style: theme.textTheme.bodyMedium,
+          ),
+        ),
+        if (dayContext != null) ...[
+          const SizedBox(height: 6),
+          Text(dayContext!, style: theme.textTheme.bodySmall),
+        ],
+      ],
+    );
+  }
+}
+
 class _EmptyAgenda extends StatelessWidget {
-  const _EmptyAgenda();
+  const _EmptyAgenda({required this.dayLabel});
+
+  final String dayLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -518,7 +714,7 @@ class _EmptyAgenda extends StatelessWidget {
               color: Theme.of(context).colorScheme.primary,
             ),
             const SizedBox(width: 12),
-            const Expanded(child: Text('今天没有排入课程的记录。')),
+            Expanded(child: Text('$dayLabel没有排入课程的记录。')),
           ],
         ),
       ),
@@ -570,11 +766,16 @@ String? _dayContext(AcademicDayType type, DateTime date) {
 }
 
 String _formatDuration(Duration duration) {
-  final minutes = duration.inMinutes.clamp(0, 24 * 60);
-  if (minutes < 60) return '$minutes 分钟';
+  // Round up fractional seconds so a future boundary never reads zero.
+  final seconds =
+      ((duration.inMicroseconds + 999999) ~/ 1000000).clamp(0, 86400);
+  if (seconds < 60) return '$seconds 秒';
+  final minutes = seconds ~/ 60;
+  final remainderSeconds = seconds % 60;
+  if (minutes < 60) return '$minutes 分钟 $remainderSeconds 秒';
   final hours = minutes ~/ 60;
   final remainder = minutes % 60;
-  return remainder == 0 ? '$hours 小时' : '$hours 小时 $remainder 分钟';
+  return '$hours 小时 $remainder 分钟 $remainderSeconds 秒';
 }
 
 String _courseTimeRange(EffectiveCourseInstance course) {
@@ -588,8 +789,9 @@ String _timeLabel(DateTime value) {
 
 void _showFullAgenda(
   BuildContext context,
-  List<EffectiveCourseInstance> courses,
-) {
+  List<EffectiveCourseInstance> courses, {
+  required String dayLabel,
+}) {
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -604,7 +806,7 @@ void _showFullAgenda(
           child: ListView(
             children: [
               Text(
-                '今日全部课程',
+                '$dayLabel全部课程',
                 style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),

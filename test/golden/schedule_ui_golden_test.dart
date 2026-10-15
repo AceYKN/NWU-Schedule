@@ -147,7 +147,7 @@ class _GoldenScheduleBoard extends StatelessWidget {
                 ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          CourseCard(instance: instance, status: 'NEXT'),
+          CourseCard(instance: instance, status: '下一节'),
           const SizedBox(height: 14),
           Text(
             'Week · Month',

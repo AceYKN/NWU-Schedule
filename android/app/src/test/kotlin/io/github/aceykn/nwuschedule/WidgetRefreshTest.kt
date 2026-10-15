@@ -63,6 +63,9 @@ class WidgetRefreshTest {
         val manager = AppWidgetManager.getInstance(context)
         val shadow = shadowOf(manager)
         val ids = IntArray(3) { shadow.createWidget(CourseWidgetProvider::class.java, R.layout.widget_small) }
+        // Each widget queues an initial refresh from preferences. Drain those
+        // updates before rendering the snapshot whose contents we assert below.
+        PlatformTaskRunner.awaitIdle()
         var loads = 0
         CourseWidgetProvider.refresh(context, ids) {
             loads++

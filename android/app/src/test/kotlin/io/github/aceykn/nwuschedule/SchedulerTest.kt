@@ -31,6 +31,8 @@ class SchedulerTest {
         shadowOf(AppWidgetManager.getInstance(context)).createWidget(
             CourseWidgetProvider::class.java, R.layout.widget_small,
         )
+        // Initial widget broadcasts must finish before a test changes alarms.
+        PlatformTaskRunner.awaitIdle()
     }
 
     @Test

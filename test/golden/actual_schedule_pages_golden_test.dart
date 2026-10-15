@@ -60,7 +60,7 @@ void main() {
             HomePage(now: item.now),
           );
           await expectLater(
-            find.byType(HomePage),
+            find.byType(Scaffold),
             matchesGoldenFile('goldens/actual/home/${theme.id}_${item.id}.png'),
           );
         },
@@ -100,8 +100,32 @@ void main() {
           ),
         );
         await expectLater(
-          find.byType(CalendarPage),
+          find.byType(Scaffold),
           matchesGoldenFile('goldens/actual/pages/${theme.id}_month.png'),
+        );
+      },
+    );
+
+    testWidgets(
+      '${theme.id} actual Month page dark golden',
+      (tester) async {
+        final fixture = await _createFixture();
+        addTearDown(fixture.dispose);
+        await _pumpPage(
+          tester,
+          fixture,
+          theme,
+          CalendarPage(
+            now: _fixedMondayMorning,
+            initialMonth: DateTime(2026, 9),
+          ),
+          dark: true,
+        );
+        await expectLater(
+          find.byType(Scaffold),
+          matchesGoldenFile(
+            'goldens/actual/pages/${theme.id}_month_dark.png',
+          ),
         );
       },
     );
@@ -197,12 +221,9 @@ final _homeCases = [
   (id: 'no_class', now: DateTime.utc(2026, 9, 8, 1)),
 ];
 
-Future<void> _pumpPage(
-  WidgetTester tester,
-  _GoldenFixture fixture,
-  ScheduleThemeDefinition theme,
-  Widget page,
-) async {
+Future<void> _pumpPage(WidgetTester tester, _GoldenFixture fixture,
+    ScheduleThemeDefinition theme, Widget page,
+    {bool dark = false}) async {
   tester.view.physicalSize = const Size(480, 820);
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
@@ -221,8 +242,10 @@ Future<void> _pumpPage(
         ),
       ],
       child: MaterialApp(
-        theme: theme.light(),
-        home: page,
+        theme: dark ? theme.dark() : theme.light(),
+        home: page is HomePage || page is CalendarPage
+            ? Scaffold(body: page)
+            : page,
       ),
     ),
   );
