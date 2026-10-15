@@ -20,6 +20,10 @@ class NotificationService {
     return granted ?? false;
   }
 
+  Future<void> openBatteryOptimizationSettings() async {
+    await _channel.invokeMethod<void>('openBatteryOptimizationSettings');
+  }
+
   Future<void> rebuild(Iterable<PlannedNotification> requests) async {
     final plan = [for (final request in requests) request.toJson()];
     final signature = jsonEncode(plan);

@@ -2,7 +2,12 @@ package io.github.aceykn.nwuschedule
 
 import android.app.Activity
 import android.app.NotificationManager
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
@@ -18,17 +23,44 @@ class NotificationChannelHandler(private val activity: Activity) {
                 val channelAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
                     manager.getNotificationChannel("course_reminders")?.importance != NotificationManager.IMPORTANCE_NONE
                 val preferences = activity.getSharedPreferences("nwu_schedule_notifications", Activity.MODE_PRIVATE)
+                val powerManager = activity.getSystemService(Activity.POWER_SERVICE) as PowerManager
+                val batteryOptimizationIgnored = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+                    powerManager.isIgnoringBatteryOptimizations(activity.packageName)
                 mapOf("systemAllowed" to allowed, "channelAllowed" to channelAllowed,
+                    "batteryOptimizationIgnored" to batteryOptimizationIgnored,
                     "planStored" to preferences.contains("scheduled_requests_v1"),
                     "replenishFailed" to preferences.getBoolean("replenish_failed", false), "exact" to false)
             }
             "rebuildNotifications" -> rebuildNotifications(call, result)
+            "openBatteryOptimizationSettings" -> openBatteryOptimizationSettings(result)
             "clearNotifications" -> PlatformTaskRunner.submit(result, "clear_failed") {
                 NotificationAlarmScheduler.clear(activity)
                 null
             }
             else -> result.notImplemented()
         }
+    }
+
+    private fun openBatteryOptimizationSettings(result: MethodChannel.Result) {
+        val intents = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                add(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+            add(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:${activity.packageName}")))
+        }
+        for (intent in intents) {
+            try {
+                activity.startActivity(intent)
+                result.success(null)
+                return
+            } catch (_: ActivityNotFoundException) {
+                // Some manufacturers omit the standard battery settings screen.
+            } catch (_: SecurityException) {
+                // Fall back if the manufacturer restricts access to this screen.
+            }
+        }
+        result.error("settings_unavailable", "无法打开系统设置，请在手机设置中调整本应用的电池限制", null)
     }
 
     fun onRequestPermissionsResult(requestCode: Int, grantResults: IntArray): Boolean {

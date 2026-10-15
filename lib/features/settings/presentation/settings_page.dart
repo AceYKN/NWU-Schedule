@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +14,10 @@ import '../../../domain/settings/appearance_preferences.dart';
 import '../../../domain/settings/schedule_display_preferences.dart';
 import '../../../infrastructure/backup/backup_file_service.dart';
 import '../../../infrastructure/import/webview_session_service.dart';
+
+const _backgroundRunningDescription =
+    '将“西小课”的电池使用设为“不受限制”或“不优化”，可减少提醒和小组件更新延迟。';
+const _backgroundRunningPromptKey = 'notifications.backgroundPromptShown';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -170,6 +175,33 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       ref.invalidate(notificationPlatformStatusProvider),
                 ),
                 const Divider(height: 1),
+                if (!kIsWeb &&
+                    defaultTargetPlatform == TargetPlatform.android) ...[
+                  ListTile(
+                    leading: const Icon(Icons.battery_saver_outlined),
+                    title: const Text('电池与后台设置'),
+                    subtitle: Text(
+                      '${switch (platform?['batteryOptimizationIgnored']) {
+                        true => '电池优化：已豁免',
+                        false => '电池优化：未豁免',
+                        _ => '电池优化：状态未知',
+                      }}\n$_backgroundRunningDescription',
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: TextButton(
+                        onPressed: () => _run(
+                          () => _openBackgroundRunningSettings(context, ref),
+                        ),
+                        child: const Text('前往设置'),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                ],
                 ListTile(
                   leading: const Icon(Icons.timer_outlined),
                   title: const Text('提前时间'),
@@ -610,7 +642,7 @@ Future<void> _bestEffort(Future<void> Function() operation) async {
   try {
     await operation();
   } on Object {
-    // Local data is already cleared; platform cleanup is best effort.
+    // Optional platform work must not undo a successful local operation.
   }
 }
 
@@ -713,10 +745,73 @@ Future<void> _setNotificationEnabled(
     ref.invalidate(notificationEnabledProvider);
     await ref.read(notificationTaskQueueProvider).schedule(state);
     if (context.mounted) _showMessage(context, '上课提醒已开启');
+    // An optional battery hint must not turn a successful reminder setup into
+    // a failure, even if reading or saving the hint state fails.
+    await _bestEffort(() => _maybeShowBackgroundRunningPrompt(context, ref));
   } catch (error) {
     if (context.mounted) {
       _showMessage(context, nwuUserMessage(error, action: '设置提醒失败'));
     }
+  }
+}
+
+Future<void> _openBackgroundRunningSettings(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  try {
+    await ref
+        .read(notificationServiceProvider)
+        .openBatteryOptimizationSettings();
+    if (context.mounted) ref.invalidate(notificationPlatformStatusProvider);
+  } catch (_) {
+    if (context.mounted) {
+      _showMessage(context, '无法打开系统设置，请在手机设置中调整本应用的电池限制');
+    }
+  }
+}
+
+Future<void> _maybeShowBackgroundRunningPrompt(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  if (!context.mounted ||
+      kIsWeb ||
+      defaultTargetPlatform != TargetPlatform.android) {
+    return;
+  }
+  final repository = ref.read(scheduleDataRepositoryProvider);
+  if (await repository.getSetting(_backgroundRunningPromptKey) == 'true') {
+    return;
+  }
+  if (!context.mounted) return;
+  final status = await ref.read(notificationServiceProvider).status();
+  if (!context.mounted || status?['batteryOptimizationIgnored'] != false) {
+    return;
+  }
+  await repository.setSetting(_backgroundRunningPromptKey, 'true');
+  if (!context.mounted) return;
+  final openSettings = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('电池与后台设置'),
+      content: const SingleChildScrollView(
+        child: Text(_backgroundRunningDescription),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('暂时跳过'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('前往设置'),
+        ),
+      ],
+    ),
+  );
+  if (context.mounted && openSettings == true) {
+    await _openBackgroundRunningSettings(context, ref);
   }
 }
 
