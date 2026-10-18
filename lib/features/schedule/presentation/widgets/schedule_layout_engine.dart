@@ -9,8 +9,8 @@ class ScheduleGridMetrics {
 
   static const headerHeight = 54.0;
   static const periodHeight = 68.0;
-  static const timeRailWidth = 46.0;
-  static const compactTimeRailWidth = 34.0;
+  static const timeRailWidth = 40.0;
+  static const compactTimeRailWidth = 28.0;
   static const eventGap = 3.0;
   static const afternoonGap = 6.0;
   static const eveningGap = 8.0;

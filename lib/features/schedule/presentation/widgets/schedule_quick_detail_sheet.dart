@@ -119,6 +119,14 @@ class _QuickDetailContent extends StatelessWidget {
           if (instance.campus != null && instance.campus!.trim().isNotEmpty)
             _InfoValue(instance.campus!),
           _InfoValue('当前：第$selectedWeek周'),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: CourseExceptionAction(
+              pageContext: pageContext,
+              instance: instance,
+            ),
+          ),
           const SizedBox(height: 18),
           const Divider(),
           const SizedBox(height: 14),

@@ -228,7 +228,7 @@ void main() {
 
     await pumpPage(SchedulePage(now: now));
     expect(find.text('周课表'), findsNothing);
-    expect(find.text('第 2 周'), findsOneWidget);
+    expect(find.text('第2周'), findsOneWidget);
     expect(find.byIcon(Icons.keyboard_arrow_down), findsNothing);
     expect(find.text('回本周'), findsNothing);
     final viewport = tester.getRect(find.byType(PageView));
@@ -240,7 +240,7 @@ void main() {
     expect(find.text('六'), findsOneWidget);
     await tester.drag(find.byType(PageView), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('第 1 周'), findsOneWidget);
+    expect(find.text('第1周'), findsOneWidget);
     expect(find.text('回本周'), findsOneWidget);
     final backButton = tester.getRect(find.byTooltip('返回本周'));
     final addButton = tester.getRect(find.byTooltip('添加课程'));
@@ -265,13 +265,13 @@ void main() {
     expect(find.textContaining('本周周末有 1 节课'), findsOneWidget);
     await tester.tap(find.text('回本周'));
     await tester.pumpAndSettle();
-    expect(find.text('第 2 周'), findsOneWidget);
+    expect(find.text('第2周'), findsOneWidget);
     expect(find.text('回本周'), findsNothing);
     for (var swipe = 0; swipe < 8; swipe++) {
       await tester.drag(find.byType(PageView), const Offset(-600, 0));
       await tester.pumpAndSettle();
     }
-    expect(find.text('第 10 周'), findsOneWidget);
+    expect(find.text('第10周'), findsOneWidget);
     final eveningFinder = find.text('晚间课程', skipOffstage: false);
     await tester.ensureVisible(eveningFinder);
     await tester.pumpAndSettle();
@@ -287,7 +287,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('回本周'));
     await tester.pumpAndSettle();
-    expect(find.text('第 2 周'), findsOneWidget);
+    expect(find.text('第2周'), findsOneWidget);
     expect(find.text('回本周'), findsNothing);
     final courseFinder = find.textContaining('软件测试', skipOffstage: false);
     await tester.ensureVisible(courseFinder);

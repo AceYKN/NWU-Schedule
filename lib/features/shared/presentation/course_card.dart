@@ -203,15 +203,9 @@ void showCourseDetails(
                           children: [
                             if (instance.isException &&
                                 instance.exceptionId != null)
-                              OutlinedButton.icon(
-                                onPressed: () => _deleteException(
-                                  context,
-                                  sheetContext,
-                                  ref,
-                                  instance.exceptionId!,
-                                ),
-                                icon: const Icon(Icons.undo_outlined),
-                                label: const Text('撤销临时变更'),
+                              CourseExceptionAction(
+                                pageContext: context,
+                                instance: instance,
                               ),
                             OutlinedButton.icon(
                               onPressed: () => _showCourseColorPicker(
@@ -224,15 +218,9 @@ void showCourseDetails(
                               label: const Text('修改颜色'),
                             ),
                             if (!instance.isException)
-                              OutlinedButton.icon(
-                                onPressed: () => _showExceptionEditor(
-                                  context,
-                                  sheetContext,
-                                  ref,
-                                  instance,
-                                ),
-                                icon: const Icon(Icons.edit_calendar_outlined),
-                                label: const Text('临时变更'),
+                              CourseExceptionAction(
+                                pageContext: context,
+                                instance: instance,
                               ),
                             if (!instance.isException) ...[
                               OutlinedButton.icon(
@@ -279,6 +267,37 @@ void showCourseDetails(
               ));
     },
   );
+}
+
+class CourseExceptionAction extends ConsumerWidget {
+  const CourseExceptionAction({
+    required this.pageContext,
+    required this.instance,
+    super.key,
+  });
+
+  final BuildContext pageContext;
+  final EffectiveCourseInstance instance;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (instance.isException) {
+      final exceptionId = instance.exceptionId;
+      if (exceptionId == null) return const SizedBox.shrink();
+      return OutlinedButton.icon(
+        onPressed: () =>
+            _deleteException(pageContext, context, ref, exceptionId),
+        icon: const Icon(Icons.undo_outlined),
+        label: const Text('撤销临时变更'),
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: () =>
+          _showExceptionEditor(pageContext, context, ref, instance),
+      icon: const Icon(Icons.edit_calendar_outlined),
+      label: const Text('临时变更'),
+    );
+  }
 }
 
 Future<CalendarDefinition?> _exceptionCalendar(

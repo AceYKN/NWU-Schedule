@@ -33,7 +33,7 @@ class ScheduleWeekGrid extends StatelessWidget {
       1.0,
       MediaQuery.textScalerOf(context).scale(14) / 14,
     );
-    final weekLabel = '第 ${viewModel.week} 周';
+    final weekLabel = '第${viewModel.week}周';
     final weekLabelStyle = Theme.of(context).textTheme.labelSmall!.copyWith(
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -41,7 +41,7 @@ class ScheduleWeekGrid extends StatelessWidget {
         );
     final labelPainter = TextPainter(
       // Reserve two digits so columns stay aligned when swiping past week 9.
-      text: TextSpan(text: '第 64 周', style: weekLabelStyle),
+      text: TextSpan(text: '第64周', style: weekLabelStyle),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
     )..layout();
@@ -50,7 +50,7 @@ class ScheduleWeekGrid extends StatelessWidget {
               ? ScheduleGridMetrics.timeRailWidth
               : ScheduleGridMetrics.compactTimeRailWidth) *
           scale,
-      labelPainter.width + 8,
+      labelPainter.width + 2 * scale,
     );
     labelPainter.dispose();
     final periodCount = NwuPeriodRepository.all.length;

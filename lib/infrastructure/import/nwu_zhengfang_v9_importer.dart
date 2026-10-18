@@ -4,8 +4,9 @@ import '../../domain/import/timetable_importer.dart';
 typedef TimetablePayloadReader = Future<Map<String, dynamic>> Function();
 
 /// NWU's current public entry is a Zhengfang V9 installation. The concrete
-/// page/API discovery remains outside this normalizer because the authenticated
-/// endpoint and response shape must be observed in a real student session.
+/// API requests and schemas were observed in a real session on 2026-10-07;
+/// see docs/authenticated-import-acceptance-2026-10-07.md. This normalizer
+/// consumes the rendered DOM payload rather than the site's raw JSON response.
 class NwuZhengfangV9Importer implements TimetableImporter {
   static const adapterVersion = 'nwu-zhengfang-v9-dom-v9';
   static final entryUri = Uri.parse(
@@ -37,7 +38,7 @@ class NwuZhengfangV9Importer implements TimetableImporter {
   ///
   /// This is deliberately narrower than [isAllowedUri]. The latter protects
   /// the navigation host boundary; this allowlist protects the JavaScript
-  /// bridge boundary. The endpoint and response schema remain unverified.
+  /// bridge boundary. Observed API schemas do not broaden bridge access.
   static bool isTrustedTimetableUri(Uri uri) {
     if (!isAllowedUri(uri) || isLoginUri(uri)) return false;
     final path = uri.path.toLowerCase();

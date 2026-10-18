@@ -19,7 +19,7 @@
 /jwglxt/kbcx/xskbcx_cxXsgrkb.html
 ```
 
-其余仍在官方域名下的页面可以继续导航，但不会获得课表 JavaScript Bridge；即使路径匹配，页面仍必须实际暴露 `#kblist_table` 或明确的课表 payload 才会启用 Bridge。页面路径或 DOM 结构变化时应导出诊断后再更新适配器。当前诊断版本为 `nwu-zhengfang-v9-dom-v9`。这项路径验证不等同于真实 API endpoint、`gnmkdm` 或响应 schema 已验证。
+其余仍在官方域名下的页面可以继续导航，但不会获得课表 JavaScript Bridge；即使路径匹配，页面仍必须实际暴露 `#kblist_table` 或明确的课表 payload 才会启用 Bridge。页面路径或 DOM 结构变化时应导出诊断后再更新适配器。当前诊断版本为 `nwu-zhengfang-v9-dom-v9`。路径 allowlist 本身不证明 API 正确；2026-10-07 的真实请求与 schema 证据另见 [真实账号导入记录](authenticated-import-acceptance-2026-10-07.md)。
 
 真实页面 DOM 已验证存在列表课表 `#kblist_table`。当前主 DOM 适配器只依赖以下已观察结构：
 
@@ -31,7 +31,9 @@ jc_<weekday>-<start>-<end>    -> 节次范围
 
 当前 V9 列表页的课程单元使用 `.timetable_con`：课程名在 `.title`，带 `glyphicon-calendar` 的字体节点提供“节次/周次”，带 `glyphicon-map-marker` 的字体节点提供“校区/教室”，带 `glyphicon-user` 的字体节点提供教师。真实页面的日历字段可能显示为 `周数：1-18周`，适配器会去掉这个展示标签后再解析周次。旧版或脱敏 fixture 中的 `周数：`、`校区:`、`上课地点：`、`教师：` 标签分支仍保留。DOM 适配器优先从这些结构化字段切分产品字段，不再从视觉矩阵表中猜列位置；`#kbgrid_table_0` 不作为主解析源。课程代码、教学班、学分和考核方式不属于产品课表字段，适配器不会解析或输出它们；没有稳定远端 ID 时使用版本化、学期作用域的课程名与完整上课结构指纹，并在 Dart Diff 层做保守匹配。若 `#kblist_table` 存在但结构不符合上述契约，应直接产生校验错误并停止导入，不回退到启发式解析。仓库中的 `nwu_kblist_fixture.html` 只保留脱敏后的结构与合成课程数据，不得提交真实姓名、学号或完整原始 DOM。
 
-2026-09-21 的字段级真实页面观察还确认：课表筛选表单的 GET/POST action 都是 `/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html`，学年与学期字段名为 `xnm`、`xqm`；当前页返回的是服务端 HTML 列表，而不是已确认的 JSON 课表响应。课程节点及其父级只暴露展示 class，没有观察到稳定课程/教学班 ID，也没有在已加载脚本和资源路径中确认独立 JSON endpoint。因此当前实现把该服务端列表 DOM 作为经过 allowlist 保护的正式兜底源，并保留稳定远端 ID 一旦被真实接口提供后再接入的边界。
+2026-10-07 通过真实已登录 WebView 重新核对：入口 GET `/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default` 返回 HTML 外壳；选学期查询触发 POST `/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N253508`，返回 JSON 后由页面脚本生成列表和网格。这修正了 2026-09-21 仅观察表单 action 后作出的“服务端 HTML 列表”判断。POST 字段为 `xnm/xqm/kzlx/xsdm/kclbdm/kclxdm`，本次第一、二学期分别观察到 `xqm=3/12`。JSON 的 `kbList` 含 `kcmc/xqj/jcs/zcd/xm/xqmc/cdmc/kch_id/jxb_id` 等字段；当前 App 仍读取渲染后的列表 DOM，并未切换到原始 JSON 解析。
+
+已知列表必须从自身标题识别学年与学期；标题缺失时不能借用下拉选项或页面其他文字。真实页面同时有 `#kbgrid_table_0` 时，还核对两种视图的 `.timetable_con` 条目数；不一致会阻断导入，网格仍不作为解析回退。此检查不能发现两种视图同时以相同方式缺失的数据。
 
 ## 首次导入
 
@@ -42,6 +44,7 @@ jc_<weekday>-<start>-<end>    -> 节次范围
 5. 确认学期列表、课程名、教师、校区、上课地点、星期、节次和周次与教务系统一致。
 6. 确认 Preview 先出现，点击确认后课程、上课安排和导入快照一起保存。
 7. 关闭导入页面，再次进入导入，确认必须重新登录。
+8. 在已登录导入页强制停止 App 后重启，再次进入导入，确认仍要求重新登录；新会话开始前必须重新清理持久化 WebView 登录数据。
 
 ## Diff 与本地修改
 
@@ -89,7 +92,7 @@ jc_<weekday>-<start>-<end>    -> 节次范围
 
 ## 发布前外部确认
 
-- 正方真实认证后的 form boundary 已观察到 action 与 `xnm`/`xqm` 字段；独立 JSON endpoint、完整响应 schema 和稳定远端 ID 仍必须通过后续真实接口观察确认，当前代码不会把其他学校的参数当作 NWU 事实。
+- 2026-10-07 已观察一个账号、五个学期的 JSON endpoint、运行时查询参数和返回字段/类型。`kch_id/jxb_id` 在本次常规课程中存在，同学期重复查询保持一致；跨账号或长期稳定性仍需后续证据，当前 DOM 导入未依赖这些 ID。
 - SPEC 暂定第 11 节为 `21:00–21:50`。西北大学公开作息 PDF 当前列出第 1–10 节，教务通知允许排课到第 11 节但没有给出第 11 节时间；发布前须由项目 Owner 根据校方最新作息确认。参考：[公开作息 PDF](https://www.nwu.edu.cn/__local/A/1C/E3/5C1FC71F3FD6DD7D62660973AEB_437A7D4A_2517.pdf?e=.pdf)、[教务排课通知](https://jwc.nwu.edu.cn/info/1034/10591.htm)。
 
 ## 记录结果
@@ -98,4 +101,4 @@ jc_<weekday>-<start>-<end>    -> 节次范围
 
 验收记录至少包含：APK commit、设备/Android/WebView 版本、导入学期、通过/失败项、脱敏后的错误阶段和是否导出了诊断文件。诊断文件只能由测试人员主动保存和发送，应用不会自动上传。
 
-真实认证 form boundary 已有字段级记录；独立 endpoint、`gnmkdm` 的具体运行时值、完整请求参数和响应 schema 只有在完成真实接口观察后，才能标记为已验证；脱敏 fixture 测试不能替代这一步。
+2026-10-07 的五学期真实认证复核、请求/返回结构、四项现场发现及修复见 [真实账号导入记录](authenticated-import-acceptance-2026-10-07.md)。详细脱敏 JSON 仅保存在测试者本机；本次没有提交、推送或上传 GitHub。脱敏 fixture 测试与真实会话证据分别记录。

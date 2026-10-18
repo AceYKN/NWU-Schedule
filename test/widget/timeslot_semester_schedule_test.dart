@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nwu_schedule/domain/calendar/calendar_definition.dart';
 import 'package:nwu_schedule/domain/calendar/calendar_engine.dart';
@@ -159,7 +160,8 @@ void main() {
     var hidden = false;
 
     await tester.pumpWidget(
-      MaterialApp(
+      ProviderScope(
+          child: MaterialApp(
         home: Scaffold(
           body: Builder(
             builder: (context) => FilledButton(
@@ -176,7 +178,7 @@ void main() {
             ),
           ),
         ),
-      ),
+      )),
     );
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
@@ -205,7 +207,8 @@ void main() {
     var restoredCourseId = '';
 
     await tester.pumpWidget(
-      MaterialApp(
+      ProviderScope(
+          child: MaterialApp(
         home: Scaffold(
           body: Builder(
             builder: (context) => FilledButton(
@@ -223,7 +226,7 @@ void main() {
             ),
           ),
         ),
-      ),
+      )),
     );
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();

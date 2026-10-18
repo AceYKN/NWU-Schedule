@@ -23,6 +23,7 @@ import '../../../infrastructure/import/nwu_zhengfang_v9_importer.dart';
 import '../../../infrastructure/import/webview_diagnostics.dart';
 import '../../../infrastructure/import/webview_session_service.dart';
 import 'import_exception_impacts.dart';
+import 'timetable_import_instructions.dart';
 
 class TimetableImportPage extends ConsumerStatefulWidget {
   const TimetableImportPage({super.key});
@@ -57,6 +58,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   String? _latestStartedUrl;
   bool _reading = false;
   bool _saving = false;
+  bool _importStarted = false;
 
   @override
   void initState() {
@@ -90,17 +92,32 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
           onHttpError: _recordHttpError,
         ),
       );
-    // A force-stop can bypass dispose() and leave persisted login cookies.
-    // Clear them before loading each new import session.
-    unawaited(WebViewSessionService.serializeCleanup(
-      const WebViewSessionService().clear,
-    ).then((_) async {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_beginImport());
+    });
+  }
+
+  Future<void> _beginImport() async {
+    final start = await showTimetableImportInstructions(context, initial: true);
+    if (!mounted) return;
+    if (start != true) {
+      popOrGo(context, '/');
+      return;
+    }
+    setState(() => _importStarted = true);
+    try {
+      // A force-stop can bypass dispose(), leaving persisted WebView cookies.
+      // Clear them again before every new import session, after any pending
+      // cleanup, so restarting the process cannot reuse an authenticated page.
+      await WebViewSessionService.serializeCleanup(
+        const WebViewSessionService().clear,
+      );
       if (mounted) {
         await _controller.loadRequest(NwuZhengfangV9Importer.entryUri);
       }
-    }).catchError((Object error) {
+    } on Object {
       if (mounted) _setError('打开教务页面失败');
-    }));
+    }
   }
 
   @override
@@ -636,15 +653,26 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
                 icon: const Icon(Icons.close),
               ),
               Expanded(
-                child: Text(
-                  '从教务系统导入',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '从教务系统导入',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => showTimetableImportInstructions(context),
+                      icon: const Icon(Icons.help_outline, size: 18),
+                      label: const Text('操作说明'),
+                    ),
+                  ],
                 ),
               ),
               FilledButton.tonalIcon(
-                onPressed: _reading ? null : _readCurrentPage,
+                onPressed:
+                    !_importStarted || _reading ? null : _readCurrentPage,
                 icon: _reading
                     ? const SizedBox(
                         width: 16,

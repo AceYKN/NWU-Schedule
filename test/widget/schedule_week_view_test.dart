@@ -61,6 +61,7 @@ void main() {
   testWidgets('day status headers and the time rail fit larger text scales', (
     tester,
   ) async {
+    await tester.runAsync(loadGoldenFonts);
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -88,26 +89,41 @@ void main() {
       entries: baseModel.entries,
     );
 
-    for (final scale in [1.0, 1.15, 1.3, 1.8]) {
-      await _pumpGrid(
-        tester,
-        model,
-        model.days,
-        showWeekend: true,
-        showPeriodTimes: false,
-        textScale: scale,
-      );
-      expect(find.text('第 12 周'), findsOneWidget);
-      final labelRect = tester.getRect(find.text('第 12 周'));
-      final firstPeriodRect = tester.getRect(
-        find.byType(ScheduleTimeAxis).first,
-      );
-      expect(labelRect.left, greaterThanOrEqualTo(firstPeriodRect.left));
-      expect(labelRect.right, lessThanOrEqualTo(firstPeriodRect.right));
-      expect(find.text('休'), findsOneWidget);
-      expect(find.text('调'), findsOneWidget);
-      expect(find.text('补'), findsOneWidget);
-      expect(tester.takeException(), isNull);
+    for (final scale in [1.0, 1.15, 1.3, 1.8, 2.0]) {
+      for (final showPeriodTimes in [false, true]) {
+        await _pumpGrid(
+          tester,
+          model,
+          model.days,
+          showWeekend: true,
+          showPeriodTimes: showPeriodTimes,
+          textScale: scale,
+        );
+        expect(find.text('第12周'), findsOneWidget);
+        final labelRect = tester.getRect(find.text('第12周'));
+        final firstPeriodRect = tester.getRect(
+          find.byType(ScheduleTimeAxis).first,
+        );
+        expect(labelRect.left, greaterThanOrEqualTo(firstPeriodRect.left));
+        expect(labelRect.right, lessThanOrEqualTo(firstPeriodRect.right));
+        expect(firstPeriodRect.width, lessThanOrEqualTo(40 * scale));
+        final railText = find.descendant(
+          of: find.byType(ScheduleTimeAxis).first,
+          matching: find.byType(Text),
+        );
+        for (final element in railText.evaluate()) {
+          final finder = find.byElementPredicate((other) => other == element);
+          final paragraph = tester.renderObject<RenderParagraph>(finder);
+          expect(paragraph.didExceedMaxLines, isFalse);
+          final textRect = tester.getRect(finder);
+          expect(textRect.left, greaterThanOrEqualTo(firstPeriodRect.left));
+          expect(textRect.right, lessThanOrEqualTo(firstPeriodRect.right));
+        }
+        expect(find.text('休'), findsOneWidget);
+        expect(find.text('调'), findsOneWidget);
+        expect(find.text('补'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
     }
   });
 
