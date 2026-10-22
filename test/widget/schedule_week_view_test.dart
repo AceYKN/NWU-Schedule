@@ -99,8 +99,8 @@ void main() {
           showPeriodTimes: showPeriodTimes,
           textScale: scale,
         );
-        expect(find.text('第12周'), findsOneWidget);
-        final labelRect = tester.getRect(find.text('第12周'));
+        expect(find.text('第12週'), findsOneWidget);
+        final labelRect = tester.getRect(find.text('第12週'));
         final firstPeriodRect = tester.getRect(
           find.byType(ScheduleTimeAxis).first,
         );
@@ -120,8 +120,8 @@ void main() {
           expect(textRect.right, lessThanOrEqualTo(firstPeriodRect.right));
         }
         expect(find.text('休'), findsOneWidget);
-        expect(find.text('调'), findsOneWidget);
-        expect(find.text('补'), findsOneWidget);
+        expect(find.text('調'), findsOneWidget);
+        expect(find.text('補'), findsOneWidget);
         expect(tester.takeException(), isNull);
       }
     }
@@ -146,14 +146,14 @@ void main() {
         home: Scaffold(body: ScheduleDayHeader(day: day)),
       ),
     );
-    const label = '星期六，9月12日，周末补课，补班';
+    const label = '星期六，9月12日，周末补课，補班';
     final annotatedHeader = find.byWidgetPredicate(
       (widget) => widget is Semantics && widget.properties.label == label,
       description: 'makeup day semantics annotation',
     );
     expect(annotatedHeader, findsOneWidget);
     expect(tester.getSemantics(annotatedHeader).label, label);
-    expect(find.text('补'), findsOneWidget);
+    expect(find.text('補'), findsOneWidget);
     semantics.dispose();
   });
 
@@ -979,7 +979,7 @@ void main() {
         makeupDays: const {DateTime.saturday},
       );
 
-      expect(weekendCourseNoticeMessage(model), '本周六有补课安排');
+      expect(weekendCourseNoticeMessage(model), '本週六有補課安排');
     },
   );
 }

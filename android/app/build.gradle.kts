@@ -74,6 +74,15 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Flutter may uninstall an existing app when an APK cannot replace
+            // it. Never let a debug key collide with the signed production app.
+            applicationIdSuffix = when {
+                providers.gradleProperty("nwuDesignPreview").orNull == "true" -> ".designpreview"
+                providers.gradleProperty("nwuUiPreview").orNull == "true" -> ".uipreview"
+                else -> ".debug"
+            }
+        }
         release {
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")

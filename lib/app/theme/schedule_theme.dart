@@ -308,13 +308,7 @@ class ScheduleThemeDefinition {
       ),
       textTheme: _textTheme(Brightness.light),
       extensions: [_tokens()],
-      navigationBarTheme: NavigationBarThemeData(
-        height: 72,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        elevation: 0,
-        backgroundColor: scheme.surface,
-        indicatorColor: scheme.primaryContainer,
-      ),
+      navigationBarTheme: _navigationTheme(scheme, colors.lightBackground),
     );
   }
 
@@ -342,12 +336,7 @@ class ScheduleThemeDefinition {
       ),
       textTheme: _textTheme(Brightness.dark),
       extensions: [_tokens()],
-      navigationBarTheme: NavigationBarThemeData(
-        height: 72,
-        elevation: 0,
-        backgroundColor: scheme.surface,
-        indicatorColor: scheme.primaryContainer,
-      ),
+      navigationBarTheme: _navigationTheme(scheme, colors.darkBackground),
     );
   }
 
@@ -405,6 +394,31 @@ class ScheduleThemeDefinition {
     );
   }
 }
+
+NavigationBarThemeData _navigationTheme(ColorScheme scheme, Color background) =>
+    NavigationBarThemeData(
+      height: 72,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      elevation: 0,
+      backgroundColor: background,
+      surfaceTintColor: Colors.transparent,
+      indicatorColor: scheme.primary.withValues(alpha: .10),
+      labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+            fontSize: 12,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w500,
+            color: states.contains(WidgetState.selected)
+                ? scheme.primary
+                : scheme.onSurfaceVariant,
+          )),
+      iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+            size: 24,
+            color: states.contains(WidgetState.selected)
+                ? scheme.primary
+                : scheme.onSurfaceVariant,
+          )),
+    );
 
 ScheduleThemeTokens scheduleThemeTokensOf(BuildContext context) {
   return Theme.of(context).extension<ScheduleThemeTokens>() ??

@@ -16,6 +16,16 @@ void main(List<String> args) {
     throw StateError('Merged Android manifest not found: ${file.path}');
   }
   final manifest = file.readAsStringSync();
+  final package = RegExp(r'\bpackage="([^"]+)"').firstMatch(manifest)?.group(1);
+  final expectedPackage = releaseBuild
+      ? 'io.github.aceykn.nwuschedule'
+      : 'io.github.aceykn.nwuschedule.debug';
+  if (package != expectedPackage) {
+    throw StateError(
+      'Unexpected application ID: $package (expected $expectedPackage). '
+      'Debug builds must not replace the signed production app.',
+    );
+  }
   final permissions = RegExp(
     r'<uses-permission\b[^>]*android:name="([^"]+)"[^>]*/?>',
   ).allMatches(manifest).map((match) => match.group(1)!).toSet();

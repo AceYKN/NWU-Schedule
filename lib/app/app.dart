@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:go_router/go_router.dart';
 
 import 'bootstrap.dart';
 import '../core/nwu/constants.dart';
@@ -10,7 +11,18 @@ import 'router.dart';
 import 'theme/schedule_theme.dart';
 
 class NwuScheduleApp extends ConsumerStatefulWidget {
-  const NwuScheduleApp({super.key});
+  const NwuScheduleApp({
+    super.key,
+    this.router,
+    this.theme,
+    this.darkTheme,
+    this.locale = const Locale('zh', 'CN'),
+  });
+
+  final GoRouter? router;
+  final ThemeData? theme;
+  final ThemeData? darkTheme;
+  final Locale locale;
 
   @override
   ConsumerState<NwuScheduleApp> createState() => _NwuScheduleAppState();
@@ -26,7 +38,7 @@ class _NwuScheduleAppState extends ConsumerState<NwuScheduleApp>
     WidgetsBinding.instance.addObserver(this);
     _navigationChannel.setMethodCallHandler((call) async {
       if (call.method == 'openRoute' && call.arguments is String) {
-        appRouter.go(call.arguments as String);
+        (widget.router ?? appRouter).go(call.arguments as String);
       }
       return null;
     });
@@ -57,18 +69,23 @@ class _NwuScheduleAppState extends ConsumerState<NwuScheduleApp>
         ref.watch(themeModeProvider).asData?.value ?? AppThemeMode.system;
     return MaterialApp.router(
       title: nwuAppName,
-      locale: const Locale('zh', 'CN'),
-      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+      locale: widget.locale,
+      supportedLocales: const [
+        Locale('ja', 'JP'),
+        Locale('zh', 'TW'),
+        Locale('zh', 'CN'),
+        Locale('en', 'US'),
+      ],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       debugShowCheckedModeBanner: false,
-      theme: theme.light(),
-      darkTheme: theme.dark(),
+      theme: widget.theme ?? theme.light(),
+      darkTheme: widget.darkTheme ?? theme.dark(),
       themeMode: switch (selectedThemeMode) {
         AppThemeMode.system => ThemeMode.system,
         AppThemeMode.light => ThemeMode.light,
         AppThemeMode.dark => ThemeMode.dark,
       },
-      routerConfig: appRouter,
+      routerConfig: widget.router ?? appRouter,
     );
   }
 }

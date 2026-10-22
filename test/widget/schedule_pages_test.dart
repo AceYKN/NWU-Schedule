@@ -228,22 +228,23 @@ void main() {
 
     await pumpPage(SchedulePage(now: now));
     expect(find.text('周课表'), findsNothing);
-    expect(find.text('第2周'), findsOneWidget);
+    expect(find.text('第2週'), findsOneWidget);
     expect(find.byIcon(Icons.keyboard_arrow_down), findsNothing);
-    expect(find.text('回本周'), findsNothing);
+    expect(find.text('回本週'), findsNothing);
     final viewport = tester.getRect(find.byType(PageView));
     expect(viewport.top, tester.getRect(find.byType(SchedulePage)).top);
+    expect(find.text('每週課表'), findsNothing);
     expect(find.text('六'), findsNothing);
-    expect(find.textContaining('本周周末有 1 节课'), findsOneWidget);
-    await tester.tap(find.textContaining('查看周末'));
+    expect(find.textContaining('本週週末有 1 節課'), findsOneWidget);
+    await tester.tap(find.textContaining('查看週末'));
     await tester.pumpAndSettle();
     expect(find.text('六'), findsOneWidget);
     await tester.drag(find.byType(PageView), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('第1周'), findsOneWidget);
-    expect(find.text('回本周'), findsOneWidget);
-    final backButton = tester.getRect(find.byTooltip('返回本周'));
-    final addButton = tester.getRect(find.byTooltip('添加课程'));
+    expect(find.text('第1週'), findsOneWidget);
+    expect(find.text('回本週'), findsOneWidget);
+    final backButton = tester.getRect(find.byTooltip('返回本週'));
+    final addButton = tester.getRect(find.byTooltip('添加課程'));
     expect(backButton.right, lessThan(addButton.left));
     expect(backButton.center.dy, addButton.center.dy);
     expect(tester.getRect(find.byType(PageView)), viewport);
@@ -262,33 +263,34 @@ void main() {
     await tester.pumpAndSettle();
     expect(scrollable.position.pixels, greaterThan(0));
     expect(find.text('六'), findsNothing);
-    expect(find.textContaining('本周周末有 1 节课'), findsOneWidget);
-    await tester.tap(find.text('回本周'));
+    expect(find.textContaining('本週週末有 1 節課'), findsOneWidget);
+    await tester.tap(find.text('回本週'));
     await tester.pumpAndSettle();
-    expect(find.text('第2周'), findsOneWidget);
-    expect(find.text('回本周'), findsNothing);
+    expect(find.text('第2週'), findsOneWidget);
+    expect(find.text('回本週'), findsNothing);
     for (var swipe = 0; swipe < 8; swipe++) {
       await tester.drag(find.byType(PageView), const Offset(-600, 0));
       await tester.pumpAndSettle();
     }
-    expect(find.text('第10周'), findsOneWidget);
+    expect(find.text('第10週'), findsOneWidget);
     final eveningFinder = find.text('晚间课程', skipOffstage: false);
     await tester.ensureVisible(eveningFinder);
     await tester.pumpAndSettle();
     final eveningRect = tester.getRect(eveningFinder);
     expect(
       eveningRect.bottom,
-      lessThan(tester.getRect(find.byTooltip('返回本周')).top),
+      lessThan(tester.getRect(find.byTooltip('返回本週')).top),
     );
     await tester.tap(eveningFinder);
     await tester.pumpAndSettle();
-    expect(find.text('当前：第10周'), findsOneWidget);
-    Navigator.of(tester.element(find.text('当前：第10周'))).pop();
+    final selectedWeekFinder = find.textContaining('当前：第10周');
+    expect(selectedWeekFinder, findsOneWidget);
+    Navigator.of(tester.element(selectedWeekFinder)).pop();
     await tester.pumpAndSettle();
-    await tester.tap(find.text('回本周'));
+    await tester.tap(find.text('回本週'));
     await tester.pumpAndSettle();
-    expect(find.text('第2周'), findsOneWidget);
-    expect(find.text('回本周'), findsNothing);
+    expect(find.text('第2週'), findsOneWidget);
+    expect(find.text('回本週'), findsNothing);
     final courseFinder = find.textContaining('软件测试', skipOffstage: false);
     await tester.ensureVisible(courseFinder);
     await tester.pumpAndSettle();
@@ -297,7 +299,7 @@ void main() {
     await pumpPage(SchedulePage(now: DateTime.utc(2027, 9, 1)));
     await tester.drag(find.byType(PageView), const Offset(-600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('回本周'), findsNothing);
+    expect(find.text('回本週'), findsNothing);
     expect(tester.takeException(), isNull);
 
     await pumpPage(CalendarPage(now: now));

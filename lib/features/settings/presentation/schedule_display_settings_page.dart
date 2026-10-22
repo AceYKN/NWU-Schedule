@@ -5,11 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/theme/campus_design.dart';
 import '../../../app/theme/schedule_theme.dart';
 import '../../../core/nwu/periods.dart';
 import '../../../domain/settings/schedule_display_preferences.dart';
-import '../../../domain/errors/app_error.dart';
 import '../../shared/presentation/app_page_header.dart';
+import 'package:nwu_schedule/features/shared/presentation/campus_text.dart';
 
 class ScheduleDisplaySettingsPage extends ConsumerStatefulWidget {
   const ScheduleDisplaySettingsPage({super.key});
@@ -30,7 +31,9 @@ class _ScheduleDisplaySettingsPageState
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(nwuUserMessage(error, action: '更新课表显示失败'))),
+          SnackBar(
+              content: Text(campusUserMessage(context, error,
+                  action: campusText(context, '更新课表显示失败')))),
         );
       }
     } finally {
@@ -55,15 +58,15 @@ class _ScheduleDisplaySettingsPageState
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
         children: [
-          if (_busy) const Text('正在处理…'),
+          if (_busy) Text(campusText(context, '正在处理…')),
           AppPageHeader(
-            title: '课表显示',
+            title: campusText(context, '课表显示'),
             showBack: true,
             onBack: () => context.go('/settings'),
           ),
           const SizedBox(height: 8),
           Text(
-            '预览',
+            campusText(context, '预览'),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontSize: scheduleThemeTokensOf(context).sectionTitleSize,
                   fontWeight: FontWeight.w700,
@@ -76,51 +79,51 @@ class _ScheduleDisplaySettingsPageState
             child: Column(
               children: [
                 _PreferenceSwitch(
-                  title: '始终显示周末',
-                  subtitle: '关闭时，有周末课程的周会提示你临时查看周末',
+                  title: campusText(context, '始终显示周末'),
+                  subtitle: campusText(context, '关闭时，有周末课程的周会提示你临时查看周末'),
                   value: preferences.showWeekend,
                   onChanged: (value) =>
                       _run(() => _save(ref, 'showWeekend', value)),
                 ),
                 const Divider(height: 1),
                 _PreferenceSwitch(
-                  title: '显示教师',
+                  title: campusText(context, '显示教师'),
                   value: preferences.showTeacher,
                   onChanged: (value) =>
                       _run(() => _save(ref, 'showTeacher', value)),
                 ),
                 const Divider(height: 1),
                 _PreferenceSwitch(
-                  title: '显示校区',
-                  subtitle: '关闭后仅显示教室',
+                  title: campusText(context, '显示校区'),
+                  subtitle: campusText(context, '关闭后仅显示教室'),
                   value: preferences.showCampus,
                   onChanged: (value) =>
                       _run(() => _save(ref, 'showCampus', value)),
                 ),
                 const Divider(height: 1),
                 _PreferenceSwitch(
-                  title: '显示非本周课程',
+                  title: campusText(context, '显示非本周课程'),
                   value: preferences.showInactiveCourses,
                   onChanged: (value) =>
                       _run(() => _save(ref, 'showInactiveCourses', value)),
                 ),
                 const Divider(height: 1),
                 _PreferenceSwitch(
-                  title: '显示节次时间',
+                  title: campusText(context, '显示节次时间'),
                   value: preferences.showPeriodTimes,
                   onChanged: (value) =>
                       _run(() => _save(ref, 'showPeriodTimes', value)),
                 ),
                 const Divider(height: 1),
                 _PreferenceSwitch(
-                  title: '高亮当前节次',
+                  title: campusText(context, '高亮当前节次'),
                   value: preferences.highlightCurrentPeriod,
                   onChanged: (value) =>
                       _save(ref, 'highlightCurrentPeriod', value),
                 ),
                 const Divider(height: 1),
                 _PreferenceSwitch(
-                  title: '显示“返回本周”按钮',
+                  title: campusText(context, '显示“返回本周”按钮'),
                   value: preferences.showBackToCurrentWeekFab,
                   onChanged: (value) =>
                       _save(ref, 'showBackToCurrentWeekFab', value),
@@ -181,10 +184,11 @@ class _ScheduleDisplaySettingsPageState
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
-        content: Text('已恢复“$courseName”'),
+        content:
+            Text(campusText(context, '已恢复“{0}”', values: {'0': courseName})),
         duration: const Duration(seconds: 5),
         action: SnackBarAction(
-          label: '撤销',
+          label: campusText(context, '撤销'),
           onPressed: () => unawaited(_run(() => _addHidden(ref, courseId))),
         ),
       ),
@@ -202,10 +206,11 @@ class _ScheduleDisplaySettingsPageState
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
-        content: Text('已恢复 ${previousHidden.length} 门课程'),
+        content: Text(campusText(context, '已恢复 {0} 门课程',
+            values: {'0': previousHidden.length})),
         duration: const Duration(seconds: 5),
         action: SnackBarAction(
-          label: '撤销',
+          label: campusText(context, '撤销'),
           onPressed: () =>
               unawaited(_run(() => _setHidden(ref, previousHidden))),
         ),
@@ -253,11 +258,12 @@ class _HiddenCoursesCard extends StatelessWidget {
       child: Column(
         children: [
           ListTile(
-            title: const Text('已隐藏课程'),
-            subtitle: Text('${ids.length} 门课程不会出现在周课表中'),
+            title: Text(campusText(context, '已隐藏课程')),
+            subtitle: Text(campusText(context, '{0} 门课程不会出现在周课表中',
+                values: {'0': ids.length})),
             trailing: TextButton(
               onPressed: onRestoreAll,
-              child: const Text('全部恢复'),
+              child: Text(campusText(context, '全部恢复')),
             ),
           ),
           for (var index = 0; index < ids.length; index++) ...[
@@ -266,7 +272,7 @@ class _HiddenCoursesCard extends StatelessWidget {
               title: Text(courseNames[ids[index]] ?? ids[index]),
               trailing: TextButton(
                 onPressed: () => onRestore(ids[index]),
-                child: const Text('显示'),
+                child: Text(campusText(context, '显示')),
               ),
             ),
           ],
@@ -347,7 +353,7 @@ class _SchedulePreview extends StatelessWidget {
                     SizedBox(
                       width: 40,
                       child: Text(
-                        '第 4 周',
+                        campusText(context, '第 4 周'),
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11,
@@ -371,7 +377,9 @@ class _SchedulePreview extends StatelessWidget {
                                 vertical: 4,
                               ),
                               child: Text(
-                                days[index],
+                                CampusDesign.maybeOf(context) == null
+                                    ? days[index]
+                                    : '${'月火水木金土日'[index]}曜',
                                 style: TextStyle(
                                   color: index == 1
                                       ? scheme.onPrimaryContainer
@@ -475,7 +483,7 @@ class _SchedulePreview extends StatelessWidget {
                                     vertical: 6,
                                   ),
                                   child: Text(
-                                    '回本周',
+                                    campusText(context, '回本周'),
                                     style: TextStyle(
                                       color: scheme.onSurface,
                                       fontSize: 11,
@@ -546,7 +554,7 @@ class _PreviewBlock extends StatelessWidget {
         ),
       ),
       child: Text(
-        '$title\n$detail',
+        '$title\n${campusText(context, detail)}',
         softWrap: true,
         style: Theme.of(context)
             .textTheme

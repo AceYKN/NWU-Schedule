@@ -184,9 +184,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('本节次其他周安排'), findsOneWidget);
+    expect(find.text('1-20周 · 当前：第1周'), findsOneWidget);
     await tester.drag(find.byType(ListView).last, const Offset(0, -360));
     await tester.pumpAndSettle();
-    expect(find.textContaining('1-20周'), findsOneWidget);
     expect(find.text('1-20周 · 当前'), findsOneWidget);
 
     await tester.tap(find.text('仅在周课表隐藏'));

@@ -10,7 +10,6 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../../../app/bootstrap.dart';
 import '../../../app/navigation.dart';
 import '../../../core/nwu/constants.dart';
-import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/week_mask.dart';
 import '../../../domain/import/import_diff.dart';
 import '../../../domain/import/timetable_import.dart';
@@ -24,6 +23,7 @@ import '../../../infrastructure/import/webview_diagnostics.dart';
 import '../../../infrastructure/import/webview_session_service.dart';
 import 'import_exception_impacts.dart';
 import 'timetable_import_instructions.dart';
+import 'package:nwu_schedule/features/shared/presentation/campus_text.dart';
 
 class TimetableImportPage extends ConsumerStatefulWidget {
   const TimetableImportPage({super.key});
@@ -328,7 +328,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       final selected = await _selectRemoteSemester(semesters);
       if (selected == null) return;
       final timetable = await importer.importSemester(selected);
-      if (generation != _navigationGeneration) return;
+      if (!mounted || generation != _navigationGeneration) return;
       final diff = await _buildDiff(timetable);
       if (!mounted || generation != _navigationGeneration) return;
       setState(() {
@@ -337,15 +337,18 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
         _resolution = ImportConflictResolution.empty;
       });
     } on TimetableImportFailure catch (error) {
-      if (generation != _navigationGeneration) return;
+      if (!mounted || generation != _navigationGeneration) return;
+      final message = campusText(context, importFailureUserMessage(error));
       _setFailure(
-        importFailureUserMessage(error),
+        message,
         await _enrichDiagnostic(error.diagnostic),
       );
     } on Object catch (error) {
-      if (generation != _navigationGeneration) return;
+      if (!mounted || generation != _navigationGeneration) return;
+      final message = campusUserMessage(context, error,
+          action: campusText(context, '无法读取课表'));
       _setFailure(
-        nwuUserMessage(error, action: '无法读取课表'),
+        message,
         await _enrichDiagnostic(ImportDiagnostic(
           adapterVersion: NwuZhengfangV9Importer.adapterVersion,
           parserStage: 'webview-read',
@@ -374,9 +377,9 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
         child: ListView(
           shrinkWrap: true,
           children: [
-            const ListTile(
-              title: Text('选择要导入的学期'),
-              subtitle: Text('课表读取完成后才会写入本地数据'),
+            ListTile(
+              title: Text(campusText(sheetContext, '选择要导入的学期')),
+              subtitle: Text(campusText(sheetContext, '课表读取完成后才会写入本地数据')),
             ),
             ...semesters.map(
               (semester) => ListTile(
@@ -429,16 +432,17 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
         });
       }
     } on Object catch (error) {
-      if (generation != _navigationGeneration) return;
+      if (!mounted || generation != _navigationGeneration) return;
       final diagnostic = await _enrichDiagnostic(ImportDiagnostic(
         adapterVersion: NwuZhengfangV9Importer.adapterVersion,
         parserStage: 'bridge-message',
         currentUrlPath: _currentUrlPath,
         error: redactImportError(error),
       ));
-      if (generation != _navigationGeneration) return;
+      if (!mounted || generation != _navigationGeneration) return;
       _setFailure(
-        nwuUserMessage(error, action: '课表桥接数据无效'),
+        campusUserMessage(context, error,
+            action: campusText(context, '课表桥接数据无效')),
         diagnostic,
       );
     }
@@ -474,14 +478,15 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
           setState(() {
             _diff = refreshed;
             _resolution = ImportConflictResolution.empty;
-            _error = '本地课表已变化，预览已更新。请重新检查后确认导入。';
+            _error = campusText(context, '本地课表已变化，预览已更新。请重新检查后确认导入。');
           });
         }
       } catch (error) {
         if (mounted) {
           setState(() {
             _diff = null;
-            _error = nwuUserMessage(error, action: '更新预览失败，请重新读取');
+            _error = campusUserMessage(context, error,
+                action: campusText(context, '更新预览失败，请重新读取'));
           });
         }
       }
@@ -490,7 +495,9 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
     } on TimetableImportConflictException {
       _setError('发现本地与教务系统同时修改的课程，导入已取消，未写入部分数据');
     } on Object catch (error) {
-      _setError(nwuUserMessage(error, action: '确认导入失败'));
+      if (!mounted) return;
+      _setError(campusUserMessage(context, error,
+          action: campusText(context, '确认导入失败')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -511,12 +518,18 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
       );
       if (mounted) _showMessage(saved ? '诊断信息已导出' : '已取消导出');
     } on Object catch (error) {
-      if (mounted) _showMessage(nwuUserMessage(error, action: '诊断导出失败'));
+      if (mounted) {
+        _showMessage(campusUserMessage(context, error,
+            action: campusText(context, '诊断导出失败')));
+      }
     }
   }
 
   void _setError(String message) {
-    if (mounted) setState(() => _error = message);
+    if (mounted) {
+      final localized = campusText(context, message);
+      setState(() => _error = localized);
+    }
   }
 
   Future<void> _recordWebResourceError(WebResourceError error) async {
@@ -547,7 +560,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
   void _setFailure(String message, ImportDiagnostic diagnostic) {
     if (!mounted) return;
     setState(() {
-      _error = message;
+      _error = campusText(context, message);
       _diagnostic = diagnostic;
       _timetable = null;
       _diff = null;
@@ -648,7 +661,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
           child: Row(
             children: [
               IconButton(
-                tooltip: '取消',
+                tooltip: campusText(context, '取消'),
                 onPressed: () => popOrGo(context, '/'),
                 icon: const Icon(Icons.close),
               ),
@@ -657,7 +670,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '从教务系统导入',
+                      campusText(context, '从教务系统导入'),
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -665,7 +678,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
                     TextButton.icon(
                       onPressed: () => showTimetableImportInstructions(context),
                       icon: const Icon(Icons.help_outline, size: 18),
-                      label: const Text('操作说明'),
+                      label: Text(campusText(context, '操作说明')),
                     ),
                   ],
                 ),
@@ -680,7 +693,7 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.download_outlined),
-                label: const Text('读取课表'),
+                label: Text(campusText(context, '读取课表')),
               ),
             ],
           ),
@@ -693,11 +706,11 @@ class _TimetableImportPageState extends ConsumerState<TimetableImportPage> {
               if (_diagnostic != null)
                 TextButton(
                   onPressed: _exportDiagnostic,
-                  child: const Text('导出诊断'),
+                  child: Text(campusText(context, '导出诊断')),
                 ),
               TextButton(
                 onPressed: () => setState(() => _error = null),
-                child: const Text('关闭'),
+                child: Text(campusText(context, '关闭')),
               ),
             ],
           ),
@@ -789,19 +802,24 @@ class TimetableImportPreviewCard extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                       Text(
-                        '读取完成 · ${timetable.semester.label}',
+                        campusText(context, '读取完成 · {0}',
+                            values: {'0': timetable.semester.label}),
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                          '${timetable.courses.length} 门课程 · $meetingCount 个上课安排'),
+                      Text(campusText(context, '{0} 门课程 · {1} 个上课安排', values: {
+                        '0': timetable.courses.length,
+                        '1': meetingCount
+                      })),
                       if (timetable.ignoredSelfStudyCourseCount > 0) ...[
                         const SizedBox(height: 6),
                         Text(
-                          '已忽略 ${timetable.ignoredSelfStudyCourseCount} 门标记为自修的课程',
+                          campusText(context, '已忽略 {0} 门标记为自修的课程', values: {
+                            '0': timetable.ignoredSelfStudyCourseCount
+                          }),
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: Theme.of(context)
@@ -813,7 +831,8 @@ class TimetableImportPreviewCard extends StatelessWidget {
                       if (dataIssues.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Text(
-                          '发现 ${dataIssues.length} 条可能异常的数据，已保留可识别的课程。',
+                          campusText(context, '发现 {0} 条可能异常的数据，已保留可识别的课程。',
+                              values: {'0': dataIssues.length}),
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.error,
                             fontWeight: FontWeight.w700,
@@ -828,14 +847,17 @@ class TimetableImportPreviewCard extends StatelessWidget {
                           ),
                         if (dataIssues.length > 3)
                           Text(
-                            '还有 ${dataIssues.length - 3} 条异常…',
+                            campusText(context, '还有 {0} 条异常…',
+                                values: {'0': dataIssues.length - 3}),
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                       ],
                       if (diff != null) ...[
                         const SizedBox(height: 4),
                         if (diff!.exceptionImpacts.isNotEmpty) ...[
-                          Text('影响 ${diff!.exceptionImpacts.length} 条临时变更',
+                          Text(
+                              campusText(context, '影响 {0} 条临时变更',
+                                  values: {'0': diff!.exceptionImpacts.length}),
                               style: TextStyle(
                                   color: Theme.of(context).colorScheme.error,
                                   fontWeight: FontWeight.w700)),
@@ -844,14 +866,20 @@ class TimetableImportPreviewCard extends StatelessWidget {
                           const SizedBox(height: 8),
                         ],
                         if (diff!.isNewSemester)
-                          const Text(
-                            '发现新的学期，确认后会建立独立的本地课表，不会覆盖其他学期。',
+                          Text(
+                            campusText(
+                                context, '发现新的学期，确认后会建立独立的本地课表，不会覆盖其他学期。'),
                           ),
                         Text(
-                          '新增 ${diff!.addedCount} · 更新 ${diff!.modifiedCount} · '
-                          '删除 ${diff!.removedCount} · '
-                          '本地删除 ${diff!.locallyDeletedCount} · '
-                          '冲突 ${diff!.conflictCount}',
+                          campusText(context,
+                              '新增 {0} · 更新 {1} · 删除 {2} · 本地删除 {3} · 冲突 {4}',
+                              values: {
+                                '0': diff!.addedCount,
+                                '1': diff!.modifiedCount,
+                                '2': diff!.removedCount,
+                                '3': diff!.locallyDeletedCount,
+                                '4': diff!.conflictCount
+                              }),
                           style: TextStyle(
                             color: diff!.hasConflicts
                                 ? Theme.of(context).colorScheme.error
@@ -860,7 +888,7 @@ class TimetableImportPreviewCard extends StatelessWidget {
                         ),
                         if (diff!.hasConflicts)
                           Text(
-                            '检测到本地与远端同时修改，请先解决冲突后再确认导入。',
+                            campusText(context, '检测到本地与远端同时修改，请先解决冲突后再确认导入。'),
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.error,
                             ),
@@ -873,7 +901,7 @@ class TimetableImportPreviewCard extends StatelessWidget {
                                 builder: (_) => _ImportChangesSheet(
                                     diff: diff!, timetable: timetable)),
                             icon: const Icon(Icons.compare_arrows),
-                            label: const Text('查看完整变化清单')),
+                            label: Text(campusText(context, '查看完整变化清单'))),
                         if (hasConflictItems)
                           Align(
                             alignment: Alignment.centerLeft,
@@ -881,7 +909,9 @@ class TimetableImportPreviewCard extends StatelessWidget {
                               onPressed: saving ? null : onResolveConflicts,
                               icon: const Icon(Icons.merge_type),
                               label: Text(
-                                diff!.hasConflicts ? '解决冲突' : '处理本地删除课程',
+                                diff!.hasConflicts
+                                    ? campusText(context, '解决冲突')
+                                    : campusText(context, '处理本地删除课程'),
                               ),
                             ),
                           ),
@@ -894,7 +924,11 @@ class TimetableImportPreviewCard extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${course.name} · ${course.meetings.length} 个安排',
+                                    campusText(context, '{0} · {1} 个安排',
+                                        values: {
+                                          '0': course.name,
+                                          '1': course.meetings.length
+                                        }),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
@@ -905,7 +939,7 @@ class TimetableImportPreviewCard extends StatelessWidget {
                                       padding: const EdgeInsets.only(
                                           left: 8, top: 2),
                                       child: Text(
-                                        _previewMeetingLabel(meeting),
+                                        _previewMeetingLabel(context, meeting),
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                         style: Theme.of(context)
@@ -918,7 +952,10 @@ class TimetableImportPreviewCard extends StatelessWidget {
                                       padding: const EdgeInsets.only(
                                           left: 8, top: 2),
                                       child: Text(
-                                        '还有 ${course.meetings.length - 2} 个安排…',
+                                        campusText(context, '还有 {0} 个安排…',
+                                            values: {
+                                              '0': course.meetings.length - 2
+                                            }),
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall,
@@ -929,7 +966,8 @@ class TimetableImportPreviewCard extends StatelessWidget {
                             ),
                           ),
                       if (timetable.courses.length > 3)
-                        Text('还有 ${timetable.courses.length - 3} 门课程…'),
+                        Text(campusText(context, '还有 {0} 门课程…',
+                            values: {'0': timetable.courses.length - 3})),
                     ]))),
             const SizedBox(height: 10),
             Wrap(
@@ -938,10 +976,10 @@ class TimetableImportPreviewCard extends StatelessWidget {
               children: [
                 TextButton(
                     onPressed: saving ? null : onCancel,
-                    child: const Text('取消')),
+                    child: Text(campusText(context, '取消'))),
                 TextButton(
                     onPressed: saving ? null : onRetry,
-                    child: const Text('重新读取')),
+                    child: Text(campusText(context, '重新读取'))),
                 const SizedBox(width: 4),
                 FilledButton(
                   onPressed:
@@ -950,10 +988,10 @@ class TimetableImportPreviewCard extends StatelessWidget {
                           : onConfirm,
                   child: Text(
                     saving
-                        ? '导入中…'
+                        ? campusText(context, '导入中…')
                         : diff?.isNewSemester == true
-                            ? '建立新课表'
-                            : '确认导入',
+                            ? campusText(context, '建立新课表')
+                            : campusText(context, '确认导入'),
                   ),
                 ),
               ],
@@ -965,15 +1003,16 @@ class TimetableImportPreviewCard extends StatelessWidget {
   }
 }
 
-String _previewMeetingLabel(ImportedMeeting meeting) {
+String _previewMeetingLabel(BuildContext context, ImportedMeeting meeting) {
   final location = [
     if (meeting.campus != null) meeting.campus!,
     if (meeting.room != null) meeting.room!,
   ].join(' · ');
   return [
-    weekdayName(meeting.weekday),
-    '第 ${meeting.startSection}-${meeting.endSection} 节',
-    formatWeekMask(meeting.weekMask),
+    campusWeekdayName(context, meeting.weekday),
+    campusText(context, '第 {0}-{1} 节',
+        values: {'0': meeting.startSection, '1': meeting.endSection}),
+    campusWeekMask(context, meeting.weekMask),
     if (location.isNotEmpty) location,
     if (meeting.teacher != null) meeting.teacher!,
   ].join(' · ');
@@ -993,61 +1032,80 @@ class _ImportChangesSheet extends StatelessWidget {
         child: SizedBox(
             height: MediaQuery.sizeOf(context).height * .8,
             child: Column(children: [
-              const ListTile(
-                  title: Text('完整变化清单'),
-                  subtitle: Text('确认导入前可逐项核对；此页面不会保存课程')),
+              ListTile(
+                  title: Text(campusText(context, '完整变化清单')),
+                  subtitle: Text(campusText(context, '确认导入前可逐项核对；此页面不会保存课程'))),
               Expanded(
                   child: ListView(children: [
-                if (changed.isEmpty) const ListTile(title: Text('没有变化')),
+                if (changed.isEmpty)
+                  ListTile(title: Text(campusText(context, '没有变化'))),
                 for (final change in changed)
                   ExpansionTile(
                       initiallyExpanded: true,
                       title: Text(
-                          '${_changeLabel(change.kind)} · ${change.remoteCourse?.name ?? change.localCourse?.name ?? change.sourceCourseKey}'),
+                          '${campusText(context, _changeLabel(change.kind))} · ${change.remoteCourse?.name ?? change.localCourse?.name ?? change.sourceCourseKey}'),
                       children: [
                         for (final field in change.fields.where((f) =>
                             jsonEncode(f.localValue) !=
                             jsonEncode(f.remoteValue)))
                           ListTile(
-                              title:
-                                  Text(_changeFieldLabel(change, field.field)),
+                              title: Text(_changeFieldLabel(
+                                  context, change, field.field)),
                               subtitle: Text(
-                                  '${_displayValue(field.localValue, field.field)} → ${_displayValue(field.remoteValue, field.field)}'
-                                  '${field.decision == MergeDecision.local ? '（保留本地）' : field.hasConflict ? '（待解决）' : ''}')),
+                                  campusText(context, '{0} → {1}{2}', values: {
+                                '0': _displayValue(
+                                    context, field.localValue, field.field),
+                                '1': _displayValue(
+                                    context, field.remoteValue, field.field),
+                                '2': field.decision == MergeDecision.local
+                                    ? campusText(context, '（保留本地）')
+                                    : field.hasConflict
+                                        ? campusText(context, '（待解决）')
+                                        : ''
+                              }))),
                         if (change.kind == ImportChangeKind.added &&
                             change.remoteCourse != null)
                           for (final meeting in change.remoteCourse!.meetings)
                             ListTile(
-                                title: Text(_previewMeetingLabel(meeting))),
+                                title: Text(
+                                    _previewMeetingLabel(context, meeting))),
                         if (change.kind == ImportChangeKind.removed)
-                          const ListTile(title: Text('远端已移除此课程，确认后将从有效课表移除')),
+                          ListTile(
+                              title: Text(
+                                  campusText(context, '远端已移除此课程，确认后将从有效课表移除'))),
                       ]),
                 ExpansionTile(
-                    title: Text('全部课程（${timetable.courses.length}）'),
+                    title: Text(campusText(context, '全部课程（{0}）',
+                        values: {'0': timetable.courses.length})),
                     children: [
                       for (final course in timetable.courses)
                         ListTile(
                             title: Text(course.name),
                             subtitle: Text(course.meetings
-                                .map(_previewMeetingLabel)
+                                .map((meeting) =>
+                                    _previewMeetingLabel(context, meeting))
                                 .join('\n'))),
                     ]),
               ])),
               TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('返回核对')),
+                  child: Text(campusText(context, '返回核对'))),
             ])));
   }
 }
 
-String _changeFieldLabel(ImportChange change, String field) {
-  if (!field.startsWith('meeting:')) return _fieldLabel(field);
+String _changeFieldLabel(
+    BuildContext context, ImportChange change, String field) {
+  if (!field.startsWith('meeting:')) return _fieldLabel(context, field);
   final key = field.substring(8, field.lastIndexOf(':'));
   final matches =
       change.remoteCourse?.meetings.where((m) => m.sourceMeetingKey == key);
-  if (matches == null || matches.isEmpty) return _fieldLabel(field);
+  if (matches == null || matches.isEmpty) return _fieldLabel(context, field);
   final meeting = matches.first;
-  return '${weekdayName(meeting.weekday)} · 第${meeting.startSection}-${meeting.endSection}节 · ${_meetingPropertyLabel(field)}';
+  return '${campusWeekdayName(context, meeting.weekday)} · ${campusText(context, '第{0}-{1}节', values: {
+        '0': meeting.startSection,
+        '1': meeting.endSection
+      })} · ${_meetingPropertyLabel(context, field)}';
 }
 
 String _changeLabel(ImportChangeKind kind) => switch (kind) {
@@ -1142,13 +1200,13 @@ class _ConflictResolutionSheetState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '处理导入变更',
+                campusText(context, '处理导入变更'),
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
               ),
               const SizedBox(height: 4),
-              const Text('本地删除默认保留；冲突字段和恢复动作都由你明确选择。'),
+              Text(campusText(context, '本地删除默认保留；冲突字段和恢复动作都由你明确选择。')),
               const SizedBox(height: 12),
               Expanded(
                 child: ListView.separated(
@@ -1168,8 +1226,10 @@ class _ConflictResolutionSheetState
                             change,
                             value ?? false,
                           ),
-                          title: Text('恢复 $courseName'),
-                          subtitle: const Text('教务系统中仍存在这门课程，勾选后本次导入会恢复它。'),
+                          title: Text(campusText(context, '恢复 {0}',
+                              values: {'0': courseName})),
+                          subtitle: Text(
+                              campusText(context, '教务系统中仍存在这门课程，勾选后本次导入会恢复它。')),
                           secondary: const Icon(Icons.restore),
                         ),
                       );
@@ -1186,11 +1246,19 @@ class _ConflictResolutionSheetState
                             ListTile(
                               dense: true,
                               title: Text(
-                                '${entry.change.remoteCourse?.name ?? entry.change.sourceCourseKey} · ${_fieldLabel(entry.field.field)}',
+                                '${entry.change.remoteCourse?.name ?? entry.change.sourceCourseKey} · ${_fieldLabel(context, entry.field.field)}',
                               ),
                               subtitle: Text(
-                                '本地：${_displayValue(entry.field.localValue, entry.field.field)}\n'
-                                '教务：${_displayValue(entry.field.remoteValue, entry.field.field)}',
+                                campusText(context, '本地：{0}\n教务：{1}', values: {
+                                  '0': _displayValue(
+                                      context,
+                                      entry.field.localValue,
+                                      entry.field.field),
+                                  '1': _displayValue(
+                                      context,
+                                      entry.field.remoteValue,
+                                      entry.field.field)
+                                }),
                               ),
                             ),
                             Padding(
@@ -1198,14 +1266,14 @@ class _ConflictResolutionSheetState
                                   const EdgeInsets.symmetric(horizontal: 16),
                               child: SegmentedButton<MergeDecision>(
                                 emptySelectionAllowed: selected == null,
-                                segments: const [
+                                segments: [
                                   ButtonSegment(
                                     value: MergeDecision.local,
-                                    label: Text('保留本地'),
+                                    label: Text(campusText(context, '保留本地')),
                                   ),
                                   ButtonSegment(
                                     value: MergeDecision.remote,
-                                    label: Text('采用教务'),
+                                    label: Text(campusText(context, '采用教务')),
                                   ),
                                 ],
                                 selected: {
@@ -1237,7 +1305,9 @@ class _ConflictResolutionSheetState
                             ),
                           )
                       : null,
-                  child: Text(_complete ? '应用选择' : '请完成全部选择'),
+                  child: Text(_complete
+                      ? campusText(context, '应用选择')
+                      : campusText(context, '请完成全部选择')),
                 ),
               ),
             ],
@@ -1248,40 +1318,45 @@ class _ConflictResolutionSheetState
   }
 }
 
-String _fieldLabel(String field) => switch (field) {
-      'name' => '课程名',
-      'meetings' => '上课安排',
+String _fieldLabel(BuildContext context, String field) => switch (field) {
+      'name' => campusText(context, '课程名'),
+      'meetings' => campusText(context, '上课安排'),
       _ when field.startsWith('meeting:') =>
-        '上课安排 · ${_meetingPropertyLabel(field)}',
+        '${campusText(context, '上课安排')} · ${_meetingPropertyLabel(context, field)}',
       _ => field,
     };
 
-String _meetingPropertyLabel(String field) {
+String _meetingPropertyLabel(BuildContext context, String field) {
   final separator = field.lastIndexOf(':');
   final property = separator < 0 ? field : field.substring(separator + 1);
   return switch (property) {
-    'weekday' => '星期',
-    'startSection' => '开始节次',
-    'endSection' => '结束节次',
-    'weekMask' => '周次',
-    'teacher' => '教师',
-    'campus' => '校区',
-    'room' => '教室',
+    'weekday' => campusText(context, '星期'),
+    'startSection' => campusText(context, '开始节次'),
+    'endSection' => campusText(context, '结束节次'),
+    'weekMask' => campusText(context, '周次'),
+    'teacher' => campusText(context, '教师'),
+    'campus' => campusText(context, '校区'),
+    'room' => campusText(context, '教室'),
     _ => property,
   };
 }
 
-String _displayValue(Object? value, String field) {
-  if (value == null) return '未填写';
+String _displayValue(BuildContext context, Object? value, String field) {
+  if (value == null) return campusText(context, '未填写');
   if (field == 'meetings' && value is List) {
     return value.map((item) {
       if (item is! List || item.length < 4) return item.toString();
-      return '${weekdayName(item[0] as int)} · 第${item[1]}-${item[2]}节 · ${formatWeekMask(WeekMask(item[3] as int))}';
+      return '${campusWeekdayName(context, item[0] as int)} · ${campusText(context, '第 {0}-{1} 节', values: {
+            '0': item[1],
+            '1': item[2]
+          })} · ${campusWeekMask(context, WeekMask(item[3] as int))}';
     }).join('\n');
   }
-  if (field.endsWith(':weekday') && value is int) return weekdayName(value);
+  if (field.endsWith(':weekday') && value is int) {
+    return campusWeekdayName(context, value);
+  }
   if (field.endsWith(':weekMask') && value is int) {
-    return formatWeekMask(WeekMask(value));
+    return campusWeekMask(context, WeekMask(value));
   }
   return value.toString();
 }

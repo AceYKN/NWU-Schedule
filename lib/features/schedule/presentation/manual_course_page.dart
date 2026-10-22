@@ -9,9 +9,11 @@ import '../../../domain/course/course_identity.dart';
 import '../../../domain/course/meeting_draft.dart';
 import '../../../domain/course/meeting_rule.dart';
 import '../../../domain/course/week_pattern.dart';
-import '../../../domain/errors/app_error.dart';
+import '../../../domain/schedule/schedule_conflict_detector.dart';
 import '../../shared/presentation/app_page_header.dart';
+import '../../shared/presentation/schedule_conflict_dialog.dart';
 import 'course_form_fields.dart';
+import 'package:nwu_schedule/features/shared/presentation/campus_text.dart';
 
 class ManualCoursePage extends ConsumerStatefulWidget {
   const ManualCoursePage({this.courseId, super.key});
@@ -26,6 +28,7 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _note = TextEditingController();
+  bool _saveAttemptActive = false;
   bool _saving = false;
   bool _initialized = false;
   bool _snackbarDismissed = false;
@@ -113,8 +116,8 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
 
   void _deleteDraft(int index) {
     if (_drafts.length <= 1) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('课程至少需要一个上课安排')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(campusText(context, '课程至少需要一个上课安排'))));
       return;
     }
     setState(() {
@@ -140,19 +143,19 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('删除存在临时变更的上课安排？'),
+        title: Text(campusText(dialogContext, '删除存在临时变更的上课安排？')),
         content: Text(
-          '该上课安排存在 ${affected.length} 条临时变更。\n'
-          '删除后相关临时变更也将删除。',
+          campusText(dialogContext, '该上课安排存在 {0} 条临时变更。\n删除后相关临时变更也将删除。',
+              values: {'0': affected.length}),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('取消'),
+            child: Text(campusText(dialogContext, '取消')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('确认删除'),
+            child: Text(campusText(dialogContext, '确认删除')),
           ),
         ],
       ),
@@ -161,10 +164,10 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
   }
 
   Future<void> _save(ScheduleReady ready) async {
-    if (_saving || !_formKey.currentState!.validate()) return;
+    if (_saveAttemptActive || !_formKey.currentState!.validate()) return;
     if (_drafts.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('课程至少需要一个上课安排')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(campusText(context, '课程至少需要一个上课安排'))));
       return;
     }
     final desiredName = _name.text.trim();
@@ -179,34 +182,45 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
     if (sameNameCourse != null) {
       final isEditing = _existingCourse != null;
       final restoresCourse = sameNameCourse.deleted;
-      final restorationNotice = restoresCourse ? '这门同名课程已删除，本次操作会恢复它。\n' : '';
+      final restorationNotice =
+          restoresCourse ? campusText(context, '这门同名课程已删除，本次操作会恢复它。\n') : '';
       final mergeDescription = isEditing
-          ? '“${sameNameCourse.name}”已存在。本次修改会把当前课程及其上课安排合并到该课程。'
-          : '“${sameNameCourse.name}”已存在，将把本次内容作为新的上课安排添加到该课程。课程备注和颜色保持现有设置。';
+          ? campusText(context, '“{0}”已存在。本次修改会把当前课程及其上课安排合并到该课程。',
+              values: {'0': sameNameCourse.name})
+          : campusText(context, '“{0}”已存在，将把本次内容作为新的上课安排添加到该课程。课程备注和颜色保持现有设置。',
+              values: {'0': sameNameCourse.name});
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: Text(restoresCourse
-              ? (isEditing ? '恢复并合并同名课程？' : '恢复同名课程？')
-              : (isEditing ? '合并同名课程？' : '已存在同名课程')),
+              ? (isEditing
+                  ? campusText(context, '恢复并合并同名课程？')
+                  : campusText(context, '恢复同名课程？'))
+              : (isEditing
+                  ? campusText(context, '合并同名课程？')
+                  : campusText(context, '已存在同名课程'))),
           content: Text('$restorationNotice$mergeDescription'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('取消'),
+              child: Text(campusText(dialogContext, '取消')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
               child: Text(restoresCourse
-                  ? (isEditing ? '恢复并合并' : '恢复并添加安排')
-                  : (isEditing ? '合并课程' : '添加安排')),
+                  ? (isEditing
+                      ? campusText(context, '恢复并合并')
+                      : campusText(context, '恢复并添加安排'))
+                  : (isEditing
+                      ? campusText(context, '合并课程')
+                      : campusText(context, '添加安排'))),
             ),
           ],
         ),
       );
       if (confirmed != true || !mounted) return;
     }
-    setState(() => _saving = true);
+    _saveAttemptActive = true;
     try {
       final totalWeeks = ready.engine.totalWeeks;
       final masks = [for (final draft in _drafts) draft.weekMask(totalWeeks)];
@@ -260,6 +274,30 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
           ),
         );
       }
+      final targetRules = sameNameCourse == null
+          ? const <MeetingRule>[]
+          : ready.engine.meetingRules
+              .where((rule) => rule.courseId == sameNameCourse!.id)
+              .toList(growable: false);
+      final conflicts = ScheduleConflictDetector.forCourseSave(
+        current: ready.engine,
+        changedCourses: [
+          if (sameNameCourse != null && _existingCourse != null) ...[
+            editedCourse,
+            sameNameCourse,
+          ] else if (sameNameCourse != null)
+            sameNameCourse.copyWith(deleted: false)
+          else
+            editedCourse,
+        ],
+        changedRules: [...targetRules, ...rules],
+        removeExceptionIds: deletedExceptionIds,
+      );
+      if (!mounted) return;
+      if (!await confirmScheduleConflicts(context, conflicts) || !mounted) {
+        return;
+      }
+      setState(() => _saving = true);
       if (sameNameCourse != null && _existingCourse != null) {
         await repository.mergeCourseInto(
           editedCourse: editedCourse,
@@ -268,11 +306,8 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
           removeExceptionIds: deletedExceptionIds,
         );
       } else if (sameNameCourse != null) {
-        final existingRules = ready.engine.meetingRules
-            .where((rule) => rule.courseId == sameNameCourse!.id)
-            .toList(growable: false);
         await repository.saveCourse(sameNameCourse.copyWith(deleted: false), [
-          ...existingRules,
+          ...targetRules,
           ...rules,
         ]);
       } else {
@@ -293,22 +328,25 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
         SnackBar(
           content: Text(
             sameNameCourse == null
-                ? '课程已保存到本地'
+                ? campusText(context, '课程已保存到本地')
                 : _existingCourse == null
                     ? sameNameCourse.deleted
-                        ? '课程已恢复并添加上课安排'
-                        : '已添加为现有课程的新上课安排'
-                    : '同名课程及上课安排已合并',
+                        ? campusText(context, '课程已恢复并添加上课安排')
+                        : campusText(context, '已添加为现有课程的新上课安排')
+                    : campusText(context, '同名课程及上课安排已合并'),
           ),
         ),
       );
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(nwuUserMessage(error, action: '保存失败'))),
+          SnackBar(
+              content: Text(campusUserMessage(context, error,
+                  action: campusText(context, '保存失败')))),
         );
       }
     } finally {
+      _saveAttemptActive = false;
       if (mounted) setState(() => _saving = false);
     }
   }
@@ -328,19 +366,21 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
         : ref.watch(courseEditLoadProvider(widget.courseId!));
     return load.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) =>
-          Center(child: Text(nwuUserMessage(error, action: '读取学期失败'))),
+      error: (error, stackTrace) => Center(
+          child: Text(campusUserMessage(context, error,
+              action: campusText(context, '读取学期失败')))),
       data: (state) {
         if (state is ScheduleCalendarMissing) {
-          return const Center(child: Text('学期已保存，但缺少校历，请更新应用后重试'));
+          return Center(
+              child: Text(campusText(context, '学期已保存，但缺少校历，请更新应用后重试')));
         }
         if (state is! ScheduleReady) {
-          return const Center(child: Text('请先在设置中创建学期'));
+          return Center(child: Text(campusText(context, '请先在设置中创建学期')));
         }
         final totalWeeks = state.engine.totalWeeks;
         _initialize(state, totalWeeks);
         if (widget.courseId != null && _existingCourse == null) {
-          return const Center(child: Text('找不到这门课程'));
+          return Center(child: Text(campusText(context, '找不到这门课程')));
         }
         return Form(
           key: _formKey,
@@ -348,26 +388,33 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 96),
             children: [
               AppPageHeader(
-                title: widget.courseId == null ? '手动添加课程' : '编辑整门课程',
+                title: widget.courseId == null
+                    ? campusText(context, '手动添加课程')
+                    : campusText(context, '编辑整门课程'),
                 subtitle: state.semester.label,
               ),
               const SizedBox(height: 24),
-              const _SectionHeading(title: '课程信息'),
+              _SectionHeading(title: campusText(context, '课程信息')),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _name,
-                decoration: const InputDecoration(labelText: '课程名 *'),
+                decoration:
+                    InputDecoration(labelText: campusText(context, '课程名 *')),
                 maxLength: 80,
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? '请输入课程名称' : null,
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? campusText(context, '请输入课程名称')
+                    : null,
               ),
               const SizedBox(height: 12),
               CompactNotesField(controller: _note),
               const SizedBox(height: 24),
               Row(
                 children: [
-                  const Expanded(child: _SectionHeading(title: '上课安排')),
-                  Text('${_drafts.length} 条'),
+                  Expanded(
+                      child:
+                          _SectionHeading(title: campusText(context, '上课安排'))),
+                  Text(campusText(context, '{0} 条',
+                      values: {'0': _drafts.length})),
                 ],
               ),
               const SizedBox(height: 12),
@@ -387,12 +434,14 @@ class _ManualCoursePageState extends ConsumerState<ManualCoursePage> {
               OutlinedButton.icon(
                 onPressed: () => _addDraft(_drafts.length - 1, totalWeeks),
                 icon: const Icon(Icons.add),
-                label: const Text('添加上课安排'),
+                label: Text(campusText(context, '添加上课安排')),
               ),
               const SizedBox(height: 24),
               FilledButton(
                 onPressed: _saving ? null : () => _save(state),
-                child: Text(_saving ? '保存中…' : '保存课程'),
+                child: Text(_saving
+                    ? campusText(context, '保存中…')
+                    : campusText(context, '保存课程')),
               ),
             ],
           ),
@@ -511,7 +560,8 @@ class _MeetingDraftCardState extends State<_MeetingDraftCard> {
               children: [
                 Expanded(
                   child: Text(
-                    '上课安排 ${widget.index + 1}',
+                    campusText(context, '上课安排 {0}',
+                        values: {'0': widget.index + 1}),
                     style: Theme.of(context)
                         .textTheme
                         .titleMedium
@@ -519,12 +569,12 @@ class _MeetingDraftCardState extends State<_MeetingDraftCard> {
                   ),
                 ),
                 IconButton(
-                  tooltip: '复制安排',
+                  tooltip: campusText(context, '复制安排'),
                   onPressed: widget.onCopy,
                   icon: const Icon(Icons.copy_outlined),
                 ),
                 IconButton(
-                  tooltip: '删除安排',
+                  tooltip: campusText(context, '删除安排'),
                   onPressed: widget.canDelete ? widget.onDelete : null,
                   icon: const Icon(Icons.delete_outline),
                 ),
@@ -533,12 +583,12 @@ class _MeetingDraftCardState extends State<_MeetingDraftCard> {
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
               initialValue: draft.weekday,
-              decoration: const InputDecoration(labelText: '星期'),
+              decoration: InputDecoration(labelText: campusText(context, '星期')),
               items: List.generate(
                 7,
                 (index) => DropdownMenuItem(
                   value: index + 1,
-                  child: Text('星期${'一二三四五六日'[index]}'),
+                  child: Text(campusWeekdayName(context, index + 1)),
                 ),
               ),
               onChanged: (value) =>
@@ -558,9 +608,8 @@ class _MeetingDraftCardState extends State<_MeetingDraftCard> {
             const SizedBox(height: 12),
             TextFormField(
               controller: _teacher,
-              decoration: const InputDecoration(
-                labelText: CourseFieldLabels.teacher,
-              ),
+              decoration: InputDecoration(
+                  labelText: campusText(context, CourseFieldLabels.teacher)),
               onChanged: (_) => _updateText(),
             ),
             const SizedBox(height: 12),
@@ -568,16 +617,14 @@ class _MeetingDraftCardState extends State<_MeetingDraftCard> {
               builder: (context, constraints) {
                 final campusField = TextFormField(
                   controller: _campus,
-                  decoration: const InputDecoration(
-                    labelText: CourseFieldLabels.campus,
-                  ),
+                  decoration: InputDecoration(
+                      labelText: campusText(context, CourseFieldLabels.campus)),
                   onChanged: (_) => _updateText(),
                 );
                 final roomField = TextFormField(
                   controller: _room,
-                  decoration: const InputDecoration(
-                    labelText: CourseFieldLabels.room,
-                  ),
+                  decoration: InputDecoration(
+                      labelText: campusText(context, CourseFieldLabels.room)),
                   onChanged: (_) => _updateText(),
                 );
                 if (constraints.maxWidth >= 320) {

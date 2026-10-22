@@ -6,31 +6,43 @@ import '../../../app/bootstrap.dart';
 import '../../../app/theme/schedule_theme.dart';
 import '../../../core/nwu/periods.dart';
 import '../../../core/utils/date_utils.dart';
-import '../../../core/utils/week_mask.dart';
 import '../../../domain/course/course_exception.dart';
 import '../../../domain/calendar/calendar_definition.dart';
+import '../../../domain/calendar/calendar_engine.dart';
 import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
+import '../../../domain/schedule/schedule_conflict_detector.dart';
+import '../../../domain/schedule/schedule_engine.dart';
 import 'course_color_resolver.dart';
+import 'course_title.dart';
+import 'schedule_conflict_dialog.dart';
+import 'schedule_motion.dart';
 import '../../schedule/presentation/course_form_fields.dart';
+import 'package:nwu_schedule/features/shared/presentation/campus_text.dart';
 
 class CourseCard extends StatelessWidget {
   const CourseCard({
     required this.instance,
     this.status,
     this.compact = false,
+    this.paletteIndex,
     super.key,
   });
 
   final EffectiveCourseInstance instance;
   final String? status;
   final bool compact;
+  final int? paletteIndex;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final themeTokens = scheduleThemeTokensOf(context);
-    final colors = CourseColorResolver.resolve(instance.course, scheme);
+    final colors = CourseColorResolver.resolveSchedule(
+      instance.course,
+      scheme,
+      paletteIndex: paletteIndex,
+    );
     final label = [
       if (status != null) status!,
       instance.courseName,
@@ -44,18 +56,21 @@ class CourseCard extends StatelessWidget {
       button: true,
       excludeSemantics: true,
       label: label,
-      onTap: () => showCourseDetails(context, instance),
+      onTap: () =>
+          showCourseDetails(context, instance, paletteIndex: paletteIndex),
       child: Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => showCourseDetails(context, instance),
+          onTap: () =>
+              showCourseDetails(context, instance, paletteIndex: paletteIndex),
           child: IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Container(
+                  key: ValueKey('course-color-${instance.course.id}'),
                   width: themeTokens.courseAccentWidth,
-                  color: colors.container,
+                  color: colors.accent,
                 ),
                 Expanded(
                   child: Padding(
@@ -78,7 +93,7 @@ class CourseCard extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: status == '已结束'
                                     ? scheme.surfaceContainerHighest
-                                    : scheme.primaryContainer,
+                                    : colors.container,
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -89,7 +104,7 @@ class CourseCard extends StatelessWidget {
                                     ?.copyWith(
                                       color: status == '已结束'
                                           ? scheme.onSurfaceVariant
-                                          : scheme.onPrimaryContainer,
+                                          : colors.onContainer,
                                       fontWeight: FontWeight.w600,
                                       letterSpacing: 0,
                                     ),
@@ -136,11 +151,13 @@ void showCourseDetails(
   BuildContext context,
   EffectiveCourseInstance instance, {
   Future<void> Function()? onHideCourse,
+  int? paletteIndex,
 }) {
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
+    sheetAnimationStyle: ScheduleMotion.sheetStyleOf(context),
     builder: (sheetContext) {
       final weekMask = instance.meetingRule?.weekMask;
       return Consumer(
@@ -152,8 +169,9 @@ void showCourseDetails(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          instance.courseName,
+                        CourseTitle(
+                          course: instance.course,
+                          paletteIndex: paletteIndex,
                           style: Theme.of(sheetContext)
                               .textTheme
                               .headlineSmall
@@ -162,40 +180,36 @@ void showCourseDetails(
                               ),
                         ),
                         const SizedBox(height: 18),
-                        _DetailLine(
-                            label: '教师', value: instance.teacher ?? '未提供'),
-                        _DetailLine(
-                          label: '校区',
-                          value: instance.campus ?? '未提供',
+                        Text(
+                          '${weekdayName(instance.date.weekday)} · '
+                          '第 ${instance.startSection}-${instance.endSection} 节',
+                          style: Theme.of(sheetContext).textTheme.titleSmall,
                         ),
-                        _DetailLine(
-                          label: '教室',
-                          value: instance.room ?? '未提供',
-                        ),
-                        _DetailLine(
-                          label: '星期',
-                          value: weekdayName(instance.date.weekday),
-                        ),
-                        _DetailLine(
-                          label: '节次',
-                          value:
-                              '第 ${instance.startSection}-${instance.endSection} 节',
-                        ),
-                        _DetailLine(
-                          label: '时间',
+                        const SizedBox(height: 8),
+                        CourseDetailLine(
+                          label: campusText(sheetContext, '时间'),
                           value:
                               '${formatMinutes(instance.startTime.hour * 60 + instance.startTime.minute)}–'
                               '${formatMinutes(instance.endTime.hour * 60 + instance.endTime.minute)}',
                         ),
-                        _DetailLine(
-                          label: '周次',
+                        CourseDetailLine(
+                          label: campusText(sheetContext, '地点'),
+                          value: instance.location ?? '地点待补充',
+                        ),
+                        CourseDetailLine(
+                          label: campusText(sheetContext, '教师'),
+                          value: instance.teacher ?? '未提供',
+                        ),
+                        CourseDetailLine(
+                          label: campusText(sheetContext, '周次'),
                           value: instance.isException || weekMask == null
-                              ? '单次课程'
-                              : formatWeekMask(weekMask),
+                              ? campusText(sheetContext, '单次课程')
+                              : campusWeekMask(sheetContext, weekMask),
                         ),
                         if (instance.course.note != null)
-                          _DetailLine(
-                              label: '备注', value: instance.course.note!),
+                          CourseDetailLine(
+                              label: campusText(sheetContext, '备注'),
+                              value: instance.course.note!),
                         const SizedBox(height: 14),
                         Wrap(
                           spacing: 8,
@@ -215,7 +229,7 @@ void showCourseDetails(
                                 instance,
                               ),
                               icon: const Icon(Icons.palette_outlined),
-                              label: const Text('修改颜色'),
+                              label: Text(campusText(sheetContext, '修改颜色')),
                             ),
                             if (!instance.isException)
                               CourseExceptionAction(
@@ -230,7 +244,7 @@ void showCourseDetails(
                                       .go('/course/${instance.course.id}/edit');
                                 },
                                 icon: const Icon(Icons.edit_outlined),
-                                label: const Text('编辑整门课程'),
+                                label: Text(campusText(sheetContext, '编辑整门课程')),
                               ),
                               OutlinedButton.icon(
                                 onPressed: onHideCourse == null
@@ -248,14 +262,14 @@ void showCourseDetails(
                                       },
                                 icon: const Icon(Icons.visibility_off_outlined),
                                 label: Text(onHideCourse == null
-                                    ? '停用课程及提醒'
-                                    : '仅在周课表隐藏'),
+                                    ? campusText(sheetContext, '停用课程及提醒')
+                                    : campusText(sheetContext, '仅在周课表隐藏')),
                               ),
                               TextButton.icon(
                                 onPressed: () => _deleteCourse(context,
                                     sheetContext, ref, instance.course.id),
                                 icon: const Icon(Icons.delete_outline),
-                                label: const Text('删除课程'),
+                                label: Text(campusText(sheetContext, '删除课程')),
                               ),
                             ],
                           ],
@@ -288,14 +302,14 @@ class CourseExceptionAction extends ConsumerWidget {
         onPressed: () =>
             _deleteException(pageContext, context, ref, exceptionId),
         icon: const Icon(Icons.undo_outlined),
-        label: const Text('撤销临时变更'),
+        label: Text(campusText(context, '撤销临时变更')),
       );
     }
     return OutlinedButton.icon(
       onPressed: () =>
           _showExceptionEditor(pageContext, context, ref, instance),
       icon: const Icon(Icons.edit_calendar_outlined),
-      label: const Text('临时变更'),
+      label: Text(campusText(context, '临时变更')),
     );
   }
 }
@@ -308,6 +322,40 @@ Future<CalendarDefinition?> _exceptionCalendar(
   return id == null
       ? null
       : ref.read(bundledCalendarRepositoryProvider).findById(id);
+}
+
+Future<bool> _confirmExceptionSave(
+  BuildContext context,
+  WidgetRef ref,
+  CalendarDefinition calendar,
+  CourseException exception,
+) async {
+  try {
+    final snapshot = await ref
+        .read(scheduleDataRepositoryProvider)
+        .loadSemester(exception.semesterId);
+    final current = ScheduleEngine(
+      semesterId: exception.semesterId,
+      calendarEngine: CalendarEngine(calendar),
+      courses: snapshot.courses,
+      meetingRules: snapshot.meetingRules,
+      exceptions: snapshot.exceptions,
+    );
+    final conflicts = ScheduleConflictDetector.forExceptionSave(
+      current: current,
+      exception: exception,
+    );
+    if (!context.mounted) return false;
+    return await confirmScheduleConflicts(context, conflicts);
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(campusUserMessage(context, error,
+            action: campusText(context, '检查撞课失败'))),
+      ));
+    }
+    return false;
+  }
 }
 
 DateTime _clampSemesterDate(DateTime date, CalendarDefinition calendar) {
@@ -329,8 +377,8 @@ Future<void> showStandaloneAddException({
   final calendar = await _exceptionCalendar(ref, semesterId);
   if (!pageContext.mounted) return;
   if (calendar == null) {
-    ScaffoldMessenger.of(pageContext)
-        .showSnackBar(const SnackBar(content: Text('请先为学期选择校历')));
+    ScaffoldMessenger.of(pageContext).showSnackBar(
+        SnackBar(content: Text(campusText(pageContext, '请先为学期选择校历'))));
     return;
   }
   final exception = await showModalBottomSheet<CourseException>(
@@ -341,6 +389,8 @@ Future<void> showStandaloneAddException({
       semesterId: semesterId,
       initialDate: initialDate,
       calendar: calendar,
+      confirmSave: (context, exception) =>
+          _confirmExceptionSave(context, ref, calendar, exception),
     ),
   );
   if (exception == null || !pageContext.mounted) return;
@@ -348,13 +398,15 @@ Future<void> showStandaloneAddException({
     await ref.read(scheduleDataRepositoryProvider).saveException(exception);
     if (pageContext.mounted) {
       ScaffoldMessenger.of(pageContext).showSnackBar(
-        const SnackBar(content: Text('临时加课已保存')),
+        SnackBar(content: Text(campusText(pageContext, '临时加课已保存'))),
       );
     }
   } catch (error) {
     if (pageContext.mounted) {
       ScaffoldMessenger.of(pageContext).showSnackBar(
-        SnackBar(content: Text(nwuUserMessage(error, action: '保存临时加课失败'))),
+        SnackBar(
+            content: Text(campusUserMessage(pageContext, error,
+                action: campusText(pageContext, '保存临时加课失败')))),
       );
     }
   }
@@ -373,11 +425,14 @@ Future<void> _hideCourse(
     if (!sheetContext.mounted || !pageContext.mounted) return;
     final messenger = ScaffoldMessenger.of(pageContext);
     Navigator.of(sheetContext).pop();
-    messenger.showSnackBar(const SnackBar(content: Text('课程已停用，相关提醒已停止')));
+    messenger.showSnackBar(
+        SnackBar(content: Text(campusText(pageContext, '课程已停用，相关提醒已停止'))));
   } catch (error) {
     if (sheetContext.mounted) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
-        SnackBar(content: Text(nwuUserMessage(error, action: '隐藏失败'))),
+        SnackBar(
+            content: Text(campusUserMessage(pageContext, error,
+                action: campusText(pageContext, '隐藏失败')))),
       );
     }
   }
@@ -392,16 +447,17 @@ Future<void> _deleteCourse(
   final confirmed = await showDialog<bool>(
     context: sheetContext,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('删除这门课程？'),
-      content: const Text('手动课程会从本机移除；教务导入课程会保留删除记录，避免再次导入时自动恢复。'),
+      title: Text(campusText(dialogContext, '删除这门课程？')),
+      content: Text(
+          campusText(dialogContext, '手动课程会从本机移除；教务导入课程会保留删除记录，避免再次导入时自动恢复。')),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialogContext, false),
-          child: const Text('取消'),
+          child: Text(campusText(dialogContext, '取消')),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(dialogContext, true),
-          child: const Text('删除'),
+          child: Text(campusText(dialogContext, '删除')),
         ),
       ],
     ),
@@ -412,11 +468,14 @@ Future<void> _deleteCourse(
     if (!sheetContext.mounted || !pageContext.mounted) return;
     final messenger = ScaffoldMessenger.of(pageContext);
     Navigator.of(sheetContext).pop();
-    messenger.showSnackBar(const SnackBar(content: Text('课程已删除')));
+    messenger.showSnackBar(
+        SnackBar(content: Text(campusText(pageContext, '课程已删除'))));
   } catch (error) {
     if (sheetContext.mounted) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
-        SnackBar(content: Text(nwuUserMessage(error, action: '删除失败'))),
+        SnackBar(
+            content: Text(campusUserMessage(pageContext, error,
+                action: campusText(pageContext, '删除失败')))),
       );
     }
   }
@@ -431,16 +490,16 @@ Future<void> _deleteException(
   final confirmed = await showDialog<bool>(
     context: sheetContext,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('撤销临时变更？'),
-      content: const Text('这条单次调课记录会被删除，原始课表将恢复。'),
+      title: Text(campusText(dialogContext, '撤销临时变更？')),
+      content: Text(campusText(dialogContext, '这条单次调课记录会被删除，原始课表将恢复。')),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialogContext, false),
-          child: const Text('取消'),
+          child: Text(campusText(dialogContext, '取消')),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(dialogContext, true),
-          child: const Text('撤销'),
+          child: Text(campusText(dialogContext, '撤销')),
         ),
       ],
     ),
@@ -451,42 +510,17 @@ Future<void> _deleteException(
     if (!sheetContext.mounted || !pageContext.mounted) return;
     final messenger = ScaffoldMessenger.of(pageContext);
     Navigator.of(sheetContext).pop();
-    messenger.showSnackBar(const SnackBar(content: Text('临时变更已撤销')));
+    messenger.showSnackBar(
+        SnackBar(content: Text(campusText(pageContext, '临时变更已撤销'))));
   } catch (error) {
     if (sheetContext.mounted) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
         SnackBar(
-          content: Text(nwuUserMessage(error, action: '撤销临时变更失败')),
+          content: Text(campusUserMessage(pageContext, error,
+              action: campusText(pageContext, '撤销临时变更失败'))),
         ),
       );
     }
-  }
-}
-
-class _DetailLine extends StatelessWidget {
-  const _DetailLine({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 9),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 64,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          Expanded(child: Text(value)),
-        ],
-      ),
-    );
   }
 }
 
@@ -499,16 +533,20 @@ Future<void> _showExceptionEditor(
   final calendar = await _exceptionCalendar(ref, instance.course.semesterId);
   if (!sheetContext.mounted) return;
   if (calendar == null) {
-    ScaffoldMessenger.of(sheetContext)
-        .showSnackBar(const SnackBar(content: Text('请先为学期选择校历')));
+    ScaffoldMessenger.of(sheetContext).showSnackBar(
+        SnackBar(content: Text(campusText(pageContext, '请先为学期选择校历'))));
     return;
   }
   final exception = await showModalBottomSheet<CourseException>(
     context: sheetContext,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (context) =>
-        _ExceptionEditorSheet(instance: instance, calendar: calendar),
+    builder: (context) => _ExceptionEditorSheet(
+      instance: instance,
+      calendar: calendar,
+      confirmSave: (context, exception) =>
+          _confirmExceptionSave(context, ref, calendar, exception),
+    ),
   );
   if (exception == null || !sheetContext.mounted) return;
   try {
@@ -516,12 +554,14 @@ Future<void> _showExceptionEditor(
     if (!sheetContext.mounted || !pageContext.mounted) return;
     final messenger = ScaffoldMessenger.of(pageContext);
     Navigator.of(sheetContext).pop();
-    messenger.showSnackBar(const SnackBar(content: Text('临时变更已保存')));
+    messenger.showSnackBar(
+        SnackBar(content: Text(campusText(pageContext, '临时变更已保存'))));
   } catch (error) {
     if (sheetContext.mounted) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
         SnackBar(
-          content: Text(nwuUserMessage(error, action: '保存临时变更失败')),
+          content: Text(campusUserMessage(pageContext, error,
+              action: campusText(pageContext, '保存临时变更失败'))),
         ),
       );
     }
@@ -548,6 +588,8 @@ Future<void> editCourseException({
         initialDate: current.targetDate!,
         calendar: calendar,
         existing: current,
+        confirmSave: (context, exception) =>
+            _confirmExceptionSave(context, ref, calendar, exception),
       );
     } else {
       final course =
@@ -574,7 +616,12 @@ Future<void> editCourseException({
         room: rule?.room,
       );
       editor = _ExceptionEditorSheet(
-          instance: instance, calendar: calendar, existing: current);
+        instance: instance,
+        calendar: calendar,
+        existing: current,
+        confirmSave: (context, exception) =>
+            _confirmExceptionSave(context, ref, calendar, exception),
+      );
     }
     final edited = await showModalBottomSheet<CourseException>(
       context: context,
@@ -585,13 +632,14 @@ Future<void> editCourseException({
     if (edited == null || !context.mounted) return;
     await repository.saveException(edited);
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('临时变更已更新')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(campusText(context, '临时变更已更新'))));
     }
   } catch (error) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(nwuUserMessage(error, action: '编辑临时变更失败'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(campusUserMessage(context, error,
+              action: campusText(context, '编辑临时变更失败')))));
     }
   }
 }
@@ -609,9 +657,9 @@ Future<void> _showCourseColorPicker(
       child: ListView(
         shrinkWrap: true,
         children: [
-          const ListTile(
-            title: Text('修改课程颜色'),
-            subtitle: Text('颜色覆盖只保存在本机，重新导入不会清除'),
+          ListTile(
+            title: Text(campusText(context, '修改课程颜色')),
+            subtitle: Text(campusText(context, '颜色覆盖只保存在本机，重新导入不会清除')),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
@@ -624,8 +672,8 @@ Future<void> _showCourseColorPicker(
                     button: true,
                     excludeSemantics: true,
                     label: instance.course.colorOverride == color
-                        ? '课程颜色，已选择'
-                        : '选择课程颜色',
+                        ? campusText(context, '课程颜色，已选择')
+                        : campusText(context, '选择课程颜色'),
                     onTap: () => Navigator.pop(context, color),
                     child: SizedBox(
                       width: 48,
@@ -645,7 +693,7 @@ Future<void> _showCourseColorPicker(
                   ),
                 OutlinedButton(
                   onPressed: () => Navigator.pop(context, -1),
-                  child: const Text('清除覆盖色'),
+                  child: Text(campusText(context, '清除覆盖色')),
                 ),
               ],
             ),
@@ -674,11 +722,14 @@ Future<void> _showCourseColorPicker(
     if (!sheetContext.mounted || !pageContext.mounted) return;
     final messenger = ScaffoldMessenger.of(pageContext);
     Navigator.of(sheetContext).pop();
-    messenger.showSnackBar(const SnackBar(content: Text('课程颜色已更新')));
+    messenger.showSnackBar(
+        SnackBar(content: Text(campusText(pageContext, '课程颜色已更新'))));
   } catch (error) {
     if (sheetContext.mounted) {
       ScaffoldMessenger.of(sheetContext).showSnackBar(
-        SnackBar(content: Text(nwuUserMessage(error, action: '更新课程颜色失败'))),
+        SnackBar(
+            content: Text(campusUserMessage(pageContext, error,
+                action: campusText(pageContext, '更新课程颜色失败')))),
       );
     }
   }
@@ -696,14 +747,19 @@ const _courseColors = <int>[
 ];
 
 class _ExceptionEditorSheet extends StatefulWidget {
-  const _ExceptionEditorSheet(
-      {required this.instance, required this.calendar, this.existing});
+  const _ExceptionEditorSheet({
+    required this.instance,
+    required this.calendar,
+    required this.confirmSave,
+    this.existing,
+  });
 
   final CourseException? existing;
 
   final CalendarDefinition calendar;
 
   final EffectiveCourseInstance instance;
+  final Future<bool> Function(BuildContext, CourseException) confirmSave;
 
   @override
   State<_ExceptionEditorSheet> createState() => _ExceptionEditorSheetState();
@@ -714,12 +770,14 @@ class _StandaloneAddExceptionSheet extends StatefulWidget {
     required this.semesterId,
     required this.initialDate,
     required this.calendar,
+    required this.confirmSave,
     this.existing,
   });
 
   final String semesterId;
   final DateTime initialDate;
   final CalendarDefinition calendar;
+  final Future<bool> Function(BuildContext, CourseException) confirmSave;
 
   final CourseException? existing;
 
@@ -739,6 +797,7 @@ class _StandaloneAddExceptionSheetState
   late DateTime _targetDate;
   int _startSection = 1;
   int _endSection = 2;
+  bool _checkingConflict = false;
 
   @override
   void initState() {
@@ -779,25 +838,30 @@ class _StandaloneAddExceptionSheetState
     if (selected != null && mounted) setState(() => _targetDate = selected);
   }
 
-  void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    Navigator.of(context).pop(
-      CourseException(
-        id: widget.existing?.id ??
-            'exception-${DateTime.now().microsecondsSinceEpoch}',
-        semesterId: widget.semesterId,
-        type: CourseExceptionType.add,
-        targetDate: dateOnly(_targetDate),
-        targetStartSection: _startSection,
-        targetEndSection: _endSection,
-        teacherOverride: _optional(_teacher),
-        campusOverride: _optional(_campus),
-        roomOverride: _optional(_room),
-        addedCourseName: _name.text.trim(),
-        note: _optional(_note),
-        colorOverride: widget.existing?.colorOverride,
-      ),
+  Future<void> _submit() async {
+    if (_checkingConflict || !_formKey.currentState!.validate()) return;
+    final exception = CourseException(
+      id: widget.existing?.id ??
+          'exception-${DateTime.now().microsecondsSinceEpoch}',
+      semesterId: widget.semesterId,
+      type: CourseExceptionType.add,
+      targetDate: dateOnly(_targetDate),
+      targetStartSection: _startSection,
+      targetEndSection: _endSection,
+      teacherOverride: _optional(_teacher),
+      campusOverride: _optional(_campus),
+      roomOverride: _optional(_room),
+      addedCourseName: _name.text.trim(),
+      note: _optional(_note),
+      colorOverride: widget.existing?.colorOverride,
     );
+    setState(() => _checkingConflict = true);
+    try {
+      if (!await widget.confirmSave(context, exception) || !mounted) return;
+      Navigator.of(context).pop(exception);
+    } finally {
+      if (mounted) setState(() => _checkingConflict = false);
+    }
   }
 
   @override
@@ -816,26 +880,28 @@ class _StandaloneAddExceptionSheetState
             ),
             children: [
               Text(
-                '临时加课',
+                campusText(context, '临时加课'),
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
               ),
               const SizedBox(height: 6),
-              const Text('只在指定日期显示，不会修改周期课表。'),
+              Text(campusText(context, '只在指定日期显示，不会修改周期课表。')),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _name,
                 autofocus: true,
-                decoration: const InputDecoration(labelText: '课程名 *'),
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? '请输入课程名' : null,
+                decoration:
+                    InputDecoration(labelText: campusText(context, '课程名 *')),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? campusText(context, '请输入课程名')
+                    : null,
               ),
               const SizedBox(height: 8),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.event_outlined),
-                title: const Text('上课日期'),
+                title: Text(campusText(context, '上课日期')),
                 subtitle: Text(
                   MaterialLocalizations.of(context)
                       .formatMediumDate(_targetDate),
@@ -853,30 +919,28 @@ class _StandaloneAddExceptionSheetState
               const SizedBox(height: 8),
               TextFormField(
                 controller: _teacher,
-                decoration: const InputDecoration(
-                  labelText: CourseFieldLabels.teacher,
-                ),
+                decoration: InputDecoration(
+                    labelText: campusText(context, CourseFieldLabels.teacher)),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _campus,
-                decoration: const InputDecoration(
-                  labelText: CourseFieldLabels.campus,
-                ),
+                decoration: InputDecoration(
+                    labelText: campusText(context, CourseFieldLabels.campus)),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _room,
-                decoration: const InputDecoration(
-                  labelText: CourseFieldLabels.room,
-                ),
+                decoration: InputDecoration(
+                    labelText: campusText(context, CourseFieldLabels.room)),
               ),
               const SizedBox(height: 12),
-              CompactNotesField(controller: _note, label: '备注（可选）'),
+              CompactNotesField(
+                  controller: _note, label: campusText(context, '备注（可选）')),
               const SizedBox(height: 20),
               FilledButton(
-                onPressed: _submit,
-                child: const Text('保存临时加课'),
+                onPressed: _checkingConflict ? null : _submit,
+                child: Text(campusText(context, '保存临时加课')),
               ),
             ],
           ),
@@ -896,6 +960,7 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
   late int _startSection;
   late int _endSection;
   CourseExceptionType _type = CourseExceptionType.move;
+  bool _checkingConflict = false;
 
   EffectiveCourseInstance get _instance => widget.instance;
 
@@ -940,14 +1005,14 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
     if (selected != null && mounted) setState(() => _targetDate = selected);
   }
 
-  void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _submit() async {
+    if (_checkingConflict || !_formKey.currentState!.validate()) return;
     final sourceRule = _instance.meetingRule;
     if ((_type == CourseExceptionType.move ||
             _type == CourseExceptionType.cancel) &&
         sourceRule == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('找不到原始上课安排，无法创建临时变更')),
+        SnackBar(content: Text(campusText(context, '找不到原始上课安排，无法创建临时变更'))),
       );
       return;
     }
@@ -988,7 +1053,13 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
       note: _optional(_note),
       colorOverride: widget.existing?.colorOverride,
     );
-    Navigator.of(context).pop(exception);
+    setState(() => _checkingConflict = true);
+    try {
+      if (!await widget.confirmSave(context, exception) || !mounted) return;
+      Navigator.of(context).pop(exception);
+    } finally {
+      if (mounted) setState(() => _checkingConflict = false);
+    }
   }
 
   String? _editedOverride(
@@ -1018,31 +1089,47 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
             ),
             children: [
               Text(
-                '临时变更 · ${_instance.courseName}',
+                campusText(context, '临时变更 · {0}',
+                    values: {'0': _instance.courseName}),
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
               ),
               const SizedBox(height: 6),
               Text(_type == CourseExceptionType.add
-                  ? '参考安排：${weekdayName(_instance.meetingRule?.weekday ?? _instance.date.weekday)} · 第 ${_instance.startSection}-${_instance.endSection} 节'
-                  : '原安排：${_instance.date.year}-${_instance.date.month}-${_instance.date.day} · 第 ${_instance.startSection}-${_instance.endSection} 节'),
+                  ? campusText(context, '参考安排：{0} · 第 {1}-{2} 节', values: {
+                      '0': campusWeekdayName(
+                          context,
+                          _instance.meetingRule?.weekday ??
+                              _instance.date.weekday),
+                      '1': _instance.startSection,
+                      '2': _instance.endSection
+                    })
+                  : campusText(context, '原安排：{0}-{1}-{2} · 第 {3}-{4} 节',
+                      values: {
+                          '0': _instance.date.year,
+                          '1': _instance.date.month,
+                          '2': _instance.date.day,
+                          '3': _instance.startSection,
+                          '4': _instance.endSection
+                        })),
               const SizedBox(height: 16),
               DropdownButtonFormField<CourseExceptionType>(
                 initialValue: _type,
-                decoration: const InputDecoration(labelText: '变更类型'),
-                items: const [
+                decoration:
+                    InputDecoration(labelText: campusText(context, '变更类型')),
+                items: [
                   DropdownMenuItem(
                     value: CourseExceptionType.move,
-                    child: Text('移动本次课程'),
+                    child: Text(campusText(context, '移动本次课程')),
                   ),
                   DropdownMenuItem(
                     value: CourseExceptionType.cancel,
-                    child: Text('停止本次课程'),
+                    child: Text(campusText(context, '停止本次课程')),
                   ),
                   DropdownMenuItem(
                     value: CourseExceptionType.add,
-                    child: Text('临时增加一次课程'),
+                    child: Text(campusText(context, '临时增加一次课程')),
                   ),
                 ],
                 onChanged: widget.existing != null
@@ -1056,7 +1143,7 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.event_outlined),
-                  title: const Text('目标日期'),
+                  title: Text(campusText(context, '目标日期')),
                   subtitle: Text(
                     MaterialLocalizations.of(context)
                         .formatMediumDate(_targetDate),
@@ -1074,31 +1161,30 @@ class _ExceptionEditorSheetState extends State<_ExceptionEditorSheet> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _teacher,
-                  decoration: const InputDecoration(
-                    labelText: CourseFieldLabels.teacher,
-                  ),
+                  decoration: InputDecoration(
+                      labelText:
+                          campusText(context, CourseFieldLabels.teacher)),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _campus,
-                  decoration: const InputDecoration(
-                    labelText: CourseFieldLabels.campus,
-                  ),
+                  decoration: InputDecoration(
+                      labelText: campusText(context, CourseFieldLabels.campus)),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _room,
-                  decoration: const InputDecoration(
-                    labelText: CourseFieldLabels.room,
-                  ),
+                  decoration: InputDecoration(
+                      labelText: campusText(context, CourseFieldLabels.room)),
                 ),
               ],
               const SizedBox(height: 12),
-              CompactNotesField(controller: _note, label: '备注（可选）'),
+              CompactNotesField(
+                  controller: _note, label: campusText(context, '备注（可选）')),
               const SizedBox(height: 20),
               FilledButton(
-                onPressed: _submit,
-                child: const Text('保存临时变更'),
+                onPressed: _checkingConflict ? null : _submit,
+                child: Text(campusText(context, '保存临时变更')),
               ),
             ],
           ),

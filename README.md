@@ -35,6 +35,10 @@ flutter build apk --debug
 
 Release 构建需按 [签名配置示例](android/key.properties.example) 配置本地密钥，再运行 `flutter build apk --release`。签名配置和密钥不得提交。完整检查见 [CI 配置](.github/workflows/ci.yml)。
 
+调试版显示为“西小课（开发）”，包名为 `io.github.aceykn.nwuschedule.debug`，与正式版的数据目录分离，避免调试签名覆盖正式版。正式更新始终使用原包名、原签名，保留本地数据库；不要先卸载旧版。
+
+Windows 本地运行可使用 `./tool/run_android.ps1 -Device emulator-5558`（Flutter 和 adb 需在 PATH 中，也可传入 `-Flutter`、`-Adb` 路径）。脚本构建正式入口并使用 `adb install -r` 覆盖安装，安装失败即停止，不会自动卸载旧应用。首次从旧版调试包切换开发版，可通过“设置 → 备份与恢复”转移数据；之后开发版覆盖更新会继续使用原数据。
+
 ## 隐私
 
 课表和设置保存在本机，没有云同步、广告或统计服务。仅主动导入时访问西北大学官方教务域名；应用不提取或保存学号、密码，导入会话结束后清理登录数据。备份和脱敏诊断由用户主动导出，不会自动上传。

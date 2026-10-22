@@ -23,6 +23,7 @@
 !lib/data/database/app_database.g.dart
 !lib/core/nwu/app_version.g.dart
 *.freezed.dart
+/test/golden/failures/
 
 # Local database and secrets
 *.sqlite

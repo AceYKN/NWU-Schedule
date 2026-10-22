@@ -84,7 +84,7 @@ void main() {
     addFab.onPressed!();
     await tester.pumpAndSettle();
     await tester.pumpAndSettle();
-    await tester.tap(find.text('手动添加课程'));
+    await tester.tap(find.text('手動添加課程'));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextFormField, '课程名 *'), '软件测试');
     tester.testTextInput.hide();

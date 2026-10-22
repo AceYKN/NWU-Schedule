@@ -170,7 +170,10 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text('第 1-2 节'), findsOneWidget);
+      expect(
+        find.text('${time.hour == 22 ? '星期二' : '星期一'} · 第 1-2 节'),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });

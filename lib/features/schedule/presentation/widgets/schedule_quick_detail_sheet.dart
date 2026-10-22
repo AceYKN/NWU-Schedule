@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/nwu/periods.dart';
-import '../../../../core/utils/date_utils.dart';
 import '../../../../domain/course/course_exception.dart';
 import '../../../../domain/schedule/effective_course_instance.dart';
 import '../../../../domain/schedule/schedule_engine.dart';
 import '../../../../domain/schedule/week_schedule_view_model.dart';
 import '../../../shared/presentation/course_card.dart';
 import '../../../shared/presentation/course_color_resolver.dart';
+import '../../../shared/presentation/course_title.dart';
+import '../../../shared/presentation/schedule_motion.dart';
 import 'course_display_formatter.dart';
 import 'timeslot_semester_schedule.dart';
+import 'package:nwu_schedule/features/shared/presentation/campus_text.dart';
 
 Future<void> showScheduleQuickDetail({
   required BuildContext context,
@@ -33,6 +35,7 @@ Future<void> showScheduleQuickDetail({
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
+    sheetAnimationStyle: ScheduleMotion.sheetStyleOf(context),
     builder: (sheetContext) => DraggableScrollableSheet(
       expand: false,
       initialChildSize: .68,
@@ -41,6 +44,7 @@ Future<void> showScheduleQuickDetail({
       builder: (_, scrollController) => _QuickDetailContent(
         pageContext: pageContext,
         entry: entry,
+        palette: CourseColorResolver.schedulePaletteForCourses(engine.courses),
         selectedWeek: selectedWeek,
         schedule: resolvedSemesterSchedule,
         scrollController: scrollController,
@@ -56,6 +60,7 @@ class _QuickDetailContent extends StatelessWidget {
   const _QuickDetailContent({
     required this.pageContext,
     required this.entry,
+    required this.palette,
     required this.selectedWeek,
     required this.schedule,
     required this.scrollController,
@@ -66,6 +71,7 @@ class _QuickDetailContent extends StatelessWidget {
 
   final BuildContext pageContext;
   final ScheduleGridEntry entry;
+  final Map<String, int> palette;
   final int selectedWeek;
   final TimeslotSemesterSchedule schedule;
   final ScrollController scrollController;
@@ -88,8 +94,9 @@ class _QuickDetailContent extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  CourseDisplayFormatter.title(instance.courseName),
+                child: CourseTitle(
+                  course: instance.course,
+                  paletteIndex: palette[instance.course.id],
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -100,25 +107,42 @@ class _QuickDetailContent extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '${weekdayName(instance.date.weekday)} · 第${instance.startSection}-${instance.endSection}节',
+            campusText(context, '{0} · 第{1}-{2}节', values: {
+              '0': campusWeekdayName(context, instance.date.weekday),
+              '1': instance.startSection,
+              '2': instance.endSection
+            }),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
           ),
-          Text(
-            '${formatMinutes(instance.startTime.hour * 60 + instance.startTime.minute)}–'
-            '${formatMinutes(instance.endTime.hour * 60 + instance.endTime.minute)}',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+          const SizedBox(height: 12),
+          CourseDetailLine(
+            label: campusText(context, '时间'),
+            value:
+                '${formatMinutes(instance.startTime.hour * 60 + instance.startTime.minute)}–'
+                '${formatMinutes(instance.endTime.hour * 60 + instance.endTime.minute)}',
           ),
-          const SizedBox(height: 14),
-          _InfoValue(instance.room ?? '地点待补充'),
-          if (instance.teacher != null && instance.teacher!.trim().isNotEmpty)
-            _InfoValue(instance.teacher!),
-          if (instance.campus != null && instance.campus!.trim().isNotEmpty)
-            _InfoValue(instance.campus!),
-          _InfoValue('当前：第$selectedWeek周'),
+          CourseDetailLine(
+            label: campusText(context, '地点'),
+            value: instance.location ?? campusText(context, '地点待补充'),
+          ),
+          CourseDetailLine(
+            label: campusText(context, '教师'),
+            value: instance.teacher?.trim().isNotEmpty == true
+                ? instance.teacher!
+                : campusText(context, '未提供'),
+          ),
+          CourseDetailLine(
+            label: campusText(context, '周次'),
+            value: [
+              if (instance.isException || instance.meetingRule == null)
+                campusText(context, '单次课程')
+              else
+                campusWeekMask(context, instance.meetingRule!.weekMask),
+              campusText(context, '当前：第{0}周', values: {'0': selectedWeek}),
+            ].join(' · '),
+          ),
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
@@ -131,7 +155,7 @@ class _QuickDetailContent extends StatelessWidget {
           const Divider(),
           const SizedBox(height: 14),
           Text(
-            '本节次其他周安排',
+            campusText(context, '本节次其他周安排'),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -139,7 +163,7 @@ class _QuickDetailContent extends StatelessWidget {
           const SizedBox(height: 10),
           if (schedule.groups.isEmpty)
             Text(
-              '本学期其他周没有安排',
+              campusText(context, '本学期其他周没有安排'),
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
@@ -148,6 +172,7 @@ class _QuickDetailContent extends StatelessWidget {
             for (final group in schedule.groups)
               _WeekArrangementGroup(
                 group: group,
+                palette: palette,
                 selectedWeek: selectedWeek,
                 hiddenCourseIds: hiddenCourseIds,
                 onRestoreCourse: onRestoreCourse,
@@ -166,7 +191,7 @@ class _QuickDetailContent extends StatelessWidget {
                     if (context.mounted) Navigator.of(context).pop();
                   },
                   icon: const Icon(Icons.visibility_off_outlined),
-                  label: const Text('仅在周课表隐藏'),
+                  label: Text(campusText(context, '仅在周课表隐藏')),
                 ),
               TextButton.icon(
                 onPressed: () {
@@ -174,13 +199,14 @@ class _QuickDetailContent extends StatelessWidget {
                   showCourseDetails(
                     pageContext,
                     instance,
+                    paletteIndex: palette[instance.course.id],
                     onHideCourse: onHideCourse == null
                         ? null
                         : () => onHideCourse!(instance),
                   );
                 },
                 icon: const Icon(Icons.open_in_new_outlined),
-                label: const Text('查看课程详情'),
+                label: Text(campusText(context, '查看课程详情')),
               ),
             ],
           ),
@@ -193,12 +219,14 @@ class _QuickDetailContent extends StatelessWidget {
 class _WeekArrangementGroup extends StatelessWidget {
   const _WeekArrangementGroup({
     required this.group,
+    required this.palette,
     required this.selectedWeek,
     required this.hiddenCourseIds,
     this.onRestoreCourse,
   });
 
   final TimeslotWeekGroup group;
+  final Map<String, int> palette;
   final int selectedWeek;
   final Set<String> hiddenCourseIds;
   final Future<void> Function(EffectiveCourseInstance instance)?
@@ -221,11 +249,14 @@ class _WeekArrangementGroup extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _GroupWeekLabel(
-                    label: '${group.weekLabel}${isCurrent ? ' · 当前' : ''}',
+                    label: campusText(context, '{0}{1}', values: {
+                      '0': campusWeekText(context, group.weekLabel),
+                      '1': isCurrent ? campusText(context, ' · 当前') : ''
+                    }),
                     color: scheme.error,
                   ),
                   Text(
-                    group.statusLabel ?? '本节次无课程',
+                    campusText(context, group.statusLabel ?? '本节次无课程'),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
@@ -251,7 +282,8 @@ class _WeekArrangementGroup extends StatelessWidget {
                   color: CourseColorResolver.resolveSchedule(
                     meeting.course,
                     scheme,
-                  ).onContainer,
+                    paletteIndex: palette[meeting.course.id],
+                  ).accent,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -259,7 +291,10 @@ class _WeekArrangementGroup extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _GroupWeekLabel(
-                        label: '${group.weekLabel}${isCurrent ? ' · 当前' : ''}',
+                        label: campusText(context, '{0}{1}', values: {
+                          '0': campusWeekText(context, group.weekLabel),
+                          '1': isCurrent ? campusText(context, ' · 当前') : ''
+                        }),
                       ),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -303,7 +338,7 @@ class _WeekArrangementGroup extends StatelessWidget {
                               visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.zero,
                             ),
-                            child: const Text('恢复显示'),
+                            child: Text(campusText(context, '恢复显示')),
                           ),
                         ),
                     ],
@@ -330,7 +365,7 @@ class _HiddenBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        '已隐藏',
+        campusText(context, '已隐藏'),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: scheme.onSurfaceVariant,
               fontWeight: FontWeight.w700,
@@ -371,20 +406,6 @@ class _WeekDot extends StatelessWidget {
         decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         child: const SizedBox(width: 8, height: 8),
       ),
-    );
-  }
-}
-
-class _InfoValue extends StatelessWidget {
-  const _InfoValue(this.value);
-
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 5),
-      child: Text(value, style: Theme.of(context).textTheme.bodyLarge),
     );
   }
 }

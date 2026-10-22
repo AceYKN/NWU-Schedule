@@ -10,7 +10,8 @@ void main(List<String> args) {
       "const defaultAppVersion = '$version';\n";
   final target = File('lib/core/nwu/app_version.g.dart');
   if (args.contains('--check')) {
-    if (!target.existsSync() || target.readAsStringSync() != content) {
+    if (!target.existsSync() ||
+        target.readAsStringSync().replaceAll('\r\n', '\n') != content) {
       stderr.writeln(
           'App version is stale. Run dart run tool/generate_app_version.dart');
       exitCode = 1;

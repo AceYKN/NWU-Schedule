@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/bootstrap.dart';
+import '../../../app/theme/campus_design.dart';
 import '../../../core/time/campus_clock.dart';
-import '../../../domain/errors/app_error.dart';
 import '../../../domain/schedule/effective_course_instance.dart';
 import '../../../domain/schedule/schedule_engine.dart';
 import '../../../domain/settings/schedule_display_preferences.dart';
@@ -17,6 +17,7 @@ import 'widgets/schedule_quick_detail_sheet.dart';
 import 'widgets/timeslot_semester_schedule.dart';
 import '../../shared/presentation/course_card.dart';
 import '../../shared/presentation/course_color_resolver.dart';
+import 'package:nwu_schedule/features/shared/presentation/campus_text.dart';
 
 class SchedulePage extends ConsumerStatefulWidget {
   const SchedulePage({super.key, this.now});
@@ -66,8 +67,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     final load = ref.watch(scheduleLoadProvider);
     return load.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) =>
-          Center(child: Text(nwuUserMessage(error, action: '读取本地课表失败'))),
+      error: (error, stackTrace) => Center(
+          child: Text(campusUserMessage(context, error,
+              action: campusText(context, '讀取本地課表失敗')))),
       data: (value) {
         if (value is ScheduleNoSemester) {
           return _ScheduleEmptyState(
@@ -80,14 +82,15 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Text(
-                '${value.semester.label}暂无可用校历，请先更新校历数据。',
+                campusText(context, '{0}暫無可用校曆，請先更新校曆數據。',
+                    values: {'0': value.semester.label}),
                 textAlign: TextAlign.center,
               ),
             ),
           );
         }
         if (value is! ScheduleReady) {
-          return const Center(child: Text('当前没有可展示的课表'));
+          return Center(child: Text(campusText(context, '當前沒有可展示的課表')));
         }
 
         final engine = value.engine;
@@ -99,7 +102,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         final maxWeek = engine.totalWeeks;
         final week = (selectedWeek ?? currentWeek ?? 1).clamp(1, maxWeek);
         return Material(
-          color: Theme.of(context).colorScheme.surfaceContainerLowest,
+          color: Theme.of(context).scaffoldBackgroundColor,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -235,10 +238,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
-        content: Text('已隐藏“${instance.courseName}”'),
+        content: Text(campusText(context, '已隱藏“{0}”',
+            values: {'0': instance.courseName})),
         duration: const Duration(seconds: 5),
         action: SnackBarAction(
-          label: '撤销',
+          label: campusText(context, '撤銷'),
           onPressed: () {
             unawaited(_setCourseHidden(instance.course.id, hidden: false));
           },
@@ -257,10 +261,11 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
-        content: Text('已恢复“${instance.courseName}”'),
+        content: Text(campusText(context, '已恢復“{0}”',
+            values: {'0': instance.courseName})),
         duration: const Duration(seconds: 5),
         action: SnackBarAction(
-          label: '撤销',
+          label: campusText(context, '撤銷'),
           onPressed: () {
             unawaited(_setCourseHidden(instance.course.id, hidden: true));
           },
@@ -299,6 +304,7 @@ class _ScheduleFabRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final design = CampusDesign.maybeOf(context);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -312,7 +318,9 @@ class _ScheduleFabRow extends StatelessWidget {
                     height: 48,
                     child: FloatingActionButton.extended(
                       heroTag: null,
-                      tooltip: '返回本周',
+                      tooltip: design == null
+                          ? campusText(context, '返回本週')
+                          : campusText(context, '今週'),
                       onPressed: onBackToCurrentWeek,
                       backgroundColor: scheme.surfaceContainerHigh,
                       foregroundColor: scheme.onSurface,
@@ -322,7 +330,9 @@ class _ScheduleFabRow extends StatelessWidget {
                       ),
                       extendedIconLabelSpacing: 6,
                       icon: const Icon(Icons.my_location_outlined, size: 18),
-                      label: const Text('回本周'),
+                      label: Text(design == null
+                          ? campusText(context, '回本週')
+                          : campusText(context, '今週')),
                     ),
                   ),
                 )
@@ -330,14 +340,21 @@ class _ScheduleFabRow extends StatelessWidget {
         ),
         Semantics(
           button: true,
-          label: '添加课程',
+          label: design == null
+              ? campusText(context, '添加課程')
+              : campusText(context, '授業追加'),
           child: FloatingActionButton.small(
             heroTag: null,
-            tooltip: '添加课程',
+            tooltip: design == null
+                ? campusText(context, '添加課程')
+                : campusText(context, '授業追加'),
             onPressed: onAdd,
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-            elevation: 2,
+            backgroundColor:
+                design?.ink ?? Theme.of(context).colorScheme.primary,
+            foregroundColor:
+                design?.paper ?? Theme.of(context).colorScheme.onPrimary,
+            shape: design == null ? null : const RoundedRectangleBorder(),
+            elevation: 0,
             child: const Icon(Icons.add_rounded),
           ),
         ),
@@ -472,7 +489,7 @@ class _WeekContentState extends State<_WeekContent> {
                     ),
                     if (pageModel.activeEntries.isEmpty) ...[
                       const SizedBox(height: 24),
-                      const Text('这一周暂无课程'),
+                      Text(campusText(context, '這一週暫無課程')),
                     ],
                   ],
                 ),
@@ -523,7 +540,7 @@ class WeekendCourseNotice extends StatelessWidget {
               visualDensity: VisualDensity.compact,
               padding: const EdgeInsets.symmetric(horizontal: 8),
             ),
-            child: const Text('查看周末 ›'),
+            child: Text(campusText(context, '查看週末 ›')),
           ),
         ],
       ),
@@ -542,10 +559,10 @@ String weekendCourseNoticeMessage(WeekScheduleViewModel model) {
         activeWeekendDays.contains(day.weekday),
   );
   if (makeupDays.length == 1) {
-    return '本周${makeupDays.single.label}有补课安排';
+    return '本週${makeupDays.single.label}有補課安排';
   }
-  if (makeupDays.isNotEmpty) return '本周周末有补课安排';
-  return '本周周末有 ${model.activeWeekendCount} 节课';
+  if (makeupDays.isNotEmpty) return '本週週末有補課安排';
+  return '本週週末有 ${model.activeWeekendCount} 節課';
 }
 
 enum _AddCourseAction { manual, exception }
@@ -561,7 +578,7 @@ class _AddCourseSheet extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
         children: [
           Text(
-            '添加课程',
+            campusText(context, '添加課程'),
             style: Theme.of(context)
                 .textTheme
                 .titleLarge
@@ -571,15 +588,15 @@ class _AddCourseSheet extends StatelessWidget {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.menu_book_outlined),
-            title: const Text('手动添加课程'),
-            subtitle: const Text('创建长期课程及上课安排'),
+            title: Text(campusText(context, '手動添加課程')),
+            subtitle: Text(campusText(context, '創建長期課程及上課安排')),
             onTap: () => Navigator.of(context).pop(_AddCourseAction.manual),
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.event_repeat_outlined),
-            title: const Text('临时加课'),
-            subtitle: const Text('仅修改指定日期的实际课表'),
+            title: Text(campusText(context, '臨時加課')),
+            subtitle: Text(campusText(context, '僅修改指定日期的實際課表')),
             onTap: () => Navigator.of(context).pop(_AddCourseAction.exception),
           ),
         ],
@@ -609,14 +626,14 @@ class _ScheduleEmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              '暂无课表',
+              campusText(context, '暫無課表'),
               style: Theme.of(context)
                   .textTheme
                   .titleLarge
                   ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            const Text('可以从教务系统导入，或先手动添加课程。'),
+            Text(campusText(context, '可以從教務系統導入，或先手動添加課程。')),
             const SizedBox(height: 20),
             Wrap(
               spacing: 8,
@@ -624,12 +641,12 @@ class _ScheduleEmptyState extends StatelessWidget {
                 FilledButton.icon(
                   onPressed: onImport,
                   icon: const Icon(Icons.download_outlined),
-                  label: const Text('从教务系统导入'),
+                  label: Text(campusText(context, '從教務系統導入')),
                 ),
                 OutlinedButton.icon(
                   onPressed: onManual,
                   icon: const Icon(Icons.add),
-                  label: const Text('手动添加'),
+                  label: Text(campusText(context, '手動添加')),
                 ),
               ],
             ),

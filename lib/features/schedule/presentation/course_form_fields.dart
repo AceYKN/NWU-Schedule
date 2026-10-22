@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/nwu/periods.dart';
 import '../../../core/utils/week_mask.dart';
 import '../../../domain/course/week_pattern.dart';
+import 'package:nwu_schedule/features/shared/presentation/campus_text.dart';
 
 abstract final class CourseFieldLabels {
   static const teacher = '教师（可选）';
@@ -36,8 +37,8 @@ class SectionRangeSelector extends StatelessWidget {
       builder: (context, constraints) {
         final startField = DropdownButtonFormField<int>(
           initialValue: startSection,
-          decoration: const InputDecoration(labelText: '开始节'),
-          items: _items(),
+          decoration: InputDecoration(labelText: campusText(context, '开始节')),
+          items: _items(context),
           onChanged: (value) {
             final start = value ?? startSection;
             onChanged(
@@ -51,8 +52,8 @@ class SectionRangeSelector extends StatelessWidget {
         final endField = DropdownButtonFormField<int>(
           key: ValueKey(endSection),
           initialValue: endSection,
-          decoration: const InputDecoration(labelText: '结束节'),
-          items: _items(),
+          decoration: InputDecoration(labelText: campusText(context, '结束节')),
+          items: _items(context),
           onChanged: (value) {
             final end = value ?? endSection;
             onChanged(
@@ -83,11 +84,12 @@ class SectionRangeSelector extends StatelessWidget {
     );
   }
 
-  List<DropdownMenuItem<int>> _items() => [
+  List<DropdownMenuItem<int>> _items(BuildContext context) => [
         for (final period in NwuPeriodRepository.all)
           DropdownMenuItem(
             value: period.number,
-            child: Text('第 ${period.number} 节'),
+            child: Text(
+                campusText(context, '第 {0} 节', values: {'0': period.number})),
           ),
       ];
 }
@@ -133,13 +135,14 @@ class TeachingWeekSelector extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('周次', style: theme.textTheme.labelLarge),
+        Text(campusText(context, '周次'), style: theme.textTheme.labelLarge),
         const SizedBox(height: 10),
         LayoutBuilder(
           builder: (context, constraints) {
             final startField = DropdownButtonFormField<int>(
               initialValue: safeRange.start,
-              decoration: const InputDecoration(labelText: '起始周'),
+              decoration:
+                  InputDecoration(labelText: campusText(context, '起始周')),
               items: _weekItems(),
               onChanged: (value) => _changeRange(
                 context,
@@ -150,7 +153,8 @@ class TeachingWeekSelector extends StatelessWidget {
             final endField = DropdownButtonFormField<int>(
               key: ValueKey(safeRange.end),
               initialValue: safeRange.end,
-              decoration: const InputDecoration(labelText: '结束周'),
+              decoration:
+                  InputDecoration(labelText: campusText(context, '结束周')),
               items: _weekItems(),
               onChanged: (value) => _changeRange(
                 context,
@@ -183,7 +187,7 @@ class TeachingWeekSelector extends StatelessWidget {
           children: [
             for (final candidate in WeekSelectionMode.values)
               ChoiceChip(
-                label: Text(candidate.label),
+                label: Text(campusText(context, candidate.label)),
                 selected: mode == candidate,
                 onSelected: (_) => _selectMode(context, candidate, weeks),
               ),
@@ -191,7 +195,7 @@ class TeachingWeekSelector extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          '本安排覆盖 ${weeks.length} 周',
+          campusText(context, '本安排覆盖 {0} 周', values: {'0': weeks.length}),
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
@@ -323,7 +327,7 @@ class TeachingWeekSelector extends StatelessWidget {
     if (next.remove(week)) {
       if (next.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('至少选择一个教学周')),
+          SnackBar(content: Text(campusText(context, '至少选择一个教学周'))),
         );
         return;
       }
@@ -344,7 +348,7 @@ class TeachingWeekSelector extends StatelessWidget {
 
   void _showAtLeastOneWeekMessage(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('至少选择一个教学周')),
+      SnackBar(content: Text(campusText(context, '至少选择一个教学周'))),
     );
   }
 
@@ -371,7 +375,11 @@ class _WeekChip extends StatelessWidget {
     return Semantics(
       button: true,
       toggled: selected,
-      label: '第 $week 周${selected ? '，已选择' : '，未选择'}',
+      label: campusText(context, '第 {0} 周{1}', values: {
+        '0': week,
+        '1':
+            selected ? campusText(context, '，已选择') : campusText(context, '，未选择')
+      }),
       onTap: onTap,
       child: InkWell(
         onTap: onTap,
@@ -415,7 +423,7 @@ class CompactNotesField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
-      decoration: InputDecoration(labelText: label),
+      decoration: InputDecoration(labelText: campusText(context, label)),
       minLines: 2,
       maxLines: 3,
     );

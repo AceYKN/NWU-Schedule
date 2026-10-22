@@ -3,12 +3,16 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/schedule_theme.dart';
+import '../../../../app/theme/campus_design.dart';
 import '../../../../domain/course/course_exception.dart';
 import '../../../../domain/schedule/week_schedule_view_model.dart';
 import '../../../../domain/settings/schedule_display_preferences.dart';
 import 'course_block_density.dart';
 import '../../../shared/presentation/course_card.dart';
+import '../../../shared/presentation/campus_text.dart';
 import '../../../shared/presentation/course_color_resolver.dart';
+import '../../../shared/presentation/course_title.dart';
+import '../../../shared/presentation/schedule_motion.dart';
 import 'course_display_formatter.dart';
 
 /// Compatibility wrapper kept for callers and tests that refer to the old
@@ -75,6 +79,7 @@ class CourseEventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final design = CampusDesign.maybeOf(context);
     final colors = CourseColorResolver.resolveSchedule(
       entry.course,
       scheme,
@@ -105,17 +110,27 @@ class CourseEventCard extends StatelessWidget {
         : isCurrent
             ? BorderSide(color: scheme.primary, width: 2)
             : BorderSide.none;
-    final label = CourseDisplayFormatter.semanticsLabel(entry);
+    final label = design == null
+        ? CourseDisplayFormatter.semanticsLabel(entry)
+        : [
+            entry.course.name,
+            CampusDesign.weekdayName(entry.weekday),
+            '${entry.startSection}–${entry.endSection}時限',
+            if (entry.instance.location case final location?) location,
+            if (entry.teacher case final teacher?) teacher,
+            if (!entry.active) '対象週外',
+          ].join('、');
     return Semantics(
       button: true,
       excludeSemantics: true,
-      label: '$label，点击查看课程详情',
+      label: design == null ? '$label，点击查看课程详情' : '$label、授業詳細',
       onTap: () => _handleTap(context),
       child: Material(
         color: background,
         elevation: isCurrent && !ghost ? 1 : 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(tokens.radiusMedium),
+          borderRadius:
+              BorderRadius.circular(design == null ? tokens.radiusMedium : 1),
           side: border,
         ),
         clipBehavior: Clip.antiAlias,
@@ -219,7 +234,7 @@ class CourseEventCard extends StatelessWidget {
     if (onTap != null) {
       onTap!();
     } else {
-      showCourseDetails(context, entry.instance);
+      showCourseDetails(context, entry.instance, paletteIndex: paletteIndex);
     }
   }
 
@@ -343,12 +358,14 @@ class OverflowCourseBlock extends StatelessWidget {
     required this.entries,
     required this.height,
     this.onEntryTap,
+    this.palette = const {},
     super.key,
   });
 
   final List<ScheduleGridEntry> entries;
   final double height;
   final ValueChanged<ScheduleGridEntry>? onEntryTap;
+  final Map<String, int> palette;
 
   @override
   Widget build(BuildContext context) {
@@ -387,6 +404,7 @@ class OverflowCourseBlock extends StatelessWidget {
     final selected = await showModalBottomSheet<ScheduleGridEntry>(
       context: context,
       showDragHandle: true,
+      sheetAnimationStyle: ScheduleMotion.sheetStyleOf(context),
       builder: (sheetContext) => SafeArea(
         child: ListView(
           shrinkWrap: true,
@@ -403,7 +421,11 @@ class OverflowCourseBlock extends StatelessWidget {
             for (final entry in entries)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text(CourseDisplayFormatter.title(entry.course.name)),
+                title: CourseTitle(
+                  course: entry.course,
+                  paletteIndex: palette[entry.course.id],
+                  style: Theme.of(sheetContext).textTheme.titleMedium,
+                ),
                 subtitle: Text(
                   [
                     '第${entry.startSection}-${entry.endSection}节',
@@ -421,7 +443,8 @@ class OverflowCourseBlock extends StatelessWidget {
       if (onEntryTap != null) {
         onEntryTap!(selected);
       } else {
-        showCourseDetails(context, selected.instance);
+        showCourseDetails(context, selected.instance,
+            paletteIndex: palette[selected.course.id]);
       }
     }
   }
@@ -463,7 +486,7 @@ class _StatusBadge extends StatelessWidget {
         ),
       ),
       child: Text(
-        label,
+        campusText(context, label),
         style: TextStyle(
           color: color,
           fontSize: 9,

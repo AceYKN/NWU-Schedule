@@ -16,6 +16,8 @@ import '../../../domain/schedule/effective_course_instance.dart';
 import '../../../domain/schedule/schedule_engine.dart';
 import '../../../domain/semester/semester.dart';
 import '../../shared/presentation/course_card.dart';
+import '../../shared/presentation/course_color_resolver.dart';
+import '../../shared/presentation/schedule_motion.dart';
 import '../application/home_schedule_status_resolver.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -308,6 +310,8 @@ class _HomeContent extends StatelessWidget {
         ? engine.getCoursesForDate(addCalendarDays(state.now, 1))
         : state.todayCourses;
     final themeTokens = scheduleThemeTokensOf(context);
+    final palette =
+        CourseColorResolver.schedulePaletteForCourses(engine.courses);
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
@@ -338,6 +342,7 @@ class _HomeContent extends StatelessWidget {
           _HeroState(
             state: state,
             clock: clock,
+            palette: palette,
             tomorrowCourses: showTomorrow ? agendaCourses : const [],
           ),
           const SizedBox(height: 24),
@@ -365,6 +370,7 @@ class _HomeContent extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: CourseCard(
                       instance: course,
+                      paletteIndex: palette[course.course.id],
                       compact: true,
                       status: _agendaStatus(course, state),
                     ),
@@ -378,6 +384,7 @@ class _HomeContent extends StatelessWidget {
                   context,
                   agendaCourses,
                   dayLabel: agendaDayLabel,
+                  palette: palette,
                 ),
                 icon: const Icon(Icons.list_alt_outlined),
                 label: Text('查看$agendaDayLabel全部课程（${agendaCourses.length}）'),
@@ -469,11 +476,17 @@ class _HeroState extends StatelessWidget {
     required this.state,
     required this.clock,
     required this.tomorrowCourses,
+    required this.palette,
   });
 
   final HomeScheduleState state;
   final ValueListenable<DateTime> clock;
   final List<EffectiveCourseInstance> tomorrowCourses;
+  final Map<String, int> palette;
+
+  void _showDetails(BuildContext context, EffectiveCourseInstance course) =>
+      showCourseDetails(context, course,
+          paletteIndex: palette[course.course.id]);
 
   @override
   Widget build(BuildContext context) {
@@ -491,7 +504,7 @@ class _HeroState extends StatelessWidget {
           dayContext: _dayContext(currentState.todayType, currentState.now),
         ),
         background: scheme.primaryContainer,
-        onTap: () => showCourseDetails(context, currentState.current),
+        onTap: () => _showDetails(context, currentState.current),
       );
     }
     if (state is HomeBeforeNextClassState) {
@@ -507,7 +520,7 @@ class _HeroState extends StatelessWidget {
           dayContext: _dayContext(nextState.todayType, nextState.now),
         ),
         background: scheme.secondaryContainer,
-        onTap: () => showCourseDetails(context, nextState.course),
+        onTap: () => _showDetails(context, nextState.course),
       );
     }
     if (state.now.hour >= 22) {
@@ -524,7 +537,7 @@ class _HeroState extends StatelessWidget {
                 : _dayContext(state.next!.dayType, course.date),
           )),
           background: scheme.secondaryContainer,
-          onTap: () => showCourseDetails(context, course),
+          onTap: () => _showDetails(context, course),
         );
       }
       return _HeroCard(
@@ -534,7 +547,7 @@ class _HeroState extends StatelessWidget {
         background: scheme.surfaceContainerHighest,
         onTap: state.next == null
             ? null
-            : () => showCourseDetails(context, state.next!.course),
+            : () => _showDetails(context, state.next!.course),
       );
     }
     if (state is HomeTodayFinishedState) {
@@ -546,7 +559,7 @@ class _HeroState extends StatelessWidget {
         background: scheme.surfaceContainerHighest,
         onTap: finishedState.next == null
             ? null
-            : () => showCourseDetails(context, finishedState.next!.course),
+            : () => _showDetails(context, finishedState.next!.course),
       );
     }
     if (state is HomeOutsideTeachingTermState) {
@@ -557,7 +570,7 @@ class _HeroState extends StatelessWidget {
         background: scheme.surfaceContainerHighest,
         onTap: state.next == null
             ? null
-            : () => showCourseDetails(context, state.next!.course),
+            : () => _showDetails(context, state.next!.course),
       );
     }
     final noClass = state as HomeNoClassTodayState;
@@ -573,7 +586,7 @@ class _HeroState extends StatelessWidget {
       background: scheme.surfaceContainerHighest,
       onTap: noClass.next == null
           ? null
-          : () => showCourseDetails(context, noClass.next!.course),
+          : () => _showDetails(context, noClass.next!.course),
     );
   }
 }
@@ -791,11 +804,13 @@ void _showFullAgenda(
   BuildContext context,
   List<EffectiveCourseInstance> courses, {
   required String dayLabel,
+  required Map<String, int> palette,
 }) {
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
+    sheetAnimationStyle: ScheduleMotion.sheetStyleOf(context),
     builder: (sheetContext) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
@@ -815,7 +830,10 @@ void _showFullAgenda(
               for (final course in courses)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: CourseCard(instance: course),
+                  child: CourseCard(
+                    instance: course,
+                    paletteIndex: palette[course.course.id],
+                  ),
                 ),
             ],
           ),

@@ -10,6 +10,9 @@ class CourseColorPair {
 
   final Color container;
   final Color onContainer;
+
+  /// Stronger tone for small marks on a surface; keeps the grid color's hue.
+  Color get accent => Color.lerp(container, onContainer, .28)!;
 }
 
 class CourseColorResolver {
@@ -145,9 +148,7 @@ class CourseColorResolver {
     );
   }
 
-  /// Resolves a stable, low-contrast tonal color for the dense week grid.
-  ///
-  /// The regular [resolve] contract is kept for the larger home/detail cards.
+  /// Resolves the shared course palette for the grid, agenda and details.
   /// Hue family stays fixed across themes; brightness selects a muted LCh tone
   /// and the current scheme's surface supplies the final theme tint.
   static CourseColorPair resolveSchedule(

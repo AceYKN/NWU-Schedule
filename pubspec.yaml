@@ -28,5 +28,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: CampusMincho
+      fonts:
+        - asset: assets/fonts/CampusMincho-Regular.otf
+          weight: 400
+        - asset: assets/fonts/CampusMincho-SemiBold.otf
+          weight: 600
   assets:
     - assets/calendars/nwu/source/

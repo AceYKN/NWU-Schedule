@@ -1,0 +1,38 @@
+{
+  "calendar.png": {
+    "bytes": 193358,
+    "sha256": "75f2b6a98edbb9dcd82b983e29f6a62420749197bd0acf51800783161d50bd50"
+  },
+  "settings.png": {
+    "bytes": 233719,
+    "sha256": "07d4de12c21a868260ca10b0bacda1fd5942496e8f84baa263af47cfdb7ae2fc"
+  },
+  "course-details.png": {
+    "bytes": 171448,
+    "sha256": "4ab7c0edc895f3a22e138b1f409ae8da6f873ebfaf4e18af5514230cfd810c45"
+  },
+  "course-edit.png": {
+    "bytes": 155010,
+    "sha256": "1a0de575419151ae761382d4c3b34bd89fdffa10632b8d12dcf8b7b8d0990c76"
+  },
+  "display-settings.png": {
+    "bytes": 166472,
+    "sha256": "8541049b992dccbb569e90a85ad2facb7800a23b238d1a3a73f4dad4764059f5"
+  },
+  "settings-more.png": {
+    "bytes": 183189,
+    "sha256": "1708ad923f07526ad86264b084c5015ca5d0583efa823100e51e17f22bdad6ea"
+  },
+  "calendar-settings.png": {
+    "bytes": 379592,
+    "sha256": "96fc55c817e45c7aa37ddfc25b117d50cefeb8426da40a4abade826551d465fe"
+  },
+  "details-edit.png": {
+    "bytes": 284594,
+    "sha256": "f2355ec38bfa65ed8881e50192a8d7e8918ee4d90cf491ebd618f6b233869f1c"
+  },
+  "settings-details.png": {
+    "bytes": 300123,
+    "sha256": "e5a9faae68bf022e5efca7525d3fbc189ac7654d7c526f174064d0b7284d2fd6"
+  }
+}

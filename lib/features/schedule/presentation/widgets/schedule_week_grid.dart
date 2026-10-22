@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../../../app/theme/campus_design.dart';
 
 import '../../../../core/nwu/periods.dart';
 import '../../../../core/utils/date_utils.dart';
@@ -33,15 +34,19 @@ class ScheduleWeekGrid extends StatelessWidget {
       1.0,
       MediaQuery.textScalerOf(context).scale(14) / 14,
     );
-    final weekLabel = '第${viewModel.week}周';
+    final design = CampusDesign.maybeOf(context);
+    final weekLabel = design == null
+        ? '第${viewModel.week}週'
+        : '${visibleDays.first.date.month}月';
     final weekLabelStyle = Theme.of(context).textTheme.labelSmall!.copyWith(
+          fontFamily: design == null ? null : CampusDesign.headingFamily,
           fontSize: 11,
           fontWeight: FontWeight.w600,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         );
     final labelPainter = TextPainter(
       // Reserve two digits so columns stay aligned when swiping past week 9.
-      text: TextSpan(text: '第64周', style: weekLabelStyle),
+      text: TextSpan(text: '第64週', style: weekLabelStyle),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
     )..layout();
@@ -54,13 +59,35 @@ class ScheduleWeekGrid extends StatelessWidget {
     );
     labelPainter.dispose();
     final periodCount = NwuPeriodRepository.all.length;
-    final dayHeaderHeight = ScheduleGridMetrics.headerHeight * scale;
     return LayoutBuilder(
       builder: (context, constraints) {
         final dayWidth = math.max<double>(
           1,
           (constraints.maxWidth - periodWidth) / visibleDays.length,
         );
+        var dayHeaderHeight = ScheduleGridMetrics.headerHeight * scale;
+        if (design != null) {
+          // Full weekday names may wrap with seven columns or large text.
+          for (final day in visibleDays) {
+            final painter = TextPainter(
+              text: TextSpan(
+                text: CampusDesign.weekdayName(day.date.weekday),
+                style: design.heading(12).copyWith(height: 1),
+              ),
+              textDirection: Directionality.of(context),
+              textScaler: MediaQuery.textScalerOf(context),
+            )..layout(maxWidth: math.max(1, dayWidth - 4));
+            final badgeHeight = 28 *
+                math.max(1.0, MediaQuery.textScalerOf(context).scale(11) / 11);
+            dayHeaderHeight = math.max(
+                dayHeaderHeight,
+                painter.height +
+                    badgeHeight +
+                    6 +
+                    (day.shortMarker == null ? 0 : 12 * scale));
+            painter.dispose();
+          }
+        }
         final layout = ScheduleLayoutEngine.place(
           visibleDays: visibleDays,
           entries: viewModel.entries,
@@ -106,7 +133,7 @@ class ScheduleWeekGrid extends StatelessWidget {
         );
 
         return ColoredBox(
-          color: scheme.surface,
+          color: design?.paper ?? scheme.surface,
           child: SizedBox(
             height: canvasHeight,
             child: ClipRect(
@@ -120,7 +147,8 @@ class ScheduleWeekGrid extends StatelessWidget {
                         dayWidth: dayWidth,
                         colors: [
                           for (final day in visibleDays)
-                            _dayBackgroundColor(day, scheme),
+                            _dayBackgroundColor(day, scheme,
+                                paper: design?.paper),
                         ],
                       ),
                     ),
@@ -132,7 +160,7 @@ class ScheduleWeekGrid extends StatelessWidget {
                         dayWidth: dayWidth,
                         dayCount: visibleDays.length,
                         periodCount: periodCount,
-                        lineColor: scheme.outlineVariant,
+                        lineColor: design?.rule ?? scheme.outlineVariant,
                         rowHeight: rowHeight,
                         dayHeaderHeight: dayHeaderHeight,
                       ),
@@ -145,7 +173,9 @@ class ScheduleWeekGrid extends StatelessWidget {
                     height: dayHeaderHeight,
                     child: Center(
                       child: Semantics(
-                        label: '正在查看第 ${viewModel.week} 周课表',
+                        label: design == null
+                            ? '正在查看第 ${viewModel.week} 週課表'
+                            : '第${viewModel.week}週の時間割',
                         excludeSemantics: true,
                         child: Text(
                           weekLabel,
@@ -248,6 +278,7 @@ class ScheduleWeekGrid extends StatelessWidget {
       child: item.isOverflow
           ? OverflowCourseBlock(
               entries: item.overflowEntries,
+              palette: palette,
               height: height,
               onEntryTap: onEntryTap,
             )
@@ -317,10 +348,11 @@ class _CurrentPeriod {
   final String label;
 }
 
-Color _dayBackgroundColor(WeekDayColumn day, ColorScheme scheme) {
+Color _dayBackgroundColor(WeekDayColumn day, ColorScheme scheme,
+    {Color? paper}) {
   final amount = scheme.brightness == Brightness.light ? .05 : .09;
   return switch (day.kind) {
-    ScheduleDayKind.normal => scheme.surface,
+    ScheduleDayKind.normal => paper ?? scheme.surface,
     ScheduleDayKind.holiday => Color.lerp(
         scheme.surface,
         scheme.errorContainer,
@@ -383,7 +415,8 @@ class CurrentTimeIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
+    final color = CampusDesign.maybeOf(context)?.accent ??
+        Theme.of(context).colorScheme.primary;
     return IgnorePointer(
       child: Stack(
         clipBehavior: Clip.hardEdge,
@@ -519,19 +552,26 @@ class ScheduleDayHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final marker = day.shortMarker;
+    final design = CampusDesign.maybeOf(context);
+    final marker = switch (day.shortMarker) {
+      '补' => '補',
+      '调' => '調',
+      final value => value,
+    };
     final dateBadgeSize =
-        22.0 * math.max(1.0, MediaQuery.textScalerOf(context).scale(11) / 11);
+        28.0 * math.max(1.0, MediaQuery.textScalerOf(context).scale(11) / 11);
     final semanticParts = [
-      '星期${day.label}',
+      design == null
+          ? '星期${day.label}'
+          : CampusDesign.weekdayName(day.date.weekday),
       '${day.date.month}月${day.date.day}日',
       if (day.calendarLabel?.trim().isNotEmpty == true) day.calendarLabel!,
       if (day.kind == ScheduleDayKind.holiday)
         '休假'
-      else if (day.kind == ScheduleDayKind.makeup && marker == '补')
-        '补班'
+      else if (day.kind == ScheduleDayKind.makeup && marker == '補')
+        '補班'
       else if (day.kind == ScheduleDayKind.makeup)
-        '调课',
+        '調課',
     ];
     return Semantics(
       container: true,
@@ -539,10 +579,9 @@ class ScheduleDayHeader extends StatelessWidget {
       excludeSemantics: true,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final width = math.min(
-            44.0,
-            math.max(30.0, constraints.maxWidth - 4),
-          );
+          final width = design == null
+              ? math.min(44.0, math.max(30.0, constraints.maxWidth - 4))
+              : math.max(1.0, constraints.maxWidth - 4);
           return Center(
             child: SizedBox(
               width: width,
@@ -550,9 +589,14 @@ class ScheduleDayHeader extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    day.label,
-                    maxLines: 1,
+                    design == null
+                        ? day.label
+                        : CampusDesign.weekdayName(day.date.weekday),
+                    maxLines: design == null ? 1 : null,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
+                      fontFamily:
+                          design == null ? null : CampusDesign.headingFamily,
                       color: _dayStatusForeground(day, scheme),
                       fontSize: 12,
                       height: 1,
@@ -564,19 +608,31 @@ class ScheduleDayHeader extends StatelessWidget {
                     width: math.min(dateBadgeSize, constraints.maxWidth - 4),
                     height: dateBadgeSize,
                     child: DecoratedBox(
-                      decoration: day.isToday
+                      decoration: design != null && day.isToday
                           ? BoxDecoration(
-                              color: scheme.primary,
-                              borderRadius: BorderRadius.circular(7),
-                            )
-                          : const BoxDecoration(),
+                              border: Border(
+                                  bottom: BorderSide(
+                                      color: design.accent, width: 2)))
+                          : day.isToday
+                              ? BoxDecoration(
+                                  color: scheme.primary,
+                                  shape: BoxShape.circle,
+                                )
+                              : const BoxDecoration(),
                       child: Center(
                         child: Text(
                           '${day.date.day}',
                           maxLines: 1,
                           style: TextStyle(
-                            color: day.isToday ? scheme.onPrimary : null,
-                            fontSize: 11,
+                            color: design != null
+                                ? (day.isToday ? design.accent : design.ink)
+                                : day.isToday
+                                    ? scheme.onPrimary
+                                    : null,
+                            fontFamily: design == null
+                                ? null
+                                : CampusDesign.headingFamily,
+                            fontSize: 14,
                             height: 1,
                             fontWeight: FontWeight.w600,
                           ),

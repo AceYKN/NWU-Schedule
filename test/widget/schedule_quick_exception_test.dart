@@ -14,6 +14,7 @@ import 'package:nwu_schedule/domain/course/meeting_rule.dart';
 import 'package:nwu_schedule/domain/semester/semester.dart';
 import 'package:nwu_schedule/features/schedule/presentation/schedule_page.dart';
 import 'package:nwu_schedule/features/schedule/presentation/widgets/course_block.dart';
+import 'package:nwu_schedule/features/shared/presentation/course_title.dart';
 import 'package:nwu_schedule/infrastructure/calendar/bundled_calendar_repository.dart';
 
 void main() {
@@ -22,6 +23,21 @@ void main() {
     final repository = await _pumpSchedule(tester);
     await tester.tap(find.byType(CourseEventCard).first);
     await tester.pumpAndSettle();
+
+    // Check the first sheet reached by the real week-grid entry point.
+    final details = tester
+        .widgetList<CourseDetailLine>(find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byType(CourseDetailLine),
+        ))
+        .toList();
+    expect(details.map((line) => line.label), ['时间', '地点', '教师', '周次']);
+    expect(details.map((line) => line.value), [
+      '10:10–12:00',
+      '长安校区 · 实验楼 321',
+      '测试教师',
+      '1-20周 · 当前：第3周',
+    ]);
 
     // The action is visible immediately, before the semester arrangements.
     await tester.tap(find.text('临时变更'));
@@ -55,6 +71,7 @@ void main() {
     final repository = await _pumpSchedule(tester, changed: true);
     await tester.tap(find.byType(CourseEventCard).first);
     await tester.pumpAndSettle();
+    expect(find.text('单次课程 · 当前：第3周'), findsOneWidget);
     expect(find.text('临时变更'), findsNothing);
     await tester.tap(find.text('撤销临时变更'));
     await tester.pumpAndSettle();
@@ -123,6 +140,9 @@ Future<DriftScheduleDataRepository> _pumpSchedule(
         startSection: 3,
         endSection: 4,
         weekMask: WeekMask.all(20),
+        campus: '长安校区',
+        room: '实验楼 321',
+        teacher: '测试教师',
       ),
     ],
   );

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/campus_design.dart';
 import '../../../app/theme/schedule_theme.dart';
+import 'package:nwu_schedule/features/shared/presentation/campus_text.dart';
 
 class AppPageHeader extends StatelessWidget {
   const AppPageHeader({
@@ -22,10 +24,11 @@ class AppPageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tokens = scheduleThemeTokensOf(context);
-    final titleStyle = theme.textTheme.titleLarge?.copyWith(
-      fontSize: tokens.pageTitleSize,
-      fontWeight: FontWeight.w700,
-    );
+    final titleStyle = CampusDesign.maybeOf(context)?.heading(21) ??
+        theme.textTheme.titleLarge?.copyWith(
+          fontSize: tokens.pageTitleSize,
+          fontWeight: FontWeight.w700,
+        );
     final subtitleStyle = theme.textTheme.bodyMedium?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
       fontSize: tokens.secondarySize,
@@ -40,7 +43,7 @@ class AppPageHeader extends StatelessWidget {
               width: 48,
               height: 48,
               child: IconButton(
-                tooltip: '返回',
+                tooltip: campusText(context, '返回'),
                 onPressed: onBack ?? () => Navigator.maybePop(context),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints.tightFor(
